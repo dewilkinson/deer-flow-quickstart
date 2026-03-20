@@ -12,13 +12,22 @@ static/browser_history/*.gif
 
 # Virtual environments
 .venv
+.venv_old/
 venv/
+node_modules/
 
 # Environment variables
 .env
 
 # user conf
 conf.yaml
+
+# Next.js build
+.next/
+out/
+build/
+web/node_modules/
+web/.next/
 
 .idea/
 .langgraph_api/
