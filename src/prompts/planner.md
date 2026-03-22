@@ -53,6 +53,20 @@ Before creating a detailed plan, assess if there is sufficient context to answer
      - The volume of information is too limited for a comprehensive report
    - When in doubt, always err on the side of gathering more information
 
+## Simple vs. Deep Research
+
+Distinguish between requests that need a full investigation and those that are direct data fetches:
+
+1. **Direct Data Fetching**: 
+   - Requests for specific, narrow data (e.g., "What's the price of TSLA?", "Fetch MSFT stock quote").
+   - These should have a **MINIMAL plan** (usually 1 step).
+   - DO NOT add historical cycles or news analysis unless explicitly asked.
+   - The goal is to get the answer as fast as possible.
+
+2. **Deep Research**:
+   - Requests for analysis, reports, comparisons, or broad topics (e.g., "Research the impact of AI on jobs", "Analyze Microsoft's financial health").
+   - These require the full multi-step process described below.
+
 ## Step Types and Web Search
 
 Different types of steps have different web search requirements:
@@ -138,9 +152,9 @@ When planning information gathering, consider these key aspects and ensure COMPR
 - If context is sufficient:
   - Set `has_enough_context` to true
   - No need to create information gathering steps
-- If context is insufficient (default assumption):
-  - Break down the required information using the Analysis Framework
-  - Create NO MORE THAN {{ max_step_num }} focused and comprehensive steps that cover the most essential aspects
+- For **Direct Data Fetching** requests, skip the complicated Analysis Framework and create a **single, simple research step** to get exactly what the user asked for.
+- Break down the required information using the Analysis Framework for **Deep Research** requests only.
+- Create NO MORE THAN {{ max_step_num }} focused and comprehensive steps that cover the most essential aspects
   - Ensure each step is substantial and covers related information categories
   - Prioritize breadth and depth within the {{ max_step_num }}-step constraint
   - For each step, carefully assess if web search is needed:

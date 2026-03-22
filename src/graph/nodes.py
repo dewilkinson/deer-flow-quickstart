@@ -163,6 +163,17 @@ def human_feedback_node(
     current_plan = state.get("current_plan", "")
     # check if the plan is auto accepted
     auto_accepted_plan = state.get("auto_accepted_plan", False)
+    
+    # Auto-accept simple 1-step plans to bypass the research prompt
+    if not auto_accepted_plan:
+        try:
+            plan_data = json.loads(repair_json_output(current_plan))
+            if len(plan_data.get("steps", [])) <= 1:
+                logger.info("Auto-accepting simple 1-step plan.")
+                auto_accepted_plan = True
+        except Exception:
+            pass
+
     if not auto_accepted_plan:
         feedback = interrupt("Please Review the Plan.")
 
