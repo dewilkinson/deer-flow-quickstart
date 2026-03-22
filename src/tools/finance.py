@@ -23,26 +23,40 @@ def get_stock_quote(ticker: str) -> Union[Dict[str, Any], str]:
     logger.info(f"Fetching stock quote for {ticker}")
     try:
         stock = yf.Ticker(ticker)
-        # Get historical data for the last 5 days to ensure we get a valid close (handles weekends/holidays)
+        # Detail the connection/request info
+        connection_info = f"Requesting '{ticker}' from Yahoo Finance API (yfinance v2)..."
+        params = {"ticker": ticker, "period": "5d", "interval": "1d"}
+        
         data = stock.history(period="5d")
         
         if data.empty:
-            return f"Error: No data found for ticker symbol '{ticker}'. Please ensure it is a valid Yahoo Finance ticker."
+            return f"[ERROR]: No data found for ticker '{ticker}'.\n[CONN_INFO]: {connection_info}"
         
-        # Get the most recent trading day's data
         last_row = data.iloc[-1]
+        raw_payload = data.tail(1).to_json(orient="records")
         
-        return {
-            "symbol": ticker.upper(),
-            "currency": stock.info.get("currency", "USD"),
-            "current_price": round(float(last_row['Close']), 2),
-            "open": round(float(last_row['Open']), 2),
-            "high": round(float(last_row['High']), 2),
-            "low": round(float(last_row['Low']), 2),
-            "close": round(float(last_row['Close']), 2),
-            "volume": int(last_row['Volume']),
-            "date": last_row.name.strftime('%Y-%m-%d')
-        }
+        report = f"""
+[TECHNICAL_LOG]
+Status: SUCCESS
+Connection: {connection_info}
+Parameters: {params}
+
+[API_PAYLOAD]
+{raw_payload}
+
+[OHLC_DATA]
+Symbol: {ticker.upper()}
+Currency: {stock.info.get("currency", "USD")}
+Date: {last_row.name.strftime('%Y-%m-%d')}
+Open: {round(float(last_row['Open']), 2)}
+High: {round(float(last_row['High']), 2)}
+Low: {round(float(last_row['Low']), 2)}
+Close: {round(float(last_row['Close']), 2)}
+Current: {round(float(last_row['Close']), 2)}
+Volume: {int(last_row['Volume'])}
+"""
+        return report.strip()
     except Exception as e:
         logger.error(f"Error in get_stock_quote for {ticker}: {str(e)}")
-        return f"Error fetching stock data for '{ticker}': {str(e)}"
+        return f"[ERROR]: {str(e)}\n[CONN_INFO]: Attempted connection to Yahoo Finance for {ticker}"
+

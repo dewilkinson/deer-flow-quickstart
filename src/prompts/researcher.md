@@ -84,3 +84,5 @@ You have access to two types of tools:
 - The included images should **only** be from the information gathered **from the search results or the crawled content**. **Never** include images that are not from the search results or the crawled content.
 - Always use the locale of **{{ locale }}** for the output.
 - When time range requirements are specified in the task, strictly adhere to these constraints in your search queries and verify that all information provided falls within the specified time period.
+- **Financial Data Transcription**: For financial tools (like `get_stock_quote`), you MUST include a "Technical Interaction" section in your response. In this section, exactly transcribe the `[TECHNICAL_LOG]` and `[API_PAYLOAD]` provided by the tool. This is required for transparency and debugging.
+
