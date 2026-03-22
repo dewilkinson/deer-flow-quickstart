@@ -1,10 +1,9 @@
-# Copyright (c) 2025 Bytedance Ltd. and/or its affiliates
-# SPDX-License-Identifier: MIT
+from typing import Optional
 
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
 
-from src.prompts.planner_model import StepType
+from src.prompts.planner_model import Plan, Step, StepType
 
 from .nodes import (
     background_investigation_node,
@@ -21,20 +20,20 @@ from .types import State
 
 def continue_to_running_research_team(state: State):
     current_plan = state.get("current_plan")
-    if not current_plan or not current_plan.steps:
+    if not isinstance(current_plan, Plan) or not current_plan.steps:
         return "planner"
 
     if all(step.execution_res for step in current_plan.steps):
         return "reporter"
 
     # Find first incomplete step
-    incomplete_step = None
+    incomplete_step: Optional[Step] = None
     for step in current_plan.steps:
         if not step.execution_res:
             incomplete_step = step
             break
 
-    if not incomplete_step:
+    if incomplete_step is None:
         return "reporter"
 
     if incomplete_step.step_type == StepType.RESEARCH:

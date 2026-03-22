@@ -117,8 +117,18 @@ def planner_node(
 
     # Check if we already have a plan and all steps are executed
     current_plan = state.get("current_plan")
-    if current_plan and hasattr(current_plan, "steps") and current_plan.steps:
-        all_executed = all(step.execution_res for step in current_plan.steps)
+    plan_obj = None
+    if isinstance(current_plan, str):
+        try:
+            plan_dict = json.loads(repair_json_output(current_plan))
+            plan_obj = Plan.model_validate(plan_dict)
+        except Exception:
+            pass
+    else:
+        plan_obj = current_plan
+
+    if plan_obj and hasattr(plan_obj, "steps") and plan_obj.steps:
+        all_executed = all(step.execution_res for step in plan_obj.steps)
         if all_executed:
             logger.info("All plan steps are executed. Proceeding to reporter.")
             return Command(goto="reporter")
@@ -127,6 +137,7 @@ def planner_node(
     if plan_iterations >= configurable.max_plan_iterations:
         return Command(goto="reporter")
 
+    logger.info(f"Planner calling LLM with {len(messages)} messages")
     full_response = ""
     if AGENT_LLM_MAP["planner"] == "basic" and not configurable.enable_deep_thinking:
         response = llm.invoke(messages)
@@ -134,9 +145,10 @@ def planner_node(
     else:
         response = llm.stream(messages)
         for chunk in response:
-            full_response += chunk.content
+            if chunk.content:
+                full_response += chunk.content
+    logger.info(f"Planner LLM call completed. Response length: {len(full_response)}")
     logger.debug(f"Current state messages: {state['messages']}")
-    logger.info(f"Planner response: {full_response}")
 
     try:
         curr_plan = json.loads(repair_json_output(full_response))
@@ -285,10 +297,14 @@ def reporter_node(state: State, config: RunnableConfig):
     logger.info("Reporter write final report")
     configurable = Configuration.from_runnable_config(config)
     current_plan = state.get("current_plan")
+    if not current_plan:
+        logger.warning("No current plan found in reporter node")
+        return {"final_report": "Error: No research plan was generated."}
+
     input_ = {
         "messages": [
             HumanMessage(
-                f"# Research Requirements\n\n## Task\n\n{current_plan.title}\n\n## Description\n\n{current_plan.thought}"
+                f"# Research Requirements\n\n## Task\n\n{getattr(current_plan, 'title', 'Internal Error')}\n\n## Description\n\n{getattr(current_plan, 'thought', 'No description provided')}"
             )
         ],
         "locale": state.get("locale", "en-US"),
@@ -330,7 +346,11 @@ async def _execute_agent_step(
 ) -> Command[Literal["research_team"]]:
     """Helper function to execute a step using the specified agent."""
     current_plan = state.get("current_plan")
-    plan_title = current_plan.title
+    if not current_plan:
+        logger.warning("No unexecuted step found: plan is missing")
+        return Command(goto="research_team")
+
+    plan_title = getattr(current_plan, "title", "Untitled Research")
     observations = state.get("observations", [])
 
     # Find the first unexecuted step
@@ -411,10 +431,11 @@ async def _execute_agent_step(
         )
         recursion_limit = default_recursion_limit
 
-    logger.info(f"Agent input: {agent_input}")
+    logger.info(f"Agent '{agent_name}' starting ainvoke with input length {len(str(agent_input))} and recursion_limit {recursion_limit}")
     result = await agent.ainvoke(
         input=agent_input, config={"recursion_limit": recursion_limit}
     )
+    logger.info(f"Agent '{agent_name}' ainvoke completed")
 
     # Process the result
     response_content = result["messages"][-1].content
@@ -466,12 +487,11 @@ async def _setup_and_execute_agent_step(
     enabled_tools = {}
 
     # Extract MCP server configuration for this agent type
-    if configurable.mcp_settings:
+    if configurable.mcp_settings and "servers" in configurable.mcp_settings:
         for server_name, server_config in configurable.mcp_settings["servers"].items():
-            if (
-                server_config["enabled_tools"]
-                and agent_type in server_config["add_to_agents"]
-            ):
+            enabled_tools_list = server_config.get("enabled_tools") or []
+            add_to_agents_list = server_config.get("add_to_agents") or []
+            if enabled_tools_list and agent_type in add_to_agents_list:
                 mcp_servers[server_name] = {
                     k: v
                     for k, v in server_config.items()
