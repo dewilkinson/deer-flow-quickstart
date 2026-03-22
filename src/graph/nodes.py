@@ -115,6 +115,14 @@ def planner_node(
     else:
         llm = get_llm_by_type(AGENT_LLM_MAP["planner"])
 
+    # Check if we already have a plan and all steps are executed
+    current_plan = state.get("current_plan")
+    if current_plan and hasattr(current_plan, "steps") and current_plan.steps:
+        all_executed = all(step.execution_res for step in current_plan.steps)
+        if all_executed:
+            logger.info("All plan steps are executed. Proceeding to reporter.")
+            return Command(goto="reporter")
+
     # if the plan iterations is greater than the max plan iterations, return the reporter node
     if plan_iterations >= configurable.max_plan_iterations:
         return Command(goto="reporter")
