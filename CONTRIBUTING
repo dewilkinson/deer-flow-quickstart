@@ -19,8 +19,8 @@ There are many ways you can contribute to Cobalt Multiagent:
 2. Clone your fork:
 
    ```bash
-   git clone https://github.com/bytedance/cobalt-multi-agent.git
-   cd cobalt-multi-agent
+   git clone https://github.com/bytedance/deer-flow-quickstart.git
+   cd deer-flow-quickstart
    ```
 
 3. Set up your development environment:
