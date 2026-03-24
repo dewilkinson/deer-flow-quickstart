@@ -15,7 +15,7 @@ Project Cobalt is an agentic framework designed to bridge the gap between raw ma
 ## 🛠 Core Architecture: The CMA Framework
 
 Cobalt operates through the CMA (Cobalt Multiagent) logic, which decentralizes the analytical process to ensure data integrity and prevent AI hallucination.
-- **VLI (VibeLink Interface)**: The primary command layer. Interprets natural language "vibes" and context to coordinate agent workflows.
+- **VLI (VibeLink™ Interface)**: The primary command layer. Interprets natural language "vibes" and context to coordinate agent workflows.
 - **The Scout**: A hardened data retrieval agent. Connects to brokerage APIs (SnapTrade) to fetch high-fidelity OHLC and trade history.
 - **The Analyst**: The logic engine. Scans for Liquidity Sweeps, Market Structure Shifts (MSS), and Fair Value Gaps (FVG).
 - **The Hub (Obsidian)**: The local "Source of Truth" where all agent dispatches are stored, archived, and audited.
