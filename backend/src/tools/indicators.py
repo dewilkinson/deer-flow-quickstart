@@ -92,7 +92,63 @@ async def get_volatility_atr(ticker: str) -> str:
         val = df['ATR'].iloc[-1]
         return f"### Volatility (ATR): {symbol.upper()}\n- **ATR:** {val:.2f} (Current range expectation)\n"
 
-    return await asyncio.to_thread(compute, ticker)
+    try:
+        return await asyncio.wait_for(asyncio.to_thread(compute, ticker), timeout=20.0)
+    except Exception as e:
+        logger.error(f"Volatility (ATR) tool error: {str(e)}")
+        return f"Error: {str(e)}"
+
+@tool
+async def get_bollinger_bands(ticker: str) -> str:
+    """
+    Calculate Bollinger Bands for a given ticker (20-day SMA +/- 2 std devs).
+    Identifies overbought (price > upper) and oversold (price < lower) conditions.
+    """
+    def compute_bb(symbol: str):
+        stock = yf.Ticker(symbol)
+        df = stock.history(period="60d")
+        if df.empty:
+            return f"Error: No data found for ticker '{symbol}'."
+        
+        # Calculate SMA 20
+        df['SMA20'] = df['Close'].rolling(window=20).mean()
+        # Calculate Standard Deviation
+        df['STD'] = df['Close'].rolling(window=20).std()
+        # Calculate Upper/Lower Bands
+        df['Upper'] = df['SMA20'] + (df['STD'] * 2)
+        df['Lower'] = df['SMA20'] - (df['STD'] * 2)
+        
+        current_price = df['Close'].iloc[-1]
+        upper = df['Upper'].iloc[-1]
+        lower = df['Lower'].iloc[-1]
+        mid = df['SMA20'].iloc[-1]
+        
+        status = "Neutral"
+        if current_price > upper:
+            status = "Overbought (Above Upper Band)"
+        elif current_price < lower:
+            status = "Oversold (Below Lower Band)"
+        elif current_price > mid:
+            status = "Bullish (Above Middle Band)"
+        else:
+            status = "Bearish (Below Middle Band)"
+            
+        report = f"### Bollinger Bands Analysis: {symbol.upper()}\n"
+        report += f"| Metric | Value |\n"
+        report += f"| :--- | :--- |\n"
+        report += f"| **Current Price** | {current_price:.2f} |\n"
+        report += f"| **Upper Band** | {upper:.2f} |\n"
+        report += f"| **Middle Band (SMA20)** | {mid:.2f} |\n"
+        report += f"| **Lower Band** | {lower:.2f} |\n"
+        report += f"| **Status** | **{status}** |\n"
+        
+        return report
+
+    try:
+        return await asyncio.wait_for(asyncio.to_thread(compute_bb, ticker), timeout=20.0)
+    except Exception as e:
+        logger.error(f"Bollinger Bands tool error: {str(e)}")
+        return f"Error: {str(e)}"
 
 @tool
 async def get_volume_profile(ticker: str) -> str:
@@ -100,7 +156,7 @@ async def get_volume_profile(ticker: str) -> str:
     Primitive: Simplified Volume-at-Price profile.
     Identifies high-volume nodes where price is likely to find support/resistance.
     """
-    def compute(symbol: str):
+    def compute_vp(symbol: str):
         stock = yf.Ticker(symbol)
         df = stock.history(period="60d")
         if df.empty: return "Error: No data"

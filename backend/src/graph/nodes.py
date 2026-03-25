@@ -651,6 +651,7 @@ async def scout_node(
             get_macd_analysis,
             get_volatility_atr,
             get_volume_profile,
+            get_bollinger_bands,
         ],
     )
 
@@ -672,6 +673,7 @@ async def analyst_node(
             get_macd_analysis,
             get_volatility_atr,
             get_volume_profile,
+            get_bollinger_bands,
         ],
     )
 
