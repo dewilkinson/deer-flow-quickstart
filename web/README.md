@@ -1,16 +1,16 @@
-# 🦌 Cobalt Multiagent Web UI
+# 💠 Cobalt Multiagent Web UI
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 > Originated from Open Source, give back to Open Source.
 
-This is the web UI for [`Cobalt Multiagent`](https://github.com/bytedance/cobalt-multi-agent).
+This is the web UI for [`Cobalt Multiagent`](https://github.com/dewilkinson/cobalt-multi-agent).
 
 ## Quick Start
 
 ### Prerequisites
 
-- [`Cobalt Multiagent`](https://github.com/bytedance/cobalt-multi-agent)
+- [`Cobalt Multiagent`](https://github.com/dewilkinson/cobalt-multi-agent)
 - Node.js (v22.14.0+)
 - pnpm (v10.6.2+) as package manager
 
@@ -66,7 +66,7 @@ First, you need read the [configuration](#configuration) below. Make sure `.env`
 Second, to build a Docker image of your own web server:
 
 ```bash
-docker build --build-arg NEXT_PUBLIC_API_URL=YOUR_DEER-FLOW_API -t cobalt-multi-agent-web .
+docker build --build-arg NEXT_PUBLIC_API_URL=YOUR_COBALT_API -t cobalt-multi-agent-web .
 ```
 
 Final, start up a docker container running the web server:

@@ -12,6 +12,7 @@ class StepType(str, Enum):
     PROCESSING = "processing"
     SCOUT = "scout"
     JOURNALIST = "journalist"
+    ANALYST = "analyst"
 
 
 class Step(BaseModel):

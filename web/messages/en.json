@@ -22,7 +22,7 @@
     "title": "Deep Research",
     "subtitle": "at Your Fingertips",
     "description": "Meet Cobalt Multiagent, your personal Deep Research assistant. With powerful tools like search engines, web crawlers, Python and MCP services, it delivers instant insights, comprehensive reports, and even captivating podcasts.",
-    "footnote": "* DEER stands for Deep Exploration and Efficient Research."
+    "footnote": "* Cobalt: Powerful, Resilient, Multi-Agent Intelligence."
   },
   "settings": {
     "title": "Cobalt Multiagent Settings",
@@ -82,7 +82,7 @@
     },
     "welcome": {
       "greeting": "👋 Hello, there!",
-      "description": "Welcome to 🦌 Cobalt Multiagent, a deep research assistant built on cutting-edge language models, helps you search on web, browse information, and handle complex tasks."
+      "description": "Welcome to Cobalt Multiagent, a deep research assistant built on cutting-edge language models, helps you search on web, browse information, and handle complex tasks."
     },
     "conversationStarters": [
       "How many times taller is the Eiffel Tower than the tallest building in the world?",

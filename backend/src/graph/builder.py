@@ -16,6 +16,7 @@ from .nodes import (
     research_team_node,
     researcher_node,
     scout_node,
+    analyst_node,
 )
 from .types import State
 
@@ -46,6 +47,8 @@ def continue_to_running_research_team(state: State):
         return "scout"
     if incomplete_step.step_type == StepType.JOURNALIST:
         return "journalist"
+    if incomplete_step.step_type == StepType.ANALYST:
+        return "analyst"
     return "planner"
 
 
@@ -62,12 +65,13 @@ def _build_base_graph():
     builder.add_node("coder", coder_node)
     builder.add_node("scout", scout_node)
     builder.add_node("journalist", journalist_node)
+    builder.add_node("analyst", analyst_node)
     builder.add_node("human_feedback", human_feedback_node)
     builder.add_edge("background_investigator", "planner")
     builder.add_conditional_edges(
         "research_team",
         continue_to_running_research_team,
-        ["planner", "researcher", "coder", "scout", "journalist", "reporter"],
+        ["planner", "researcher", "coder", "scout", "journalist", "analyst", "reporter"],
     )
     builder.add_edge("reporter", END)
     return builder

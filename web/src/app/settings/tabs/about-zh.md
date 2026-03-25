@@ -1,14 +1,14 @@
-# 🦌 [关于 Cobalt Multiagent](https://github.com/bytedance/cobalt-multi-agent)
+# 💠 [关于 Cobalt Multiagent](https://github.com/dewilkinson/cobalt-multi-agent)
 
 > **源于开源，回馈开源**
 
-**Cobalt Multiagent**（**深度探索**和**高效研究**流程）是一个由社区驱动的 AI 自动化框架，受到开源社区卓越贡献的启发。我们的使命是将语言模型与专业工具无缝集成，用于网络搜索、爬取和 Python 代码执行等任务——同时回馈使这种创新成为可能的社区。
+**Cobalt Multiagent**（**CMA**）是一个高诚信、社区驱动的 AI 自动化框架。我们的使命是将语言模型与专业工具无缝集成，用于行情侦查、流动性分析和聪明钱概念（SMC）研究等任务——同时回馈使这种创新成为可能的开源社区。
 
 ---
 
 ## 🌟 GitHub 仓库
 
-在 GitHub 上探索 Cobalt Multiagent：[github.com/bytedance/cobalt-multi-agent](https://github.com/bytedance/cobalt-multi-agent)
+在 GitHub 上探索 Cobalt Multiagent：[github.com/dewilkinson/cobalt-multi-agent](https://github.com/dewilkinson/cobalt-multi-agent)
 
 ---
 
@@ -36,10 +36,11 @@ Cobalt Multiagent 作为开源项目，在 **MIT 许可证** 下分发。
 
 这些杰出的项目构成了 Cobalt Multiagent 的骨干，体现了开源协作的变革力量。
 
-### 特别感谢
-最后，我们要向 `Cobalt Multiagent` 的核心作者表达衷心的感谢：
+- **[D. Wilkinson](https://github.com/dewilkinson/)** (项目负责人, BlueShell Securities LLC)
+
+最后，我们要向 [DeerFlow](https://github.com/bytedance/deer-flow) 框架的原始作者表达衷心的感谢：
 
 - **[Daniel Walnut](https://github.com/hetaoBackend/)**
 - **[Henry Li](https://github.com/magiccube/)**
 
-没有他们的愿景、热情和奉献，`Cobalt Multiagent` 就不会有今天的成就。
+他们的愿景和奉献为 Cobalt Multiagent 的构建奠定了基础。

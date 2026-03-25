@@ -1,0 +1,6 @@
+{
+    "type": "researcher",
+    "name": "The Researcher",
+    "prompt_file": "researcher",
+    "tools": ["web_search", "crawl_tool", "get_stock_quote"]
+}

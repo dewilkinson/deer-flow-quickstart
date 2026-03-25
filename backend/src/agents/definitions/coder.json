@@ -1,0 +1,6 @@
+{
+    "type": "coder",
+    "name": "The Coder",
+    "prompt_file": "coder",
+    "tools": ["python_repl_tool"]
+}

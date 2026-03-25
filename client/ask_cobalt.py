@@ -119,8 +119,9 @@ def log_cobalt_response(response: str, placeholder_id: str):
             else:
                 ai_entry = f"{ai_header}\n<div style=\"color: #999; font-size: 80%;\">\n{payload}\n</div>"
             
-            # Replace the unique placeholder using Regex for robustness (handles potential line-wrapping)
-            placeholder_pattern = rf'<span[^>]+?id\s*=\s*["\']{placeholder_id}["\'].*?</span>'
+            # Universal ID Matcher: robust against attribute order, whitespace, and nested tags
+            # We look for the ID anywhere within a span tag
+            placeholder_pattern = rf'<span[^>]+?id\s*=\s*["\']{placeholder_id}["\'][^>]*?>.*?</span>'
             if re.search(placeholder_pattern, content, re.DOTALL):
                 new_content = re.sub(placeholder_pattern, ai_entry, content, count=1, flags=re.DOTALL)
                 with open(note_path, 'w', encoding='utf-8') as f:
@@ -135,7 +136,7 @@ def log_cobalt_response(response: str, placeholder_id: str):
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: python ask_cobaltmultiagent.py <prompt>")
+        print("Usage: python ask_cobalt.py <prompt>")
         sys.exit(1)
         
     prompt = " ".join(sys.argv[1:])

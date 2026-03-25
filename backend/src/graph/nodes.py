@@ -12,7 +12,7 @@ from langchain_core.tools import tool
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langgraph.types import Command, interrupt
 
-from src.agents import create_agent
+from src.agents import create_agent, create_agent_from_registry
 from src.config.agents import AGENT_LLM_MAP
 from src.config.configuration import Configuration
 from src.llms.llm import get_llm_by_type
@@ -33,6 +33,8 @@ from src.tools import (
     get_journal_folder,
     set_journal_folder,
     python_repl_tool,
+    get_smc_analysis,
+    get_ema_analysis,
 )
 
 from src.tools.search import LoggedTavilySearch
@@ -551,13 +553,14 @@ async def _setup_and_execute_agent_step(
                     f"Powered by '{enabled_tools[tool.name]}'.\n{tool.description}"
                 )
                 loaded_tools.append(tool)
-        agent = create_agent(agent_type, agent_type, loaded_tools, agent_type)
+                loaded_tools.append(tool)
+        agent = create_agent_from_registry(agent_type, loaded_tools)
         return await _execute_agent_step(
             state, agent, agent_type, config, state.get("observations", []), state.get("current_plan")
         )
     else:
         # Use default tools if no MCP servers are configured
-        agent = create_agent(agent_type, agent_type, default_tools, agent_type)
+        agent = create_agent_from_registry(agent_type, default_tools)
         return await _execute_agent_step(
             state, agent, agent_type, config, state.get("observations", []), state.get("current_plan")
         )
@@ -629,3 +632,17 @@ async def scout_node(
         "scout",
         [get_brokerage_accounts, get_brokerage_history, get_brokerage_balance, get_brokerage_statements, get_stock_quote],
     )
+
+
+async def analyst_node(
+    state: State, config: RunnableConfig
+) -> Command[Literal["research_team"]]:
+    """Analyst node that performs strategy-level technical analysis."""
+    logger.info("Analyst node is analyzing market structure.")
+    return await _setup_and_execute_agent_step(
+        state,
+        config,
+        "analyst",
+        [get_smc_analysis, get_ema_analysis, get_stock_quote],
+    )
+

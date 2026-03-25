@@ -1,13 +1,13 @@
 # MCP Integrations（Beta）
 
-Now This feature is diabled by default. You can enable it by setting the environment ENABLE_MCP_SERVER_CONFIGURATION to be true
+Now this feature is disabled by default. You can enable it by setting the environment variable `ENABLE_MCP_SERVER_CONFIGURATION` to be `true`.
 
 > [!WARNING]
-> Please enable this feature before securing your frond-end and back-end in a managed environment.
-> Otherwise, you system could be compromised.
+> Please enable this feature before securing your front-end and back-end in a managed environment.
+> Otherwise, your system could be compromised.
 
-This feature is diabled by default. You can enable it by setting the environment ENABLE_MCP_SERVER_CONFIGURATION
-Please enable this feature before securing your frond-end and back-end in an internal environment.q
+This feature is disabled by default. You can enable it by setting the environment variable `ENABLE_MCP_SERVER_CONFIGURATION`.
+Please enable this feature before securing your front-end and back-end in an internal environment.
 
 ## Example of MCP Server Configuration
 

@@ -1,14 +1,14 @@
-# 🦌 [About Cobalt Multiagent](https://github.com/bytedance/cobalt-multi-agent)
+# 💠 [About Cobalt Multiagent](https://github.com/dewilkinson/cobalt-multi-agent)
 
 > **From Open Source, Back to Open Source**
 
-**Cobalt Multiagent** (**D**eep **E**xploration and **E**fficient **R**esearch **Flow**) is a community-driven AI automation framework inspired by the remarkable contributions of the open source community. Our mission is to seamlessly integrate language models with specialized tools for tasks such as web search, crawling, and Python code execution—all while giving back to the community that made this innovation possible.
+**Cobalt Multiagent** (**CMA**) is a high-integrity, community-driven AI automation framework. Our mission is to seamlessly integrate language models with specialized tools for tasks such as market scouting, liquidity analysis, and Smart Money Concepts (SMC) research—while honoring the open source foundations that made this possible.
 
 ---
 
 ## 🌟 GitHub Repository
 
-Explore Cobalt Multiagent on GitHub: [github.com/bytedance/cobalt-multi-agent](https://github.com/bytedance/cobalt-multi-agent)
+Explore Cobalt Multiagent on GitHub: [github.com/dewilkinson/cobalt-multi-agent](https://github.com/dewilkinson/cobalt-multi-agent)
 
 ---
 
@@ -36,10 +36,11 @@ We extend our heartfelt gratitude to the open source projects and contributors w
 
 These outstanding projects form the backbone of Cobalt Multiagent and exemplify the transformative power of open source collaboration.
 
-### Special Thanks
-Finally, we want to express our heartfelt gratitude to the core authors of `Cobalt Multiagent`:
+- **[D. Wilkinson](https://github.com/dewilkinson/)** (Project Lead, BlueShell Securities LLC)
+
+Finally, we want to express our heartfelt gratitude to the original authors of the [DeerFlow](https://github.com/bytedance/deer-flow) framework:
 
 - **[Daniel Walnut](https://github.com/hetaoBackend/)**
 - **[Henry Li](https://github.com/magiccube/)**
 
-Without their vision, passion and dedication, `Cobalt Multiagent` would not be what it is today.
+Their vision and dedication established the foundation upon which Cobalt Multiagent was built.

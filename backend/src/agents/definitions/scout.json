@@ -1,0 +1,6 @@
+{
+    "type": "scout",
+    "name": "The Scout",
+    "prompt_file": "scout",
+    "tools": ["get_brokerage_accounts", "get_brokerage_history", "get_brokerage_balance", "get_brokerage_statements", "get_stock_quote"]
+}

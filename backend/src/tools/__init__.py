@@ -8,6 +8,8 @@ from .search import get_web_search_tool
 from .finance import get_stock_quote
 from .broker import get_brokerage_accounts, get_brokerage_history, get_brokerage_balance, get_brokerage_statements
 from .journal import write_daily_journal, list_journal_entries, read_journal_entry, get_journal_folder, set_journal_folder
+from .smc import get_smc_analysis
+from .ema import get_ema_analysis
 from .tts import VolcengineTTS
 
 __all__ = [
@@ -26,4 +28,6 @@ __all__ = [
     "get_journal_folder",
     "set_journal_folder",
     "VolcengineTTS",
+    "get_smc_analysis",
+    "get_ema_analysis",
 ]

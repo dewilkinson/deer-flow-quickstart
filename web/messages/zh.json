@@ -22,7 +22,7 @@
     "title": "深度研究",
     "subtitle": "触手可及",
     "description": "认识 Cobalt Multiagent，您的个人深度研究助手。凭借搜索引擎、网络爬虫、Python 和 MCP 服务等强大工具，它能提供即时洞察、全面报告，甚至制作引人入胜的播客。",
-    "footnote": "* DEER 代表深度探索和高效研究。"
+    "footnote": "* Cobalt: 强大、韧性、多智能体智能系统。"
   },
   "settings": {
     "title": "Cobalt Multiagent 设置",
@@ -82,7 +82,7 @@
     },
     "welcome": {
       "greeting": "👋 你好！",
-      "description": "欢迎来到 🦌 Cobalt Multiagent，一个基于前沿语言模型构建的深度研究助手，帮助您搜索网络、浏览信息并处理复杂任务。"
+      "description": "欢迎来到 Cobalt Multiagent，一个基于前沿语言模型构建的深度研究助手，帮助您搜索网络、浏览信息并处理复杂任务。"
     },
     "conversationStarters": [
       "埃菲尔铁塔比世界最高建筑高多少倍？",

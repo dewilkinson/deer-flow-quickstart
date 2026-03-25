@@ -6,9 +6,7 @@
 
 - [Which models does Cobalt Multiagent support?](#which-models-does-cobaltmultiagent-support)
 
-## Where's the name Cobalt Multiagent come from?
-
-Cobalt Multiagent is short for **D**eep **E**xploration and **E**fficient **R**esearch **Flow**. It is named after the deer, which is a symbol of gentleness and elegance. We hope Cobalt Multiagent can bring a gentle and elegant deep research experience to you.
+Cobalt Multiagent (CMA) is a high-integrity framework for distributed intelligence. It is named after **Cobalt**, symbolizing the system's strength, stability, and its role as a core component in the "BlueShell" ecosystem. We hope Cobalt Multiagent provides a powerful and resilient research experience for your trading operations.
 
 ## Which models does Cobalt Multiagent support?
 
