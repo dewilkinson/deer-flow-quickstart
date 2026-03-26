@@ -1,3 +1,7 @@
+# Cobalt Multiagent - High-fidelity financial analysis platform
+# Copyright (c) 2026 Dave Wilkinson <dwilkins@bluesec.ai>
+# License: PolyForm Noncommercial 1.0.0
+
 # Copyright (c) 2025 Bytedance Ltd. and/or its affiliates
 # SPDX-License-Identifier: MIT
 
@@ -11,8 +15,10 @@ class StepType(str, Enum):
     RESEARCH = "research"
     PROCESSING = "processing"
     SCOUT = "scout"
-    JOURNALIST = "journalist"
+    JOURNALER = "journaler"
+
     ANALYST = "analyst"
+    IMAGING = "imaging"
 
 
 class Step(BaseModel):
@@ -32,6 +38,9 @@ class Plan(BaseModel):
     has_enough_context: bool
     thought: str
     title: str
+    direct_response: Optional[str] = Field(
+        default=None, description="The direct response content if enough context is available"
+    )
     steps: List[Step] = Field(
         default_factory=list,
         description="Research & Processing steps to get more context",

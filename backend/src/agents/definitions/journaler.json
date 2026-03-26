@@ -1,0 +1,14 @@
+{
+    "type": "journaler",
+    "name": "Journaler",
+    "prompt_file": "journaler",
+    "tools": [
+        "write_daily_journal",
+        "list_journal_entries",
+        "read_journal_entry",
+        "get_journal_folder",
+        "set_journal_folder",
+        "get_brokerage_history",
+        "get_stock_quote"
+    ]
+}

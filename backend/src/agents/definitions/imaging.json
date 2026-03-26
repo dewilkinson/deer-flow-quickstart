@@ -1,0 +1,6 @@
+{
+    "type": "imaging",
+    "name": "The Imaging Agent",
+    "prompt_file": "imaging",
+    "tools": ["get_image_from_url", "get_image_from_local_path", "get_stock_quote", "get_smc_analysis", "web_search", "python_repl_tool"]
+}

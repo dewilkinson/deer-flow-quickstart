@@ -1,11 +1,12 @@
 {
-    "python.defaultInterpreterPath": ".venv\\Scripts\\python.exe",
+    "python.defaultInterpreterPath": "C:\\github\\cobalt-multi-agent\\.venv\\Scripts\\python.exe",
     "python.analysis.extraPaths": [
-        "./src"
+        "backend",
+        "backend/src"
     ],
     "python.analysis.autoSearchPaths": true,
     "python.testing.pytestArgs": [
-        "tests"
+        "backend/tests"
     ],
     "python.testing.unittestEnabled": false,
     "python.testing.pytestEnabled": true

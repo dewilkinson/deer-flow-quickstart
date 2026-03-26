@@ -171,10 +171,12 @@ When planning information gathering, consider these key aspects and ensure COMPR
     - Research and external data gathering: Set `need_search: true` and `step_type: research`
     - Internal data processing or calculation: Set `need_search: false` and `step_type: processing`
     - Brokerage/Trading data retrieval (Fidelity/SnapTrade): Set `need_search: false` and `step_type: scout`
-    - Trading Journalism, Obsidian retrieval, and **journal folder management (show/change current folder)**: Set `need_search: false` and `step_type: journalist`
+    - Trading Journaling, Obsidian retrieval, and **journal folder management (show/change current folder)**: Set `need_search: false` and `step_type: journaler`
+
     - Strategy-level technical analysis (SMC, FVG, BOS, RSI, MACD, EMA): Set `need_search: false` and `step_type: analyst`
 - Specify the exact data to be collected in step's `description`. Include a `note` if necessary.
-- **Obsidian/Vault Access**: You HAVE access to the user's personal journal and trading logs via the `journalist` step type and its associated tools. DO NOT state you cannot access personal files; instead, create a `journalist` step to retrieve them.
+- **Obsidian/Vault Access**: You HAVE access to the user's personal journal and trading logs via the `journaler` step type and its associated tools. DO NOT state you cannot access personal files; instead, create a `journaler` step to retrieve them.
+
 - Prioritize depth and volume of relevant information - limited information is not acceptable.
 - Use the same language as the user to generate the plan.
 - Do not include steps for summarizing or consolidating the gathered information.
@@ -188,7 +190,8 @@ interface Step {
   need_search: boolean; // Must be explicitly set for each step
   title: string;
   description: string; // Specify exactly what data to collect. If the user input contains a link, please retain the full Markdown format when necessary.
-  step_type: "research" | "processing" | "scout" | "journalist" | "analyst"; // Indicates the nature of the step
+  step_type: "research" | "processing" | "scout" | "journaler" | "analyst"; // Indicates the nature of the step
+
 }
 
 interface Plan {
@@ -212,7 +215,8 @@ interface Plan {
   - Research steps (`need_search: true`) for gathering information
   - Processing steps (`need_search: false`) for calculations and data processing
   - Scout steps (`step_type: scout`) for brokerage and trade history retrieval
-  - Journalist steps (`step_type: journalist`) for journaling and Obsidian retrieval
+  - Journaler steps (`step_type: journaler`) for journaling and Obsidian retrieval
+
   - Analyst steps (`step_type: analyst`) for SMC patterns, RSI, MACD, and EMA strategy analysis
 - Default to gathering more information unless the strictest sufficient context criteria are met
 - Always use the language specified by the locale = **{{ locale }}**.

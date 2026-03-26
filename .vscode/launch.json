@@ -43,11 +43,12 @@
             "name": "Python: main.py",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/main.py",
+            "program": "${workspaceFolder}/backend/main.py",
+            "cwd": "${workspaceFolder}/backend",
             "console": "integratedTerminal",
             "justMyCode": false,
             "env": {
-                "PYTHONPATH": "${workspaceFolder}"
+                "PYTHONPATH": "${workspaceFolder}/backend"
             },
             "args": [
                 "--debug", "--max_plan_iterations", "1", "--max_step_num", "1"
@@ -68,22 +69,24 @@
             "name": "Python: server.py",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/server.py",
+            "program": "${workspaceFolder}/backend/server.py",
+            "cwd": "${workspaceFolder}/backend",
             "console": "integratedTerminal",
             "justMyCode": false,
             "env": {
-                "PYTHONPATH": "${workspaceFolder}"
+                "PYTHONPATH": "${workspaceFolder}/backend"
             }
         },
         {
             "name": "Python: graph.py",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/src/ppt/graph/builder.py",
+            "program": "${workspaceFolder}/backend/src/ppt/graph/builder.py",
+            "cwd": "${workspaceFolder}/backend",
             "console": "integratedTerminal",
             "justMyCode": false,
             "env": {
-                "PYTHONPATH": "${workspaceFolder}"
+                "PYTHONPATH": "${workspaceFolder}/backend"
             }
         },
     ]

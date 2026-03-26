@@ -1,4 +1,10 @@
+# Cobalt Multiagent - High-fidelity financial analysis platform
+# Copyright (c) 2026 Dave Wilkinson <dwilkins@bluesec.ai>
+# License: PolyForm Noncommercial 1.0.0
+
+# Agent: Scout - Document retrieval and context provision tools.
 # Copyright (c) 2025 Bytedance Ltd. and/or its affiliates
+
 # SPDX-License-Identifier: MIT
 
 import logging
@@ -14,7 +20,14 @@ from pydantic import BaseModel, Field
 from src.config.tools import SELECTED_RAG_PROVIDER
 from src.rag import Document, Resource, Retriever, build_retriever
 
+from typing import List, Optional, Type, Dict, Any
+from src.tools.shared_storage import SCOUT_CONTEXT
+
 logger = logging.getLogger(__name__)
+
+# Agent-specific resource context (Shared by all Scout sub-modules)
+_NODE_RESOURCE_CONTEXT = SCOUT_CONTEXT
+
 
 
 class RetrieverInput(BaseModel):

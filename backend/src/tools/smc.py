@@ -1,13 +1,27 @@
+# Agent: Analyst - Smart Money Concepts and advanced structure analysis.
 # Copyright (c) 2025 Bytedance Ltd. and/or its affiliates
 # SPDX-License-Identifier: MIT
 
 import logging
 import asyncio
-import yfinance as yf
 import pandas as pd
+from typing import Dict, Any
 from langchain_core.tools import tool
+from .finance import _fetch_stock_history
 
 logger = logging.getLogger(__name__)
+
+from .shared_storage import ANALYST_CONTEXT, GLOBAL_CONTEXT
+
+# 1. Private to the Agent Code Itself
+_NODE_RESOURCE_CONTEXT: Dict[str, Any] = {}
+
+# 2. Shared context: Persistent, shared by Analyst sub-modules
+_SHARED_RESOURCE_CONTEXT = ANALYST_CONTEXT
+
+# 3. Global context: Shared across all agent types
+_GLOBAL_RESOURCE_CONTEXT = GLOBAL_CONTEXT
+
 
 def detect_fvg(df: pd.DataFrame):
     """Detects Fair Value Gaps (FVG)."""
@@ -74,8 +88,9 @@ async def get_smc_analysis(ticker: str, period: str = "60d", interval: str = "1d
     """
     def compute_smc(symbol: str, p: str, i: str):
         logger.info(f"Computing custom SMC analysis for {symbol} (p={p}, i={i})")
-        stock = yf.Ticker(symbol)
-        df = stock.history(period=p, interval=i)
+        df = _fetch_stock_history(symbol, p, i)
+
+
         if df.empty:
             return f"Error: No data found for ticker '{symbol}' with period '{p}' and interval '{i}'."
         

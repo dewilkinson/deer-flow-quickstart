@@ -1,15 +1,33 @@
+# Cobalt Multiagent - High-fidelity financial analysis platform
+# Copyright (c) 2026 Dave Wilkinson <dwilkins@bluesec.ai>
+# License: PolyForm Noncommercial 1.0.0
+
+# Agent: Analyst - Technical indicators and momentum analysis.
 # Copyright (c) 2025 Bytedance Ltd. and/or its affiliates
 # SPDX-License-Identifier: MIT
 
 import logging
 import asyncio
-import yfinance as yf
 import pandas as pd
 import numpy as np
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from langchain_core.tools import tool
+from .finance import _fetch_stock_history
 
 logger = logging.getLogger(__name__)
+
+from .shared_storage import ANALYST_CONTEXT, GLOBAL_CONTEXT
+
+# 1. Private to the Agent Code Itself
+_NODE_RESOURCE_CONTEXT: Dict[str, Any] = {}
+
+# 2. Shared context: Persistent, shared by Analyst sub-modules
+_SHARED_RESOURCE_CONTEXT = ANALYST_CONTEXT
+
+# 3. Global context: Shared across all agent types
+_GLOBAL_RESOURCE_CONTEXT = GLOBAL_CONTEXT
+
+
 
 def calculate_rsi(df: pd.DataFrame, period: int = 14):
     """Calculates Relative Strength Index (RSI)."""
@@ -45,10 +63,10 @@ async def get_rsi_analysis(ticker: str, period: str = "60d", interval: str = "1d
     Primitive: Retrieves the Relative Strength Index (RSI) for a ticker.
     Used for detecting overbought (>70) or oversold (<30) conditions.
     """
-    def compute(symbol: str, p: str, i: str):
-        stock = yf.Ticker(symbol)
-        df = stock.history(period=p, interval=i)
+    def compute(symbol, p, i):
+        df = _fetch_stock_history(symbol, p, i)
         if df.empty: return f"### RSI: {symbol.upper()}\nError: No data for p={p}, i={i}\n"
+
         df.columns = [c.lower() for c in df.columns]
         df = calculate_rsi(df)
         val = df['RSI'].iloc[-1]
@@ -64,9 +82,9 @@ async def get_macd_analysis(ticker: str, period: str = "60d", interval: str = "1
     Used for identifying momentum shifts and trend reversals.
     """
     def compute(symbol: str, p: str, i: str):
-        stock = yf.Ticker(symbol)
-        df = stock.history(period=p, interval=i)
+        df = _fetch_stock_history(symbol, p, i)
         if df.empty: return f"### MACD: {symbol.upper()}\nError: No data for p={p}, i={i}\n"
+
         df.columns = [c.lower() for c in df.columns]
         df = calculate_macd(df)
         last = df.iloc[-1]
@@ -84,9 +102,9 @@ async def get_volatility_atr(ticker: str, period: str = "60d", interval: str = "
     Used for determining stop-loss distances and market volatility.
     """
     def compute(symbol: str, p: str, i: str):
-        stock = yf.Ticker(symbol)
-        df = stock.history(period=p, interval=i)
+        df = _fetch_stock_history(symbol, p, i)
         if df.empty: return f"### Volatility (ATR): {symbol.upper()}\nError: No data for p={p}, i={i}\n"
+
         df.columns = [c.lower() for c in df.columns]
         df = calculate_atr(df)
         val = df['ATR'].iloc[-1]
@@ -105,8 +123,8 @@ async def get_bollinger_bands(ticker: str, period: str = "60d", interval: str = 
     Identifies overbought (price > upper) and oversold (price < lower) conditions.
     """
     def compute_bb(symbol: str, p: str, i: str):
-        stock = yf.Ticker(symbol)
-        df = stock.history(period=p, interval=i)
+        df = _fetch_stock_history(symbol, p, i)
+
         if df.empty:
             return f"Error: No data found for ticker '{symbol}' with period '{p}' and interval '{i}'."
         
@@ -157,8 +175,8 @@ async def get_volume_profile(ticker: str, period: str = "60d", interval: str = "
     Identifies high-volume nodes where price is likely to find support/resistance.
     """
     def compute_vp(symbol: str, p: str, i: str):
-        stock = yf.Ticker(symbol)
-        df = stock.history(period=p, interval=i)
+        df = _fetch_stock_history(symbol, p, i)
+
         if df.empty: return f"### Volume Profile: {symbol.upper()}\nError: No data for p={p}, i={i}\n"
         # Bins for price levels
         bins = np.linspace(df['Low'].min(), df['High'].max(), 10)

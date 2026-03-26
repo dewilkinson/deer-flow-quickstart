@@ -1,3 +1,7 @@
+# Cobalt Multiagent - High-fidelity financial analysis platform
+# Copyright (c) 2026 Dave Wilkinson <dwilkins@bluesec.ai>
+# License: PolyForm Noncommercial 1.0.0
+
 # Copyright (c) 2025 Bytedance Ltd. and/or its affiliates
 # SPDX-License-Identifier: MIT
 
@@ -12,7 +16,13 @@ from typing import Any, Dict, Optional
 
 import requests
 
+from .shared_storage import GENERAL_CONTEXT
+
 logger = logging.getLogger(__name__)
+
+# Agent-specific resource context (Shared by all sub-modules)
+_NODE_RESOURCE_CONTEXT = GENERAL_CONTEXT
+
 
 
 class VolcengineTTS:

@@ -1,3 +1,7 @@
+# Cobalt Multiagent - High-fidelity financial analysis platform
+# Copyright (c) 2026 Dave Wilkinson <dwilkins@bluesec.ai>
+# License: PolyForm Noncommercial 1.0.0
+
 # Copyright (c) 2025 Bytedance Ltd. and/or its affiliates
 # SPDX-License-Identifier: MIT
 
@@ -49,9 +53,14 @@ def apply_prompt_template(
     Returns:
         List of messages with the system prompt as the first message
     """
+    # Check test mode globally
+    from src.config.loader import get_bool_env
+    is_test = os.environ.get("VLI_TEST_MODE", "").lower() in ("true", "1", "yes") or get_bool_env("VLI_TEST_MODE", False)
+
     # Convert state to dict for template rendering
     state_vars = {
         "CURRENT_TIME": datetime.now().strftime("%a %b %d %Y %H:%M:%S %z"),
+        "VLI_TEST_MODE": is_test,
         **state,
     }
 

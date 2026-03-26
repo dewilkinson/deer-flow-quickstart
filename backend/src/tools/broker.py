@@ -1,4 +1,10 @@
+# Cobalt Multiagent - High-fidelity financial analysis platform
+# Copyright (c) 2026 Dave Wilkinson <dwilkins@bluesec.ai>
+# License: PolyForm Noncommercial 1.0.0
+
+# Agent: Scout - Brokerage and account management tools.
 import os
+
 from snaptrade_client import SnapTrade
 from langchain_core.tools import tool
 from langchain_core.runnables import RunnableConfig
@@ -6,7 +12,14 @@ import logging
 from datetime import datetime, timedelta
 from src.config.configuration import Configuration
 
+from typing import Dict, Any
+from src.tools.shared_storage import SCOUT_CONTEXT
+
 logger = logging.getLogger(__name__)
+
+# Agent-specific resource context (Shared by all Scout sub-modules)
+_NODE_RESOURCE_CONTEXT = SCOUT_CONTEXT
+
 
 def _get_client_and_creds(config: RunnableConfig):
     configurable = Configuration.from_runnable_config(config)

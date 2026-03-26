@@ -1,14 +1,26 @@
+# Cobalt Multiagent - High-fidelity financial analysis platform
+# Copyright (c) 2026 Dave Wilkinson <dwilkins@bluesec.ai>
+# License: PolyForm Noncommercial 1.0.0
+
+# Agent: Analyst - Exponential Moving Average trend analysis.
 # Copyright (c) 2025 Bytedance Ltd. and/or its affiliates
 # SPDX-License-Identifier: MIT
 
 import logging
 import asyncio
-import yfinance as yf
 import pandas as pd
 from typing import List, Optional
 from langchain_core.tools import tool
+from .finance import _fetch_stock_history
+
+from .shared_storage import ANALYST_CONTEXT
 
 logger = logging.getLogger(__name__)
+
+# Agent-specific resource context (Shared by Analyst sub-modules)
+_NODE_RESOURCE_CONTEXT = ANALYST_CONTEXT
+
+
 
 def calculate_ema(df: pd.DataFrame, periods: List[int]):
     """Calculates Exponential Moving Averages (EMA) for multiple periods."""
@@ -30,8 +42,8 @@ async def get_ema_analysis(
     """
     def compute_ema(symbol: str, p_list: List[int], ts: str, intern: str):
         logger.info(f"Computing EMA history for {symbol} ({p_list}) over {ts}")
-        stock = yf.Ticker(symbol)
-        df = stock.history(period=ts, interval=intern)
+        df = _fetch_stock_history(symbol, ts, intern)
+
         if df.empty:
             return f"Error: No data found for ticker '{symbol}' to calculate EMA."
         

@@ -1,9 +1,15 @@
+# Cobalt Multiagent - High-fidelity financial analysis platform
+# Copyright (c) 2026 Dave Wilkinson <dwilkins@bluesec.ai>
+# License: PolyForm Noncommercial 1.0.0
+
+# Agent: Scout - Web search and information retrieval tools.
 # Copyright (c) 2025 Bytedance Ltd. and/or its affiliates
+
 # SPDX-License-Identifier: MIT
 
 import logging
 import os
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 
 from langchain_community.tools import (
     BraveSearch,
@@ -22,8 +28,13 @@ from src.tools.decorators import create_logged_tool
 from src.tools.tavily_search.tavily_search_results_with_images import (
     TavilySearchWithImages,
 )
+from src.tools.shared_storage import SCOUT_CONTEXT
 
 logger = logging.getLogger(__name__)
+
+# Agent-specific resource context (Shared by all Scout sub-modules)
+_NODE_RESOURCE_CONTEXT = SCOUT_CONTEXT
+
 
 # Create logged versions of the search tools
 LoggedTavilySearch = create_logged_tool(TavilySearchWithImages)

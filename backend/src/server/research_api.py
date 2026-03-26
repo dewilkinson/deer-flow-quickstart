@@ -1,3 +1,7 @@
+# Cobalt Multiagent - High-fidelity financial analysis platform
+# Copyright (c) 2026 Dave Wilkinson <dwilkins@bluesec.ai>
+# License: PolyForm Noncommercial 1.0.0
+
 # Copyright (c) 2025 Bytedance Ltd. and/or its affiliates
 # SPDX-License-Identifier: MIT
 
@@ -6,8 +10,17 @@ from typing import List, Optional
 from pydantic import BaseModel
 
 from src.config.database_service import research_db
+from src.tools import fetch_market_macros
 
 router = APIRouter()
+
+@router.get("/macros")
+async def get_market_macros():
+    """Fetch global market macro regime data."""
+    try:
+        return await fetch_market_macros()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch market macros: {str(e)}")
 
 # Pydantic models for API responses
 class ResearchProjectResponse(BaseModel):

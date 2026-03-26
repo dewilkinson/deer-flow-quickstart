@@ -1,20 +1,32 @@
-# Copyright (c) 2025 Bytedance Ltd. and/or its affiliates
-# SPDX-License-Identifier: MIT
+# Agent: Prose Writer - Node definition for text continuation.
+# Cobalt Multiagent - High-fidelity financial analysis platform
+# Copyright (c) 2026 Dave Wilkinson <dwilkins@bluesec.ai>
+# License: PolyForm Noncommercial 1.0.0
 
 import logging
-
+from typing import Dict, Any
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from src.config.agents import AGENT_LLM_MAP
 from src.llms.llm import get_llm_by_type
 from src.prompts.template import get_prompt_template
 from src.prose.graph.state import ProseState
+from src.tools.shared_storage import PROSE_CONTEXT, GLOBAL_CONTEXT
 
 logger = logging.getLogger(__name__)
 
+# 1. Private context: Truly private to THIS node.
+_NODE_RESOURCE_CONTEXT: Dict[str, Any] = {}
+
+# 2. Shared context: Persistent, shared across all Prose Writer nodes
+_SHARED_RESOURCE_CONTEXT = PROSE_CONTEXT
+
+# 3. Global context: Shared across all agent types
+_GLOBAL_RESOURCE_CONTEXT = GLOBAL_CONTEXT
 
 def prose_continue_node(state: ProseState):
-    logger.info("Generating prose continue content...")
+    """Prose continue node implementation."""
+    logger.info("Generating prose continue content.")
     model = get_llm_by_type(AGENT_LLM_MAP["prose_writer"])
     prose_content = model.invoke(
         [

@@ -1,12 +1,25 @@
+# Cobalt Multiagent - High-fidelity financial analysis platform
+# Copyright (c) 2026 Dave Wilkinson <dwilkins@bluesec.ai>
+# License: PolyForm Noncommercial 1.0.0
+
+# Agent: Journaler - Personal journaling and state tracking tools.
+
 import os
+
 import glob
 from langchain_core.tools import tool
 from langchain_core.runnables import RunnableConfig
 import logging
+from typing import Dict, Any
 from datetime import datetime
 from src.config.configuration import Configuration
+from .shared_storage import JOURNALER_CONTEXT
 
 logger = logging.getLogger(__name__)
+
+# Agent-specific resource context (Shared by Journaler sub-modules)
+_NODE_RESOURCE_CONTEXT = JOURNALER_CONTEXT
+
 
 def _get_obsidian_config(config: RunnableConfig):
     configurable = Configuration.from_runnable_config(config)

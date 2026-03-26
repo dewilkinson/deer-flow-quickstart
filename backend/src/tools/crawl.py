@@ -1,16 +1,25 @@
+# Cobalt Multiagent - High-fidelity financial analysis platform
+# Copyright (c) 2026 Dave Wilkinson <dwilkins@bluesec.ai>
+# License: PolyForm Noncommercial 1.0.0
+
+# Agent: Scout - Web crawling and extraction tools.
 # Copyright (c) 2025 Bytedance Ltd. and/or its affiliates
+
 # SPDX-License-Identifier: MIT
 
 import logging
-from typing import Annotated
+from typing import Annotated, Dict, Any
 
 from langchain_core.tools import tool
-
 from src.crawler import Crawler
-
 from .decorators import log_io
+from .shared_storage import SCOUT_CONTEXT
 
 logger = logging.getLogger(__name__)
+
+# Agent-specific resource context (Shared by all Scout sub-modules)
+_NODE_RESOURCE_CONTEXT = SCOUT_CONTEXT
+
 
 
 @tool

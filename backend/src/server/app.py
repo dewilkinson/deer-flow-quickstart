@@ -1,3 +1,7 @@
+# Cobalt Multiagent - High-fidelity financial analysis platform
+# Copyright (c) 2026 Dave Wilkinson <dwilkins@bluesec.ai>
+# License: PolyForm Noncommercial 1.0.0
+
 # Copyright (c) 2025 Bytedance Ltd. and/or its affiliates
 # SPDX-License-Identifier: MIT
 
@@ -137,6 +141,16 @@ async def verify_api_key(api_key: str = Security(api_key_header)):
         if not api_key or api_key != expected_key:
             raise HTTPException(status_code=401, detail="Invalid API Key")
     return api_key
+
+@app.get("/api/vli/visualization")
+async def vli_visualization():
+    """Serve the VLI technical analysis visualization (Diagnostic Only)."""
+    try:
+        img_path = r"C:\Users\rende\OneDrive\Desktop\vli_analysis_visualization.png"
+        with open(img_path, "rb") as f:
+            return Response(content=f.read(), media_type="image/png")
+    except Exception:
+        raise HTTPException(status_code=404, detail="Visualization image not found. Deploy to production to generate.")
 
 @app.post("/api/chat/stream", dependencies=[Depends(verify_api_key)])
 async def chat_stream(request: ChatRequest):

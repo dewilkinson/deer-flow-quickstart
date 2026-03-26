@@ -1,17 +1,31 @@
+# Cobalt Multiagent - High-fidelity financial analysis platform
+# Copyright (c) 2026 Dave Wilkinson <dwilkins@bluesec.ai>
+# License: PolyForm Noncommercial 1.0.0
+
 # Copyright (c) 2025 Bytedance Ltd. and/or its affiliates
 # SPDX-License-Identifier: MIT
 
 import logging
 import os
 import uuid
+from typing import Dict, Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
-
 from src.config.agents import AGENT_LLM_MAP
 from src.llms.llm import get_llm_by_type
 from src.prompts.template import get_prompt_template
 
+from src.tools.shared_storage import PPT_CONTEXT, GLOBAL_CONTEXT
 from .state import PPTState
+
+# 1. Private to the Agent Code Itself
+_NODE_RESOURCE_CONTEXT: Dict[str, Any] = {}
+
+# 2. Shared context: Persistent, shared by PPT sub-modules
+_SHARED_RESOURCE_CONTEXT = PPT_CONTEXT
+
+# 3. Global context: Shared across all agent types
+_GLOBAL_RESOURCE_CONTEXT = GLOBAL_CONTEXT
 
 logger = logging.getLogger(__name__)
 
