@@ -51,7 +51,7 @@ from src.config.analyst import get_analyst_keywords
 from src.utils.json_utils import repair_json_output
 from .types import State
 from src.tools.shared_storage import (
-    SCOUT_CONTEXT, ANALYST_CONTEXT, RESEARCHER_CONTEXT,
+    SCOUT_CONTEXT, ANALYST_CONTEXT,
     JOURNALER_CONTEXT, CODER_CONTEXT, ORCHESTRATOR_CONTEXT,
     GENERAL_CONTEXT
 )
@@ -85,11 +85,15 @@ async def parser_node(state: State, config: RunnableConfig) -> Command[Literal["
     _GLOBAL_RESOURCE_CONTEXT = GLOBAL_CONTEXT
 
     configurable = Configuration.from_runnable_config(config)
-    messages = apply_prompt_template("parser", state)
+    tools = get_orchestrator_tools(config)
     
     llm = get_llm_by_type(AGENT_LLM_MAP.get("parser", "basic"))
-    structured_llm = llm.with_structured_output(Plan)
+    # Bind tools for potential bypass
+    llm_with_tools = llm.bind_tools(tools)
+    structured_llm = llm_with_tools.with_structured_output(Plan)
 
+    messages = apply_prompt_template("parser", state)
+    
     response = structured_llm.invoke(messages)
     plan_obj = response
     
@@ -127,8 +131,11 @@ def coordinator_node(state: State, config: RunnableConfig) -> Command[Literal["h
     state_for_prompt = {**state, "ANALYST_KEYWORDS": analyst_keywords}
     
     messages = apply_prompt_template("coordinator", state_for_prompt)
+    
     llm = get_llm_by_type(AGENT_LLM_MAP.get("coordinator", "reasoning"))
-    structured_llm = llm.with_structured_output(Plan)
+    tools = get_orchestrator_tools(config)
+    llm_with_tools = llm.bind_tools(tools)
+    structured_llm = llm_with_tools.with_structured_output(Plan)
     
     plan_obj = structured_llm.invoke(messages)
     return Command(
@@ -209,7 +216,7 @@ async def researcher_node(state: State, config: RunnableConfig):
     # 1. Private to the Agent Code Itself
     _NODE_RESOURCE_CONTEXT = _RESEARCHER_NODE_CONTEXT
     # 2. Shared context: Persistent, shared by agents of the SAME type
-    _SHARED_RESOURCE_CONTEXT = RESEARCHER_CONTEXT
+    _SHARED_RESOURCE_CONTEXT = ANALYST_CONTEXT
     # 3. Global context: Shared across all agent types
     _GLOBAL_RESOURCE_CONTEXT = GENERAL_CONTEXT
 
@@ -228,7 +235,20 @@ async def researcher_node(state: State, config: RunnableConfig):
         except Exception as e:
             logger.error(f"Failed to initialize Research macro history: {e}")
 
-    tools = [get_web_search_tool(configurable.max_search_results), crawl_tool, get_stock_quote]
+    tools = [
+        get_web_search_tool(configurable.max_search_results), 
+        crawl_tool,
+        snapper,
+        get_stock_quote, 
+        fetch_market_macros,
+        get_smc_analysis, 
+        get_ema_analysis, 
+        get_rsi_analysis, 
+        get_macd_analysis,
+        get_volatility_atr, 
+        get_volume_profile, 
+        get_bollinger_bands
+    ]
 
     return await _setup_and_execute_agent_step(state, config, "researcher", tools)
 
@@ -262,10 +282,19 @@ async def scout_node(state: State, config: RunnableConfig):
         get_web_search_tool(configurable.max_search_results),
         crawl_tool,
         snapper,
-
     ]
 
     return await _setup_and_execute_agent_step(state, config, "scout", tools)
+
+# Orchestrator Fast Bypass Tools
+def get_orchestrator_tools(config: RunnableConfig):
+    configurable = Configuration.from_runnable_config(config)
+    return [
+        get_stock_quote,
+        get_web_search_tool(configurable.max_search_results),
+        crawl_tool,
+        snapper
+    ]
 
 async def journaler_node(state: State, config: RunnableConfig):
     # 1. Private to the Agent Code Itself

@@ -9,8 +9,7 @@ from typing import List, Dict, Any
 from langchain_core.tools import tool
 from .finance import get_symbol_history_data
 
-
-from .shared_storage import RESEARCHER_CONTEXT, GLOBAL_CONTEXT
+from .shared_storage import ANALYST_CONTEXT, GLOBAL_CONTEXT
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +17,7 @@ logger = logging.getLogger(__name__)
 _NODE_RESOURCE_CONTEXT: Dict[str, Any] = {}
 
 # 2. Shared context: Persistent, shared by all agents of the SAME type.
-_SHARED_RESOURCE_CONTEXT = RESEARCHER_CONTEXT
+_SHARED_RESOURCE_CONTEXT = ANALYST_CONTEXT
 
 # 3. Global context: Persistent, shared by ALL agents of ANY type.
 _GLOBAL_RESOURCE_CONTEXT = GLOBAL_CONTEXT

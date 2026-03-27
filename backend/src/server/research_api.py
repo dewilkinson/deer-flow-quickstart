@@ -10,7 +10,7 @@ from typing import List, Optional
 from pydantic import BaseModel
 
 from src.config.database_service import research_db
-from src.tools import fetch_market_macros
+from src.tools import fetch_market_macros, get_macro_data
 
 router = APIRouter()
 
@@ -21,6 +21,14 @@ async def get_market_macros():
         return await fetch_market_macros()
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch market macros: {str(e)}")
+
+@router.get("/macros/data")
+async def get_market_macros_data():
+    """Fetch global market macro data in structured JSON format."""
+    try:
+        return await get_macro_data()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch macro data: {str(e)}")
 
 # Pydantic models for API responses
 class ResearchProjectResponse(BaseModel):

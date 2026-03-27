@@ -8,9 +8,13 @@ from typing import Dict, Any
 from langchain_core.runnables import RunnableConfig
 
 from src.config.configuration import Configuration
-from src.tools import get_web_search_tool, crawl_tool, get_stock_quote, get_symbol_history_data
+from src.tools import (
+    get_web_search_tool, crawl_tool, get_stock_quote, get_symbol_history_data, fetch_market_macros,
+    get_smc_analysis, get_ema_analysis, get_rsi_analysis, get_macd_analysis,
+    get_volatility_atr, get_volume_profile, get_bollinger_bands, snapper
+)
 from src.tools.research import RULES as RESEARCH_RULES
-from src.tools.shared_storage import RESEARCHER_CONTEXT, GLOBAL_CONTEXT
+from src.tools.shared_storage import ANALYST_CONTEXT, GLOBAL_CONTEXT
 from ..types import State
 from .common import _setup_and_execute_agent_step
 
@@ -20,8 +24,8 @@ logger = logging.getLogger(__name__)
 # Any attempt by other agents to access this will cause an error (NameError).
 _NODE_RESOURCE_CONTEXT: Dict[str, Any] = {}
 
-# 2. Shared context: Persistent, shared by agents of the SAME type
-_SHARED_RESOURCE_CONTEXT = RESEARCHER_CONTEXT
+# 2. Shared context: Persistent, shared by Analyst sub-modules (including Researcher specialization)
+_SHARED_RESOURCE_CONTEXT = ANALYST_CONTEXT
 
 # 3. Global context: Shared across all agent types
 _GLOBAL_RESOURCE_CONTEXT = GLOBAL_CONTEXT
@@ -44,6 +48,21 @@ async def researcher_node(state: State, config: RunnableConfig):
             logger.error(f"Failed to initialize Research macro history: {e}")
 
     configurable = Configuration.from_runnable_config(config)
-    tools = [get_web_search_tool(configurable.max_search_results), crawl_tool, get_stock_quote]
+    tools = [
+        # Researcher extended tools
+        get_web_search_tool(configurable.max_search_results), 
+        crawl_tool,
+        snapper,
+        # Analyst base tools
+        get_stock_quote, 
+        fetch_market_macros,
+        get_smc_analysis, 
+        get_ema_analysis, 
+        get_rsi_analysis, 
+        get_macd_analysis,
+        get_volatility_atr, 
+        get_volume_profile, 
+        get_bollinger_bands
+    ]
 
     return await _setup_and_execute_agent_step(state, config, "researcher", tools)

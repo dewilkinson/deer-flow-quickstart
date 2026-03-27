@@ -2,5 +2,18 @@
     "type": "researcher",
     "name": "The Researcher",
     "prompt_file": "researcher",
-    "tools": ["web_search", "crawl_tool", "get_stock_quote"]
+    "tools": [
+        "web_search", 
+        "crawl_tool", 
+        "snapper",
+        "get_stock_quote", 
+        "fetch_market_macros",
+        "get_smc_analysis", 
+        "get_ema_analysis", 
+        "get_rsi_analysis", 
+        "get_macd_analysis",
+        "get_volatility_atr", 
+        "get_volume_profile", 
+        "get_bollinger_bands"
+    ]
 }

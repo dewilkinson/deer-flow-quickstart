@@ -8,12 +8,8 @@
         "get_brokerage_balance", 
         "get_brokerage_statements", 
         "get_stock_quote",
-        "get_smc_analysis",
-        "get_ema_analysis",
-        "get_rsi_analysis",
-        "get_macd_analysis",
-        "get_volatility_atr",
-        "get_volume_profile",
-        "get_bollinger_bands"
+        "get_web_search_tool",
+        "crawl_tool",
+        "snapper"
     ]
 }

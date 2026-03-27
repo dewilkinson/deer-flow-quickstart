@@ -14,7 +14,7 @@ from .finance import get_stock_quote, get_symbol_history_data, get_sharpe_ratio,
 from .broker import get_brokerage_accounts, get_brokerage_history, get_brokerage_balance, get_brokerage_statements
 from .journal import write_daily_journal, list_journal_entries, read_journal_entry, get_journal_folder, set_journal_folder
 from .smc import get_smc_analysis
-from .macros import fetch_market_macros
+from .macros import fetch_market_macros, get_macro_data
 from .ema import get_ema_analysis
 from .indicators import get_rsi_analysis, get_macd_analysis, get_volatility_atr, get_volume_profile, get_bollinger_bands
 from .vision import get_image_from_url, get_image_from_local_path
@@ -50,5 +50,6 @@ __all__ = [
     "get_sharpe_ratio",
     "get_sortino_ratio",
     "fetch_market_macros",
+    "get_macro_data",
 ]
 

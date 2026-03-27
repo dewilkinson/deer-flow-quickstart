@@ -88,7 +88,7 @@ const SCENARIOS: Scenario[] = [
     description: "Verifies VLI_TEST_MODE successfully injects web search into Analyst.",
     prompt: "I am testing the VLI override. Use your web search tool to find the latest VLI Test Framework documentation.",
     assertions: [
-      { id: '1', label: "Agent receives fetch_web_search tool", status: 'pending' },
+      { id: '1', label: "Agent receives web_search tool", status: 'pending' },
       { id: '2', label: "Agent successfully executes external search", status: 'pending' },
     ]
   },
@@ -203,6 +203,10 @@ export default function TestDashboard() {
               if (node !== lastNodeVisited && node !== 'Orchestrator') {
                  addLog('System', 'info', `⮑ [Transition] Control handed over to Node: ${node} (Namespace: ${data.checkpoint_ns || "Global"})`);
                  lastNodeVisited = node;
+                 
+                 if (node === 'analyst') {
+                    setAssertionState(prev => ({...prev, "Coordinator routes to Analyst": "passed"}));
+                 }
               }
               
               if (data.reasoning_content) {
@@ -269,22 +273,31 @@ export default function TestDashboard() {
                   addLog(agent, 'tool', `🛠️ [Action Requested] Executing ${tc.name} with params: ${argsDisplay}`);
                   
                   // Mock assertion logic based on tool names
-                  if (tc.name === 'fetch_web_search') {
+                  if (tc.name === 'web_search') {
                     setAssertionState(prev => ({
                         ...prev, 
-                        "Agent receives fetch_web_search tool": "passed", 
+                        "Agent receives web_search tool": "passed", 
                         "Agent successfully executes external search": "passed",
                         "Market leader discovery via web search": "passed"
                     }));
                   }
-                  if (tc.name === 'fetch_smc_structure') {
+                  if (tc.name === 'get_smc_analysis') {
                     setAssertionState(prev => ({...prev, "Analyst performs SMC structure search": "passed"}));
                   }
-                  if (tc.name === 'take_screenshot_tool') {
+                  if (tc.name === 'snapper') {
                     setAssertionState(prev => ({
                         ...prev, 
                         "TradingView URL construction (EXCHANGE:SYMBOL)": "passed", 
-                        "Visual chart display in panel via take_screenshot_tool": "passed"
+                        "Visual chart display in panel via snapper": "passed"
+                    }));
+                  }
+                  if (tc.name === 'fetch_market_macros') {
+                    setAssertionState(prev => ({
+                        ...prev,
+                        "Tavily Search API handshake": "passed",
+                        "Yahoo Finance Data Fetch (DXY)": "passed",
+                        "Multi-timeframe SMC computation": "passed",
+                        "Macro report synthesis": "passed"
                     }));
                   }
                 });

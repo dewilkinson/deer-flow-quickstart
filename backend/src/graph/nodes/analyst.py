@@ -9,7 +9,8 @@ from langchain_core.runnables import RunnableConfig
 
 from src.tools import (
     get_smc_analysis, get_ema_analysis, get_stock_quote, get_rsi_analysis,
-    get_macd_analysis, get_volatility_atr, get_volume_profile, get_bollinger_bands
+    get_macd_analysis, get_volatility_atr, get_volume_profile, get_bollinger_bands,
+    fetch_market_macros
 )
 from src.tools.shared_storage import ANALYST_CONTEXT, GLOBAL_CONTEXT
 from ..types import State
@@ -31,7 +32,8 @@ async def analyst_node(state: State, config: RunnableConfig):
     logger.info("Analyst Node: Synthesizing technical indicators.")
     tools = [
         get_smc_analysis, get_ema_analysis, get_stock_quote, get_rsi_analysis,
-        get_macd_analysis, get_volatility_atr, get_volume_profile, get_bollinger_bands
+        get_macd_analysis, get_volatility_atr, get_volume_profile, get_bollinger_bands,
+        fetch_market_macros
     ]
 
     return await _setup_and_execute_agent_step(state, config, "analyst", tools)

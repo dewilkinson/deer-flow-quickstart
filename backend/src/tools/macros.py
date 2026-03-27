@@ -14,7 +14,7 @@ from langchain_core.tools import tool
 from .finance import get_symbol_history_data, get_sortino_ratio, _fetch_batch_history, _extract_ticker_data
 from .smc import get_smc_analysis
 
-from .shared_storage import RESEARCHER_CONTEXT, GLOBAL_CONTEXT
+from .shared_storage import ANALYST_CONTEXT, GLOBAL_CONTEXT
 
 NY_TZ = ZoneInfo("America/New_York")
 
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 _NODE_RESOURCE_CONTEXT: Dict[str, Any] = {}
 
 # 2. Shared context
-_SHARED_RESOURCE_CONTEXT = RESEARCHER_CONTEXT
+_SHARED_RESOURCE_CONTEXT = ANALYST_CONTEXT
 
 # 3. Global context
 _GLOBAL_RESOURCE_CONTEXT = GLOBAL_CONTEXT

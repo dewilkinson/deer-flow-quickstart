@@ -10,7 +10,6 @@ from typing import Dict, Any
 
 SCOUT_CONTEXT: Dict[str, Any] = {}
 ANALYST_CONTEXT: Dict[str, Any] = {}
-RESEARCHER_CONTEXT: Dict[str, Any] = {}
 JOURNALER_CONTEXT: Dict[str, Any] = {}
 CODER_CONTEXT: Dict[str, Any] = {}
 ORCHESTRATOR_CONTEXT: Dict[str, Any] = {}

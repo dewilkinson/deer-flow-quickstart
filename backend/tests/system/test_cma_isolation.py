@@ -62,14 +62,14 @@ def test_tool_isolation_standards():
 
 def test_context_privacy_leakage():
     """Verify that modifying one private context does not affect others."""
-    from src.graph.nodes.researcher import _NODE_RESOURCE_CONTEXT as res_ctx
+    from src.graph.nodes.scout import _NODE_RESOURCE_CONTEXT as scout_ctx
     from src.graph.nodes.analyst import _NODE_RESOURCE_CONTEXT as ana_ctx
     
-    res_ctx['internal_secret'] = 'res_value'
+    scout_ctx['internal_secret'] = 'sc_value'
     assert 'internal_secret' not in ana_ctx
     
     ana_ctx['internal_secret'] = 'ana_value'
-    assert res_ctx['internal_secret'] == 'res_value'
+    assert scout_ctx['internal_secret'] == 'sc_value'
     assert ana_ctx['internal_secret'] == 'ana_value'
 
 def test_journaler_rebranding():
