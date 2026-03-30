@@ -179,7 +179,11 @@ When planning information gathering, consider these key aspects and ensure COMPR
     - Strategy-level technical analysis (SMC, FVG, BOS, RSI, MACD, EMA): Set `need_search: false` and `step_type: analyst`
     - Multimodal snapshot analysis (Screenshots, Desktop observation): Set `need_search: false` and `step_type: imaging`
 - Specify the exact data to be collected in step's `description`. Include a `note` if necessary.
-- **Obsidian/Vault Access**: You HAVE access to the user's personal journal and trading logs via the `journaler` step type and its associated tools. DO NOT state you cannot access personal files; instead, create a `journaler` step to retrieve them.
+- **Batch Analysis & Morning Routine**: You are authorized to plan for the **Morning Analysis Routine**.
+  - If the user asks for "Suitability" or "Risk Analysis" on a **named watchlist** (e.g., "Daily Picks"), you MUST first create a `portfolio_manager` step to `get_watchlist_tickers`.
+  - For each ticker identified, you should create a subsequent `analyst` or `risk_manager` step.
+  - **Switcher Logic**: If the user asks for a "Summary" or "Quick Audit," set the description to specify "Summary Mode (one-line grade only)." Otherwise, default to "Full Report Mode."
+- **Journaling**: Use the `journaler` step to `create_journal_from_watchlist` when finalizing a session.
 
 - Prioritize depth and volume of relevant information - limited information is not acceptable.
 - Use the same language as the user to generate the plan.

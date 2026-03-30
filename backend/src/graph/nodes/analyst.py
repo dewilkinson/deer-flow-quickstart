@@ -14,7 +14,7 @@ from src.tools import (
 )
 from src.tools.shared_storage import ANALYST_CONTEXT, GLOBAL_CONTEXT
 from ..types import State
-from .common import _setup_and_execute_agent_step
+from .common_vli import _setup_and_execute_agent_step
 
 logger = logging.getLogger(__name__)
 

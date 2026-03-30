@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 def prose_zap_node(state: ProseState):
     logger.info("Generating prose zap content...")
-    model = get_llm_by_type(AGENT_LLM_MAP["prose_writer"])
+    model = get_llm_by_type(AGENT_LLM_MAP.get("prose_writer", "basic"))
     prose_content = model.invoke(
         [
             SystemMessage(content=get_prompt_template("prose/prose_zap")),

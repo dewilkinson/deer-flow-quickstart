@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 
 def ppt_composer_node(state: PPTState):
     logger.info("Generating ppt content...")
-    model = get_llm_by_type(AGENT_LLM_MAP["ppt_composer"])
+    model = get_llm_by_type(AGENT_LLM_MAP.get("ppt_composer", "basic"))
     ppt_content = model.invoke(
         [
             SystemMessage(content=get_prompt_template("ppt/ppt_composer")),

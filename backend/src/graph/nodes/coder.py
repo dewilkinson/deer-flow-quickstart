@@ -10,7 +10,7 @@ from langchain_core.runnables import RunnableConfig
 from src.tools import python_repl_tool
 from src.tools.shared_storage import CODER_CONTEXT, GLOBAL_CONTEXT
 from ..types import State
-from .common import _setup_and_execute_agent_step
+from .common_vli import _setup_and_execute_agent_step
 
 logger = logging.getLogger(__name__)
 

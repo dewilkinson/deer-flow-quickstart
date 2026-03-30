@@ -18,7 +18,7 @@ from .macros import fetch_market_macros, get_macro_data
 from .ema import get_ema_analysis
 from .indicators import get_rsi_analysis, get_macd_analysis, get_volatility_atr, get_volume_profile, get_bollinger_bands
 from .vision import get_image_from_url, get_image_from_local_path
-from .portfolio import update_watchlist, update_portfolio_ledger, get_portfolio_balance_report
+from .portfolio import update_watchlist, update_portfolio_ledger, get_portfolio_balance_report, swap_watchlist_item
 from .tts import VolcengineTTS
 
 __all__ = [
@@ -59,4 +59,5 @@ __all__ = [
     "update_watchlist",
     "update_portfolio_ledger",
     "get_portfolio_balance_report",
+    "swap_watchlist_item",
 ]

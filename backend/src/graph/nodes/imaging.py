@@ -11,7 +11,7 @@ from src.config.configuration import Configuration
 from src.tools import get_stock_quote, get_web_search_tool, python_repl_tool, get_image_from_url, get_image_from_local_path, snapper
 from src.tools.shared_storage import ANALYST_CONTEXT, GLOBAL_CONTEXT
 from ..types import State
-from .common import _setup_and_execute_agent_step
+from .common_vli import _setup_and_execute_agent_step
 
 logger = logging.getLogger(__name__)
 

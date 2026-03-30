@@ -97,6 +97,63 @@ def write_daily_journal(content: str, date_str: str = None, config: RunnableConf
         return f"[ERROR]: Failed to write journal: {e}"
 
 @tool
+def sync_watchlist_to_journal(watchlist_name: str = "Daily Picks", config: RunnableConfig = None):
+    """
+    Fixed-function tool to sync a watchlist to the 'Targeted Candidates' section of today's journal.
+    If the journal doesn't exist, it creates a blank one first.
+    """
+    vault_path, journal_dir = _get_obsidian_config(config)
+    if not vault_path:
+        return "[ERROR]: Obsidian vault path is not configured."
+    
+    from .portfolio import get_watchlist_tickers
+    tickers = get_watchlist_tickers.func(name=watchlist_name, config=config)
+    
+    date_str = datetime.now().strftime("%Y-%m-%d")
+    full_journal_dir = os.path.join(vault_path, journal_dir)
+    filename = f"Trading_Journal_{date_str}.md"
+    file_path = os.path.join(full_journal_dir, filename)
+    
+    # Baseline Template
+    template = f"# Daily Analysis Journal - {date_str}\n\n"
+    template += "### 🎯 Targeted Candidates\n\n"
+    template += "### 📈 Morning Session Notes\n- \n\n"
+    template += "### ⚠️ Risk Multipliers (VIX/Gamma)\n- \n\n"
+    
+    os.makedirs(full_journal_dir, exist_ok=True)
+    
+    content = ""
+    if os.path.exists(file_path):
+        with open(file_path, "r", encoding="utf-8") as f:
+            content = f.read()
+    else:
+        content = template
+        
+    # Fixed-Function Section Replacement (Regex-free for reliability)
+    header = "### 🎯 Targeted Candidates"
+    new_list_str = "\n".join([f"- [ ] **{t}**" for t in tickers]) + "\n\n"
+    
+    if header in content:
+        parts = content.split(header)
+        # Find next header or end of file
+        rest = parts[1].lstrip()
+        if "###" in rest:
+            sub_parts = rest.split("###", 1)
+            final_content = parts[0] + header + "\n" + new_list_str + "###" + sub_parts[1]
+        else:
+            final_content = parts[0] + header + "\n" + new_list_str
+    else:
+        # Header missing - Append to end
+        final_content = content + "\n\n" + header + "\n" + new_list_str
+
+    try:
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.write(final_content)
+        return f"Watchlist [{watchlist_name}] synced to {filename} section [{header}]."
+    except Exception as e:
+        return f"[ERROR]: Failed to sync journal: {e}"
+
+@tool
 def list_journal_entries(config: RunnableConfig):
     """
     Lists all available trading journal entries in the Obsidian vault.

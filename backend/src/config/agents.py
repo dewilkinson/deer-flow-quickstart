@@ -2,16 +2,14 @@
 # Copyright (c) 2026 Dave Wilkinson <dwilkins@bluesec.ai>
 # License: PolyForm Noncommercial 1.0.0
 
-# Copyright (c) 2025 Bytedance Ltd. and/or its affiliates
-# SPDX-License-Identifier: MIT
-
 from typing import Literal
+from collections import defaultdict
 
 # Define available LLM types
 LLMType = Literal["basic", "reasoning", "vision", "code"]
 
-# Define agent-LLM mapping
-AGENT_LLM_MAP: dict[str, LLMType] = {
+# 1. Base dictionary for explicit mappings
+_BASE_AGENT_LLM_MAP: dict[str, LLMType] = {
     "coordinator": "basic",
     "planner": "basic",
     "researcher":"basic",
@@ -24,7 +22,13 @@ AGENT_LLM_MAP: dict[str, LLMType] = {
     "scout": "basic",
     "journaler": "basic",
 
+    "portfolio_manager": "basic",
+    "risk_manager": "reasoning",
+
     "analyst": "basic",
     "imaging": "vision",
     "system": "basic",
 }
+
+# 2. Resilient Registry: Never throws KeyError, defaults to "basic"
+AGENT_LLM_MAP = defaultdict(lambda: "basic", _BASE_AGENT_LLM_MAP)

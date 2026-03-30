@@ -22,7 +22,7 @@ def prompt_enhancer_node(state: PromptEnhancerState):
     """Node that enhances user prompts using AI analysis."""
     logger.info("Enhancing user prompt...")
 
-    model = get_llm_by_type(AGENT_LLM_MAP["prompt_enhancer"])
+    model = get_llm_by_type(AGENT_LLM_MAP.get("prompt_enhancer", "basic"))
 
     try:
         # Create messages with context if provided

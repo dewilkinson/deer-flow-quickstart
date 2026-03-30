@@ -5,8 +5,10 @@
 # Agent: Portfolio Manager - Watchlist and Ledger management tools.
 
 import os
+import glob
 import logging
-from typing import List, Dict, Any
+import yaml
+from typing import List, Dict, Any, Optional
 from langchain_core.tools import tool
 from langchain_core.runnables import RunnableConfig
 from src.config.configuration import Configuration
@@ -21,10 +23,16 @@ def _get_obsidian_config(config: RunnableConfig):
     return vault_path
 
 @tool
-def update_watchlist(tickers: List[str], action: str = "add", config: RunnableConfig = None):
+def update_watchlist(tickers: List[str], name: str = "Tactical", action: str = "add", metadata: Optional[Dict[str, Any]] = None, config: RunnableConfig = None):
     """
-    Manages the 'Watchlist.md' file in the Obsidian vault (_cobalt directory).
-    Actions: 'add' (adds tickers if not present), 'remove' (removes tickers), 'list' (returns content).
+    Manages a named Watchlist file in the Obsidian vault (_cobalt directory).
+    Filename: Watchlist_{name}.md
+    
+    Args:
+        tickers: List of ticker symbols to modify.
+        name: The suffix for the watchlist name (e.g., 'Daily', 'Index', 'Futures', 'Tech').
+        action: 'add', 'remove', or 'list'.
+        metadata: Optional dictionary of metadata to store as YAML frontmatter (e.g., {'Sector': 'Energy', 'Conviction': 'High'}).
     """
     vault_path = _get_obsidian_config(config)
     if not vault_path:
@@ -34,17 +42,33 @@ def update_watchlist(tickers: List[str], action: str = "add", config: RunnableCo
     if not os.path.exists(cobalt_dir):
         os.makedirs(cobalt_dir, exist_ok=True)
     
-    watchlist_path = os.path.join(cobalt_dir, "Watchlist.md")
+    filename = f"Watchlist_{name}.md" if name else "Watchlist.md"
+    watchlist_path = os.path.join(cobalt_dir, filename)
     
     # Read existing
     current_watchlist = []
+    current_metadata = {}
+    
     if os.path.exists(watchlist_path):
         with open(watchlist_path, "r", encoding="utf-8") as f:
-            lines = f.readlines()
-            current_watchlist = [line.strip().replace("- ", "") for line in lines if line.startswith("- ")]
+            content = f.read()
+            # Parse YAML if present
+            if content.startswith("---"):
+                try:
+                    parts = content.split("---", 2)
+                    if len(parts) >= 3:
+                        current_metadata = yaml.safe_load(parts[1]) or {}
+                        body = parts[2]
+                        current_watchlist = [line.strip().replace("- ", "") for line in body.splitlines() if line.startswith("- ")]
+                except Exception as e:
+                    logger.warning(f"Failed to parse YAML frontmatter in {filename}: {e}")
+                    # Fallback to simple parsing
+                    current_watchlist = [line.strip().replace("- ", "") for line in content.splitlines() if line.startswith("- ")]
+            else:
+                current_watchlist = [line.strip().replace("- ", "") for line in content.splitlines() if line.startswith("- ")]
 
     if action == "list":
-        return f"Current Watchlist: {', '.join(current_watchlist)}" if current_watchlist else "Watchlist is empty."
+        return f"Watchlist [{name}]: {', '.join(current_watchlist)}" if current_watchlist else f"Watchlist [{name}] is empty."
 
     # Normalize tickers
     tickers = [t.upper().strip() for t in tickers]
@@ -56,23 +80,114 @@ def update_watchlist(tickers: List[str], action: str = "add", config: RunnableCo
     elif action == "remove":
         current_watchlist = [t for t in current_watchlist if t not in tickers]
         msg = f"Removed: {', '.join(tickers)}"
+    elif action == "clear":
+        current_watchlist = []
+        msg = f"Watchlist [{name}] cleared."
     else:
-        return "[ERROR]: Invalid action. Use 'add', 'remove', or 'list'."
+        return "[ERROR]: Invalid action. Use 'add', 'remove', 'list', or 'clear'."
+
+    # Update metadata if provided
+    if metadata:
+        current_metadata.update(metadata)
 
     # Sort and Write back
     current_watchlist.sort()
-    with open(watchlist_path, "w", encoding="utf-8") as f:
-        f.write("# Cobalt Watchlist\n\n")
-        for ticker in current_watchlist:
-            f.write(f"- {ticker}\n")
+    try:
+        with open(watchlist_path, "w", encoding="utf-8") as f:
+            if current_metadata:
+                f.write("---\n")
+                yaml.dump(current_metadata, f, default_flow_style=False)
+                f.write("---\n\n")
+            f.write(f"# Cobalt Watchlist: {name}\n\n")
+            for ticker in current_watchlist:
+                f.write(f"- {ticker}\n")
+        return f"{msg} | Watchlist [{name}] updated at {watchlist_path}"
+    except Exception as e:
+        return f"[ERROR]: Failed to write watchlist {name}: {e}"
+
+@tool
+def get_watchlist_tickers(name: str = "Tactical", config: RunnableConfig = None) -> List[str]:
+    """
+    Returns a clean list of ticker symbols from a named Watchlist.
+    Use this as a pre-requisite for batch analysis or risk auditing.
+    """
+    vault_path = _get_obsidian_config(config)
+    if not vault_path:
+        return []
+    
+    filename = f"Watchlist_{name}.md" if name else "Watchlist.md"
+    watchlist_path = os.path.join(vault_path, "_cobalt", filename)
+    
+    tickers = []
+    if os.path.exists(watchlist_path):
+        with open(watchlist_path, "r", encoding="utf-8") as f:
+            content = f.read()
+            # Skip YAML frontmatter if present
+            if content.startswith("---"):
+                parts = content.split("---", 2)
+                body = parts[2] if len(parts) >= 3 else ""
+            else:
+                body = content
+            tickers = [line.strip().replace("- ", "") for line in body.splitlines() if line.startswith("- ")]
+    return tickers
+
+@tool
+def swap_watchlist_item(old_ticker: str, new_ticker: str, watchlist_name: str = "Tactical", config: RunnableConfig = None):
+    """
+    High-conviction tool to swap one ticker for another in a specific named Watchlist.
+    """
+    old_ticker = old_ticker.upper().strip()
+    new_ticker = new_ticker.upper().strip()
+    
+    # We use the underlying function to avoid StructuredTool call errors
+    res_remove = update_watchlist.func(tickers=[old_ticker], name=watchlist_name, action="remove", config=config)
+    if "[ERROR]" in res_remove:
+        return res_remove
+    
+    res_add = update_watchlist.func(tickers=[new_ticker], name=watchlist_name, action="add", config=config)
+    if "[ERROR]" in res_add:
+        return res_add
+        
+    return f"Successfully swapped {old_ticker} for {new_ticker} in the Cobalt Watchlist [{watchlist_name}]."
+
+@tool
+def get_portfolio_balance_report(config: RunnableConfig = None):
+    """
+    Aggregates all named Watchlists (Watchlist_*.md) and the Portfolio Ledger.
+    """
+    vault_path = _get_obsidian_config(config)
+    if not vault_path:
+        return "[ERROR]: Obsidian vault path is not configured."
+    
+    cobalt_dir = os.path.join(vault_path, "_cobalt")
+    reports = []
+    
+    # Ledger
+    ledger_path = os.path.join(cobalt_dir, "Portfolio_Ledger.md")
+    if os.path.exists(ledger_path):
+        with open(ledger_path, "r", encoding="utf-8") as f:
+            reports.append(f"--- Portfolio_Ledger.md ---\n{f.read()}")
             
-    return f"{msg} | Watchlist updated at {watchlist_path}"
+    # Watchlists
+    list_files = glob.glob(os.path.join(cobalt_dir, "Watchlist_*.md"))
+    # Also include the generic one if it exists
+    if os.path.exists(os.path.join(cobalt_dir, "Watchlist.md")):
+        list_files.append(os.path.join(cobalt_dir, "Watchlist.md"))
+        
+    for path in sorted(list_files):
+        filename = os.path.basename(path)
+        with open(path, "r", encoding="utf-8") as f:
+            reports.append(f"--- {filename} ---\n{f.read()}")
+            
+    if not reports:
+        return "No portfolio data or watchlists found in the vault."
+            
+    return "\n\n".join(reports)
 
 @tool
 def update_portfolio_ledger(position_data: str, config: RunnableConfig = None):
     """
     Updates the 'Portfolio_Ledger.md' in the Obsidian vault (_cobalt directory).
-    Use this to persist the current state of active 'Sword' and 'Shield' positions.
     """
     vault_path = _get_obsidian_config(config)
     if not vault_path:
@@ -90,25 +205,3 @@ def update_portfolio_ledger(position_data: str, config: RunnableConfig = None):
         return f"Portfolio ledger successfully updated at {ledger_path}"
     except Exception as e:
         return f"[ERROR]: Failed to update ledger: {e}"
-
-@tool
-def get_portfolio_balance_report(config: RunnableConfig = None):
-    """
-    Reads both the Watchlist and Portfolio Ledger to provide a summary of the current tactical state.
-    """
-    vault_path = _get_obsidian_config(config)
-    if not vault_path:
-        return "[ERROR]: Obsidian vault path is not configured."
-    
-    cobalt_dir = os.path.join(vault_path, "_cobalt")
-    reports = []
-    
-    for filename in ["Portfolio_Ledger.md", "Watchlist.md"]:
-        path = os.path.join(cobalt_dir, filename)
-        if os.path.exists(path):
-            with open(path, "r", encoding="utf-8") as f:
-                reports.append(f"--- {filename} ---\n{f.read()}")
-        else:
-            reports.append(f"--- {filename} ---\n(File Not Found)")
-            
-    return "\n\n".join(reports)

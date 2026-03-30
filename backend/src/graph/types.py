@@ -2,27 +2,27 @@
 # Copyright (c) 2026 Dave Wilkinson <dwilkins@bluesec.ai>
 # License: PolyForm Noncommercial 1.0.0
 
-# Copyright (c) 2025 Bytedance Ltd. and/or its affiliates
-# SPDX-License-Identifier: MIT
-
-
 from langgraph.graph import MessagesState
-
 from src.prompts.planner_model import Plan
 from src.rag import Resource
 
-
 class State(MessagesState):
-    """State for the agent system, extends MessagesState with next field."""
+    """Deeply typed state for the multi-agent graph with session persistence."""
 
-    # Runtime Variables
+    # Runtime Local Variables
     locale: str = "en-US"
     verbosity: int = 1
     research_topic: str = ""
     observations: list[str] = []
     resources: list[Resource] = []
-    plan_iterations: int = 0
+    
+    # Planning & Orchestration (Hub-and-Spoke)
     current_plan: Plan | str = None
+    steps_completed: int = 0
+    is_plan_approved: bool = False
+    plan_iterations: int = 0
+    
+    # Reports & Persistence
     final_report: str = ""
     auto_accepted_plan: bool = False
     enable_background_investigation: bool = True
@@ -31,5 +31,7 @@ class State(MessagesState):
     portfolio_ledger: str = ""
     active_watchlist: list[str] = []
     obsidian_settings: dict = {}
+    
+    # Simulation & Lifecycle
     test_mode: bool = False
-
+    is_test_mode: bool = False

@@ -12,8 +12,8 @@ from pydantic import BaseModel, Field
 
 
 class StepType(str, Enum):
-    RESEARCH = "research"
-    PROCESSING = "processing"
+    RESEARCHER = "researcher"
+    CODER = "coder"
     SCOUT = "scout"
     JOURNALER = "journaler"
 
@@ -21,6 +21,7 @@ class StepType(str, Enum):
     IMAGING = "imaging"
     SYSTEM = "system"
     PORTFOLIO_MANAGER = "portfolio_manager"
+    RISK_MANAGER = "risk_manager"
 
 
 class Step(BaseModel):
@@ -64,7 +65,7 @@ class Plan(BaseModel):
                             "description": (
                                 "Collect data on market size, growth rates, major players, and investment trends in AI sector."
                             ),
-                            "step_type": "research",
+                            "step_type": "researcher",
                         }
                     ],
                 },

@@ -1,0 +1,5 @@
+{
+  "name": "Risk Manager",
+  "type": "risk_manager",
+  "prompt_file": "risk_manager"
+}

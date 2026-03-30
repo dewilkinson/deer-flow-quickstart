@@ -27,7 +27,7 @@ _GLOBAL_RESOURCE_CONTEXT = GLOBAL_CONTEXT
 def prose_fix_node(state: ProseState):
     """Prose fix node implementation."""
     logger.info("Generating prose fix content.")
-    model = get_llm_by_type(AGENT_LLM_MAP["prose_writer"])
+    model = get_llm_by_type(AGENT_LLM_MAP.get("prose_writer", "basic"))
     prose_content = model.invoke(
         [
             SystemMessage(content=get_prompt_template("prose/prose_fix")),
