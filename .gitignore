@@ -44,3 +44,11 @@ backend/*.log
 backend/*.txt
 tmp/
 !backend/requirements.txt
+
+# Local data and test artifacts
+.deer-flow/
+backend/.deer-flow/
+examples_test_*/
+examples_error_*/
+backend/examples_test_*/
+backend/examples_error_*/

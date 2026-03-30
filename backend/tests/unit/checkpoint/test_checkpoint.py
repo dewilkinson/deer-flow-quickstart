@@ -474,12 +474,12 @@ def test_postgresql_insert_update_and_error_paths():
         def rollback(self):
             self.rollback_called = True
 
-    manager = checkpoint.ChatStreamManager(checkpoint_saver=True, db_uri=POSTGRES_URL)
-
     # Update path
-    manager.postgres_conn = FakeConn("update")
-    assert manager._persist_to_postgresql("t", ["m"]) is True
-    assert manager.postgres_conn.commit_called is True
+    with patch("psycopg.connect") as mock_connect:
+        manager = checkpoint.ChatStreamManager(checkpoint_saver=True, db_uri=POSTGRES_URL)
+        manager.postgres_conn = FakeConn("update")
+        assert manager._persist_to_postgresql("t", ["m"]) is True
+        assert manager.postgres_conn.commit_called is True
 
     # Insert path
     manager.postgres_conn = FakeConn("insert")
@@ -524,17 +524,19 @@ def test_create_chat_streams_table_success_and_error():
         def rollback(self):
             self.rollbacks += 1
 
-    manager = checkpoint.ChatStreamManager(checkpoint_saver=True, db_uri=POSTGRES_URL)
-
     # Success
-    manager.postgres_conn = FakeConn(False)
-    manager._create_chat_streams_table()
-    assert manager.postgres_conn.commits == 1
+    with patch("psycopg.connect") as mock_connect:
+        manager = checkpoint.ChatStreamManager(checkpoint_saver=True, db_uri=POSTGRES_URL)
+        manager.postgres_conn = FakeConn(False)
+        manager._create_chat_streams_table()
+        assert manager.postgres_conn.commits == 1
 
     # Failure triggers rollback
-    manager.postgres_conn = FakeConn(True)
-    manager._create_chat_streams_table()
-    assert manager.postgres_conn.rollbacks == 1
+    with patch("psycopg.connect") as mock_connect:
+        manager = checkpoint.ChatStreamManager(checkpoint_saver=True, db_uri=POSTGRES_URL)
+        manager.postgres_conn = FakeConn(True)
+        manager._create_chat_streams_table()
+        assert manager.postgres_conn.rollbacks == 1
 
 
 def test_close_closes_resources_and_handles_errors():
