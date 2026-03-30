@@ -22,6 +22,9 @@ class StepType(str, Enum):
     SYSTEM = "system"
     PORTFOLIO_MANAGER = "portfolio_manager"
     RISK_MANAGER = "risk_manager"
+    SESSION_MONITOR = "session_monitor"
+    VISION_SPECIALIST = "vision_specialist"
+    TERMINAL_SPECIALIST = "terminal_specialist"
 
 
 class Step(BaseModel):

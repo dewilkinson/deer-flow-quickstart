@@ -23,3 +23,6 @@ from .reporter import reporter_node
 from .system import system_node
 from .risk_manager import risk_manager_node
 from .portfolio_manager import portfolio_manager_node
+from .session_monitor import session_monitor_node
+from .vision_specialist import vision_specialist_node
+from .terminal_specialist import terminal_specialist_node

@@ -1,0 +1,12 @@
+{
+  "name": "session_monitor",
+  "description": "VLI Session Monitor: Analyzes the raw telemetry logs to evaluate atomic operations, identify bottlenecks, overused workflows, and overkill LLM usage vs simple code execution. Provides concrete code-level architecture recommendations.",
+  "llm_config": {
+    "provider": "google",
+    "tier": "reasoning"
+  },
+  "capabilities": [
+    "file_system_read",
+    "telemetry_analysis"
+  ]
+}

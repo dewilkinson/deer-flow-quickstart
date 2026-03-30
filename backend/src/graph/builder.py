@@ -11,20 +11,23 @@ from .nodes import (
     parser_node,
     coordinator_node,
     human_feedback_node,
+    scout_node,
+    portfolio_manager_node,
+    analyst_node,
+    risk_manager_node,
+    journaler_node,
     researcher_node,
     coder_node,
-    scout_node,
-    journaler_node,
-    analyst_node,
     imaging_node,
-    reporter_node,
     system_node,
-    risk_manager_node,
-    portfolio_manager_node
+    reporter_node,
+    session_monitor_node,
+    vision_specialist_node,
+    terminal_specialist_node
 )
 from .types import State
 
-def router_logic(state: State) -> Literal["scout", "portfolio_manager", "analyst", "risk_manager", "journaler", "researcher", "coder", "imaging", "system", "reporter", "human_feedback"]:
+def router_logic(state: State) -> Literal["scout", "portfolio_manager", "analyst", "risk_manager", "journaler", "researcher", "coder", "imaging", "system", "reporter", "human_feedback", "session_monitor", "vision_specialist", "terminal_specialist"]:
     """Conditional router supporting both High Efficiency and High Control workflows."""
     plan = state.get("current_plan")
     
@@ -73,6 +76,9 @@ def _build_base_graph():
     builder.add_node("imaging", imaging_node)
     builder.add_node("system", system_node)
     builder.add_node("reporter", reporter_node)
+    builder.add_node("session_monitor", session_monitor_node)
+    builder.add_node("vision_specialist", vision_specialist_node)
+    builder.add_node("terminal_specialist", terminal_specialist_node)
     
     # Workflow Edges
     builder.add_edge(START, "parser")
@@ -93,7 +99,10 @@ def _build_base_graph():
             "imaging": "imaging",
             "system": "system",
             "reporter": "reporter",
-            "human_feedback": "human_feedback"
+            "human_feedback": "human_feedback",
+            "session_monitor": "session_monitor",
+            "vision_specialist": "vision_specialist",
+            "terminal_specialist": "terminal_specialist"
         }
     )
     
@@ -102,7 +111,7 @@ def _build_base_graph():
     
     # ALL execution agents loop back to the coordinator for next-step evaluation
     # This maintains the Hub-and-Spoke integrity
-    for agent in ["scout", "portfolio_manager", "analyst", "risk_manager", "journaler", "researcher", "coder", "imaging", "system"]:
+    for agent in ["scout", "portfolio_manager", "analyst", "risk_manager", "journaler", "researcher", "coder", "imaging", "system", "session_monitor", "vision_specialist", "terminal_specialist"]:
         builder.add_edge(agent, "coordinator")
         
     builder.add_edge("reporter", END)

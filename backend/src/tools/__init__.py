@@ -19,10 +19,12 @@ from .ema import get_ema_analysis
 from .indicators import get_rsi_analysis, get_macd_analysis, get_volatility_atr, get_volume_profile, get_bollinger_bands
 from .vision import get_image_from_url, get_image_from_local_path
 from .portfolio import update_watchlist, update_portfolio_ledger, get_portfolio_balance_report, swap_watchlist_item
+from .bash_shell import bash_shell_tool
 from .tts import VolcengineTTS
 
 __all__ = [
     "snapper",
+    "bash_shell_tool",
     "crawl_tool",
     "python_repl_tool",
     "get_web_search_tool",

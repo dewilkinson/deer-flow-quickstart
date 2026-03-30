@@ -1,0 +1,18 @@
+{
+  "name": "terminal_specialist",
+  "description": "Safe Bash Specialist: Executes non-destructive shell commands for environment management, file automation, and process status checks. Prohibited from administrative diagnostics.",
+  "llm_config": {
+    "provider": "google",
+    "tier": "basic"
+  },
+  "capabilities": [
+    "bash_shell",
+    "file_system_management",
+    "automation"
+  ],
+  "tools": [
+    "bash_shell_tool",
+    "python_repl_tool",
+    "snapper"
+  ]
+}

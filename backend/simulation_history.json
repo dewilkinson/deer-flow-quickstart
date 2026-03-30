@@ -6,14 +6,14 @@
     "reporter_response": "",
     "vault_snapshot": {
       "watchlist_Bio": "---\nConviction: Speculative\nSector: Biotech\nType: Sword\n---\n\n# Cobalt Watchlist: Bio\n\n- AMGN\n- REGN\n- VRTX\n",
-      "watchlist_Daily Picks": "# Cobalt Watchlist: Daily Picks\n\n",
+      "watchlist_Daily Picks": "---\nTheme: Shield\n---\n\n# Cobalt Watchlist: Daily Picks\n\n",
       "watchlist_Daily": "---\nConviction: High\nSector: Tech\nType: Sword\n---\n\n# Cobalt Watchlist: Daily\n\n- AAPL\n- NVDA\n- TSLA\n",
       "watchlist_Energy": "---\nConviction: Medium\nSector: Energy\nType: Shield\n---\n\n# Cobalt Watchlist: Energy\n\n- CVX\n- ET\n- OXY\n- XOM\n",
       "watchlist_Futures": "---\nSector: Futures\nTheme: Global Macro\n---\n\n# Cobalt Watchlist: Futures\n\n- CL=F\n- ES=F\n- GC=F\n- NQ=F\n",
       "watchlist_Index": "---\nSector: Indices\nTheme: Market Averages\n---\n\n# Cobalt Watchlist: Index\n\n- DIA\n- IWM\n- QQQ\n- SPY\n",
       "journal": "(Empty)"
     },
-    "timestamp": "2026-03-30T01:02:51.915053"
+    "timestamp": "2026-03-30T01:41:08.681432"
   },
   {
     "step_id": 2,
@@ -22,14 +22,14 @@
     "reporter_response": "",
     "vault_snapshot": {
       "watchlist_Bio": "---\nConviction: Speculative\nSector: Biotech\nType: Sword\n---\n\n# Cobalt Watchlist: Bio\n\n- AMGN\n- REGN\n- VRTX\n",
-      "watchlist_Daily Picks": "# Cobalt Watchlist: Daily Picks\n\n",
+      "watchlist_Daily Picks": "---\nTheme: Shield\n---\n\n# Cobalt Watchlist: Daily Picks\n\n",
       "watchlist_Daily": "---\nConviction: High\nSector: Tech\nType: Sword\n---\n\n# Cobalt Watchlist: Daily\n\n- AAPL\n- NVDA\n- TSLA\n",
       "watchlist_Energy": "---\nConviction: Medium\nSector: Energy\nType: Shield\n---\n\n# Cobalt Watchlist: Energy\n\n- CVX\n- ET\n- OXY\n- XOM\n",
       "watchlist_Futures": "---\nSector: Futures\nTheme: Global Macro\n---\n\n# Cobalt Watchlist: Futures\n\n- CL=F\n- ES=F\n- GC=F\n- NQ=F\n",
       "watchlist_Index": "---\nSector: Indices\nTheme: Market Averages\n---\n\n# Cobalt Watchlist: Index\n\n- DIA\n- IWM\n- QQQ\n- SPY\n",
       "journal": "(Empty)"
     },
-    "timestamp": "2026-03-30T01:03:03.803590"
+    "timestamp": "2026-03-30T01:45:34.157360"
   },
   {
     "step_id": 3,
@@ -38,14 +38,14 @@
     "reporter_response": "",
     "vault_snapshot": {
       "watchlist_Bio": "---\nConviction: Speculative\nSector: Biotech\nType: Sword\n---\n\n# Cobalt Watchlist: Bio\n\n- AMGN\n- REGN\n- VRTX\n",
-      "watchlist_Daily Picks": "---\nTheme: Shield\n---\n\n# Cobalt Watchlist: Daily Picks\n\n- XOM\n",
+      "watchlist_Daily Picks": "---\nTheme: Shield\n---\n\n# Cobalt Watchlist: Daily Picks\n\n",
       "watchlist_Daily": "---\nConviction: High\nSector: Tech\nType: Sword\n---\n\n# Cobalt Watchlist: Daily\n\n- AAPL\n- NVDA\n- TSLA\n",
       "watchlist_Energy": "---\nConviction: Medium\nSector: Energy\nType: Shield\n---\n\n# Cobalt Watchlist: Energy\n\n- CVX\n- ET\n- OXY\n- XOM\n",
       "watchlist_Futures": "---\nSector: Futures\nTheme: Global Macro\n---\n\n# Cobalt Watchlist: Futures\n\n- CL=F\n- ES=F\n- GC=F\n- NQ=F\n",
       "watchlist_Index": "---\nSector: Indices\nTheme: Market Averages\n---\n\n# Cobalt Watchlist: Index\n\n- DIA\n- IWM\n- QQQ\n- SPY\n",
       "journal": "(Empty)"
     },
-    "timestamp": "2026-03-30T01:03:09.858895"
+    "timestamp": "2026-03-30T01:45:38.691533"
   },
   {
     "step_id": 4,
@@ -54,45 +54,13 @@
     "reporter_response": "",
     "vault_snapshot": {
       "watchlist_Bio": "---\nConviction: Speculative\nSector: Biotech\nType: Sword\n---\n\n# Cobalt Watchlist: Bio\n\n- AMGN\n- REGN\n- VRTX\n",
-      "watchlist_Daily Picks": "---\nTheme: Shield\n---\n\n# Cobalt Watchlist: Daily Picks\n\n- XOM\n",
+      "watchlist_Daily Picks": "---\nTheme: Shield\n---\n\n# Cobalt Watchlist: Daily Picks\n\n",
       "watchlist_Daily": "---\nConviction: High\nSector: Tech\nType: Sword\n---\n\n# Cobalt Watchlist: Daily\n\n- AAPL\n- NVDA\n- TSLA\n",
       "watchlist_Energy": "---\nConviction: Medium\nSector: Energy\nType: Shield\n---\n\n# Cobalt Watchlist: Energy\n\n- CVX\n- ET\n- OXY\n- XOM\n",
       "watchlist_Futures": "---\nSector: Futures\nTheme: Global Macro\n---\n\n# Cobalt Watchlist: Futures\n\n- CL=F\n- ES=F\n- GC=F\n- NQ=F\n",
       "watchlist_Index": "---\nSector: Indices\nTheme: Market Averages\n---\n\n# Cobalt Watchlist: Index\n\n- DIA\n- IWM\n- QQQ\n- SPY\n",
       "journal": "(Empty)"
     },
-    "timestamp": "2026-03-30T01:03:14.190396"
-  },
-  {
-    "step_id": 5,
-    "command": "Rerun suitability and risk analysis on my 'Daily Picks' (Summary Mode).",
-    "agent_thought": "Finalizing plan execution.",
-    "reporter_response": "",
-    "vault_snapshot": {
-      "watchlist_Bio": "---\nConviction: Speculative\nSector: Biotech\nType: Sword\n---\n\n# Cobalt Watchlist: Bio\n\n- AMGN\n- REGN\n- VRTX\n",
-      "watchlist_Daily Picks": "---\nTheme: Shield\n---\n\n# Cobalt Watchlist: Daily Picks\n\n- XOM\n",
-      "watchlist_Daily": "---\nConviction: High\nSector: Tech\nType: Sword\n---\n\n# Cobalt Watchlist: Daily\n\n- AAPL\n- NVDA\n- TSLA\n",
-      "watchlist_Energy": "---\nConviction: Medium\nSector: Energy\nType: Shield\n---\n\n# Cobalt Watchlist: Energy\n\n- CVX\n- ET\n- OXY\n- XOM\n",
-      "watchlist_Futures": "---\nSector: Futures\nTheme: Global Macro\n---\n\n# Cobalt Watchlist: Futures\n\n- CL=F\n- ES=F\n- GC=F\n- NQ=F\n",
-      "watchlist_Index": "---\nSector: Indices\nTheme: Market Averages\n---\n\n# Cobalt Watchlist: Index\n\n- DIA\n- IWM\n- QQQ\n- SPY\n",
-      "journal": "(Empty)"
-    },
-    "timestamp": "2026-03-30T01:04:06.828390"
-  },
-  {
-    "step_id": 6,
-    "command": "Excellent. Sync my 'Daily Picks' to today's trading journal and finalize the session.",
-    "agent_thought": "Finalizing plan execution.",
-    "reporter_response": "",
-    "vault_snapshot": {
-      "watchlist_Bio": "---\nConviction: Speculative\nSector: Biotech\nType: Sword\n---\n\n# Cobalt Watchlist: Bio\n\n- AMGN\n- REGN\n- VRTX\n",
-      "watchlist_Daily Picks": "---\nTheme: Shield\n---\n\n# Cobalt Watchlist: Daily Picks\n\n- XOM\n",
-      "watchlist_Daily": "---\nConviction: High\nSector: Tech\nType: Sword\n---\n\n# Cobalt Watchlist: Daily\n\n- AAPL\n- NVDA\n- TSLA\n",
-      "watchlist_Energy": "---\nConviction: Medium\nSector: Energy\nType: Shield\n---\n\n# Cobalt Watchlist: Energy\n\n- CVX\n- ET\n- OXY\n- XOM\n",
-      "watchlist_Futures": "---\nSector: Futures\nTheme: Global Macro\n---\n\n# Cobalt Watchlist: Futures\n\n- CL=F\n- ES=F\n- GC=F\n- NQ=F\n",
-      "watchlist_Index": "---\nSector: Indices\nTheme: Market Averages\n---\n\n# Cobalt Watchlist: Index\n\n- DIA\n- IWM\n- QQQ\n- SPY\n",
-      "journal": "(Empty)"
-    },
-    "timestamp": "2026-03-30T01:04:11.132243"
+    "timestamp": "2026-03-30T01:45:48.203287"
   }
 ]

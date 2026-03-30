@@ -132,7 +132,7 @@ def get_database_url() -> str:
     user = os.getenv("RESEARCH_DB_USER", "postgres")
     password = os.getenv("RESEARCH_DB_PASSWORD", "postgres")
 
-    return f"postgresql+pg8000://{user}:{password}@{host}:{port}/{database}"
+    return f"postgresql+psycopg://{user}:{password}@{host}:{port}/{database}"
 
 def get_database_engine():
     """Create and return database engine."""

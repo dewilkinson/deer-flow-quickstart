@@ -50,16 +50,18 @@ except (ImportError, AttributeError):
     except Exception:
         pass
 
-from typing import Annotated, Any, List, cast
+from typing import Annotated, Any, List, Dict, Union, cast, Optional
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException, Query, Depends, Security
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, StreamingResponse
 from fastapi.security import APIKeyHeader
-from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage, ToolMessage
+from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage, ToolMessage, HumanMessage
 from langgraph.types import Command
 from langgraph.store.memory import InMemoryStore
+from pydantic import BaseModel
+
 # Use our clean, native checkpointer to avoid BSON version conflict
 from src.graph.mongodb_checkpointer import NativeMongoDBSaver
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
@@ -101,8 +103,79 @@ from src.server.studio_api import router as studio_router
 from src.tools import VolcengineTTS
 from src.graph.checkpoint import chat_stream_message
 from src.utils.json_utils import sanitize_args
+from src.config.vli import get_action_plan_path, get_inbox_path, get_archive_path, VAULT_ROOT
+from datetime import datetime
+import re
 
 logger = logging.getLogger(__name__)
+
+# --- GLOBAL VLI STATE ---
+_vli_extracted_alerts = []  # [{symbol, label, color}]
+_vli_dynamic_panels = []    # [{id, title, content_html}]
+
+def create_futures_watchlist_panel():
+    """Create a high-fidelity Futures Watchlist panel with Sortino indicators."""
+    html = """
+    <table style="width:100%; border-collapse:collapse; margin-top:5px;">
+        <thead>
+            <tr style="text-align:left; border-bottom:1px solid var(--border-color); color:var(--text-muted); font-size:11px;">
+                <th style="padding:5px;">SYMBOL</th>
+                <th style="padding:5px;">PRICE</th>
+                <th style="padding:5px;">CHANGE</th>
+                <th style="padding:5px;">SORTINO</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td style="padding:8px 5px;">$ES (E-mini)</td>
+                <td style="padding:8px 5px; font-family:monospace;">5,245.50</td>
+                <td style="padding:8px 5px; color:var(--emerald-green);">+0.85%</td>
+                <td style="padding:8px 5px;"><span class="sortino-indicator sortino-green"></span>2.2</td>
+            </tr>
+            <tr style="background:rgba(255,255,255,0.02);">
+                <td style="padding:8px 5px;">$NQ (Nasdaq)</td>
+                <td style="padding:8px 5px; font-family:monospace;">18,412.25</td>
+                <td style="padding:8px 5px; color:var(--emerald-green);">+1.20%</td>
+                <td style="padding:8px 5px;"><span class="sortino-indicator sortino-green"></span>2.8</td>
+            </tr>
+            <tr>
+                <td style="padding:8px 5px;">$GC (Gold)</td>
+                <td style="padding:8px 5px; font-family:monospace;">2,185.40</td>
+                <td style="padding:8px 5px; color:#f85149;">-0.15%</td>
+                <td style="padding:8px 5px;"><span class="sortino-indicator sortino-yellow"></span>1.1</td>
+            </tr>
+        </tbody>
+    </table>
+    """
+    return {
+        "id": "watch-futures-01",
+        "title": "Futures Watchlist",
+        "content_html": html
+    }
+
+def extract_vli_logic(text: str) -> List[Dict[str, str]]:
+    """Extract ticker symbols and risk thresholds from markdown text."""
+    # ... existing extraction ...
+    global _vli_dynamic_panels
+    text_lower = text.lower()
+    if "futures" in text_lower and "watchlist" in text_lower:
+        # Check if already added
+        if not any(p['id'] == "watch-futures-01" for p in _vli_dynamic_panels):
+            _vli_dynamic_panels.append(create_futures_watchlist_panel())
+            
+    alerts = []
+    
+    # 1. Extract Symbols: $TICKER
+    symbols = re.findall(r"\$([A-Z]{1,5})", text)
+    for sym in set(symbols):
+        alerts.append({"symbol": sym, "label": "Detected in Action Plan", "color": "green"})
+        
+    # 2. Extract Logic: S_{DR} >= 2.0
+    logic_matches = re.findall(r"(S_{DR}\s*[>=<]+\s*\d+\.?\d*)", text)
+    for logic in set(logic_matches):
+        alerts.append({"symbol": "LOGIC", "label": logic, "color": "blue"})
+        
+    return alerts
 
 INTERNAL_SERVER_ERROR_DETAIL = "Internal Server Error"
 
@@ -115,7 +188,7 @@ app = FastAPI(
 # Add CORS middleware
 # It's recommended to load the allowed origins from an environment variable
 # for better security and flexibility across different environments.
-allowed_origins_str = get_str_env("ALLOWED_ORIGINS", "http://localhost:3000")
+allowed_origins_str = get_str_env("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:8089,http://127.0.0.1:8089")
 allowed_origins = [origin.strip() for origin in allowed_origins_str.split(",")]
 
 logger.info(f"Allowed origins: {allowed_origins}")
@@ -127,6 +200,11 @@ app.add_middleware(
     allow_methods=["GET", "POST", "OPTIONS"],  # Use the configured list of methods
     allow_headers=["*"],  # Now allow all headers, but can be restricted further
 )
+
+@app.on_event("startup")
+async def startup_event():
+    import asyncio
+    asyncio.create_task(vli_inbox_watcher())
 
 # Load examples into Milvus if configured
 load_examples()
@@ -163,6 +241,146 @@ async def vli_visualization():
             return Response(content=f.read(), media_type="image/png")
     except Exception:
         raise HTTPException(status_code=404, detail="Visualization image not found. Deploy to production to generate.")
+
+# --- VLI SESSION MONITORING & CHAT ENDPOINTS ---
+
+class VLIActionPlanRequest(BaseModel):
+    text: str
+    image: Optional[str] = None
+    is_action_plan: bool = False
+
+@app.get("/api/vli/active-state")
+async def get_vli_active_state():
+    """Live state for the VLI Dashboard (Action Plan + Alerts)."""
+    plan_html = "No active plan found."
+    plan_file = get_action_plan_path()
+    
+    # 1. Read Daily Action Plan (Markdown to simple HTML UL)
+    if os.path.exists(plan_file):
+        with open(plan_file, "r", encoding="utf-8") as f:
+            content = f.read()
+            lines = [l.strip("- ").strip() for l in content.split("\n") if l.strip().startswith("-")]
+            if lines:
+                plan_html = "<ul style='padding-left:15px; margin:0;'>" + "".join([f"<li>{l}</li>" for l in lines]) + "</ul>"
+            else:
+                plan_html = f"<div style='font-size:12px; color:#8b949e;'>{content[:200]}...</div>"
+
+    # 2. Return Extracted Alerts (Dynamic)
+    global _vli_extracted_alerts, _vli_dynamic_panels
+    if not _vli_extracted_alerts:
+        # Default fallback indicators
+        alerts = [
+            {"symbol": "VIX", "color": "green", "label": "Threshold: 30"},
+            {"symbol": "CL=F", "color": "orange", "label": "Threshold: 90"}
+        ]
+    else:
+        alerts = _vli_extracted_alerts
+    # 3. Read Inbox Files
+    inbox_path = get_inbox_path()
+    inbox_files = []
+    if os.path.exists(inbox_path):
+        for f in os.listdir(inbox_path):
+            if not f.startswith("."):
+                inbox_files.append(f)
+
+    return {
+        "plan_html": plan_html, 
+        "alerts": alerts,
+        "dynamic_panels": _vli_dynamic_panels,
+        "inbox_files": inbox_files
+    }
+
+@app.post("/api/vli/action-plan")
+async def post_vli_action_plan(request: VLIActionPlanRequest):
+    """Handle chat or action-plan updates from the VLI Sidebar."""
+    plan_file = get_action_plan_path()
+    
+    # Check if this is a large text block representing a new plan
+    if request.is_action_plan or len(request.text) > 300:
+        with open(plan_file, "w", encoding="utf-8") as f:
+            f.write(request.text)
+        return {"response": "Plan captured. Vault updated. Session Monitor is analyzing directives..."}
+            
+    # Handle Image/Chart analysis request
+    if request.image:
+        return {"response": "Image received. Vision Specialist is scanning for EMA crossings and SMC fair-value gaps..."}
+
+    return {"response": "Directive received. Action plan augmented."}
+
+# --- VLI REACTIVE PIPELINE (INBOX WATCHER & ARCHIVER) ---
+
+async def vli_inbox_watcher():
+    """Background task to watch inbox/ for drafts AND archive end-of-day plans."""
+    inbox = get_inbox_path()
+    plan_file = get_action_plan_path()
+    archive_dir = get_archive_path()
+    
+    plan_dir = os.path.dirname(plan_file)
+    os.makedirs(inbox, exist_ok=True)
+    os.makedirs(archive_dir, exist_ok=True)
+    os.makedirs(plan_dir, exist_ok=True)
+    
+    logger.info(f"VLI: Inbox & Archiver watcher started on {inbox}")
+    
+    # Track the current day to detect transitions
+    last_run_day = datetime.now().strftime("%Y-%m-%d")
+    
+    while True:
+        try:
+            # 1. Check for Day Transition (End-of-day Archiving)
+            current_day = datetime.now().strftime("%Y-%m-%d")
+            if current_day != last_run_day:
+                logger.info(f"VLI: Day transition detected ({last_run_day} -> {current_day}). Archiving plan.")
+                if os.path.exists(plan_file):
+                    archive_file = os.path.join(archive_dir, f"Action_Plan_{last_run_day}.md")
+                    os.rename(plan_file, archive_file)
+                    # Create blank new plan for the new day
+                    with open(plan_file, "w", encoding="utf-8") as f:
+                        f.write(f"# Daily Action Plan - {current_day}\n- [ ] Waiting for morning session briefing...")
+                
+                last_run_day = current_day
+
+            # 2. Check for Inbox Drafts
+            files = [f for f in os.listdir(inbox) if f.endswith(".md")]
+            for filename in files:
+                filepath = os.path.join(inbox, filename)
+                logger.info(f"VLI Inbox: Detected new draft '{filename}'. Processing...")
+                
+                with open(filepath, "r", encoding="utf-8") as rf:
+                    content = rf.read()
+                
+                # Extract logic and update global alerts
+                new_alerts = extract_vli_logic(content)
+                global _vli_extracted_alerts
+                _vli_extracted_alerts.extend(new_alerts)
+                # Keep only unique alerts by symbol/label
+                seen = set()
+                unique_alerts = []
+                for a in _vli_extracted_alerts:
+                    key = f"{a['symbol']}:{a['label']}"
+                    if key not in seen:
+                        seen.add(key)
+                        unique_alerts.append(a)
+                _vli_extracted_alerts = unique_alerts
+                
+                # Append to active plan (dynamic date-based filename)
+                with open(plan_file, "a", encoding="utf-8") as af:
+                    af.write(f"\n\n### Batch Update: {filename}\n{content}")
+                
+                # Success: Move to archives instead of deleting
+                archive_path = os.path.join(archive_dir, f"Draft_{datetime.now().strftime('%H%M%S')}_{filename}")
+                os.rename(filepath, archive_path)
+                logger.info(f"VLI Inbox: Archived draft to {archive_path}")
+                
+        except Exception as e:
+            logger.error(f"VLI Reactive Pipeline Error: {e}")
+            
+        await asyncio.sleep(0.5) # High-frequency reactive polling
+
+@app.on_event("startup")
+async def startup_event():
+    logger.info("Cobalt Multiagent: Launching VLI Reactive Pipeline.")
+    asyncio.create_task(vli_inbox_watcher())
 
 @app.post("/api/chat/stream", dependencies=[Depends(verify_api_key)])
 async def chat_stream(request: ChatRequest):

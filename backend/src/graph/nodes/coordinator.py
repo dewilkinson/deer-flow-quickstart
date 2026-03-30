@@ -27,10 +27,20 @@ _SHARED_RESOURCE_CONTEXT = ORCHESTRATOR_CONTEXT
 # 3. Global context: Shared across all agent types
 _GLOBAL_RESOURCE_CONTEXT = GLOBAL_CONTEXT
 
+import os
+
 def coordinator_node(state: State, config: RunnableConfig) -> Dict[str, Any]:
     """Coordinator node - Detailed multi-step planning."""
     logger.info("VLI Coordinator is planning execution.")
     analyst_keywords = ", ".join(get_analyst_keywords())
+    
+    # [NEW] Inject Daily Action Plan into GLOBAL_CONTEXT
+    vault_path = os.environ.get("OBSIDIAN_VAULT_PATH")
+    if vault_path:
+        plan_file = os.path.join(vault_path, "_cobalt", "Daily_Action_Plan.md")
+        if os.path.exists(plan_file):
+            with open(plan_file, "r", encoding="utf-8") as f:
+                GLOBAL_CONTEXT["daily_action_plan"] = f.read()
     
     # 1. Setup LLM and Tools
     llm = get_llm_by_type(AGENT_LLM_MAP.get("coordinator", "reasoning"))
@@ -85,7 +95,8 @@ def coordinator_node(state: State, config: RunnableConfig) -> Dict[str, Any]:
         **state, 
         "DEVELOPER_MODE": str(dev_mode).lower(),
         "ANALYST_KEYWORDS": analyst_keywords,
-        "CACHED_TICKERS": ", ".join(sorted(list(cached_tickers_set))) if cached_tickers_set else "None (Data Store Empty)"
+        "CACHED_TICKERS": ", ".join(sorted(list(cached_tickers_set))) if cached_tickers_set else "None (Data Store Empty)",
+        "DAILY_ACTION_PLAN": GLOBAL_CONTEXT.get("daily_action_plan", "No daily instructions provided.")
     }
     
     messages = apply_prompt_template("coordinator", state_for_prompt)
