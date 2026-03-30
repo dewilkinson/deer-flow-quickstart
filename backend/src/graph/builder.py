@@ -20,7 +20,8 @@ from .nodes import (
     imaging_node,
     reporter_node,
     system_node,
-    risk_manager_node
+    risk_manager_node,
+    portfolio_manager_node
 )
 from .types import State
 
@@ -44,6 +45,7 @@ def _build_base_graph():
 
     builder.add_node("analyst", analyst_node)
     builder.add_node("risk_manager", risk_manager_node)
+    builder.add_node("portfolio_manager", portfolio_manager_node)
     builder.add_node("imaging", imaging_node)
     builder.add_node("system", system_node)
     
@@ -62,6 +64,9 @@ def _build_base_graph():
     builder.add_edge("scout", "risk_manager")
     # Risk Manager evaluates and mandates back to the Coordinator (Option B)
     builder.add_edge("risk_manager", "coordinator")
+    
+    builder.add_edge("portfolio_manager", "reporter")
+    builder.add_edge("portfolio_manager", "coordinator")
     
     builder.add_edge("journaler", "reporter")
 

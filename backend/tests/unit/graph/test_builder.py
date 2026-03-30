@@ -34,9 +34,9 @@ def test_build_base_graph_adds_nodes_and_edges(MockStateGraph):
     builder_mod._build_base_graph()
 
     # Check that all nodes and edges are added
-    # We now have 11 nodes and 11 direct edges in the simplified version
-    assert mock_builder.add_node.call_count == 11
-    assert mock_builder.add_edge.call_count == 11
+    # We now have 13 nodes and 14 direct edges in the expanded strategic version
+    assert mock_builder.add_node.call_count == 13
+    assert mock_builder.add_edge.call_count == 14
     
     # Conditional edges were removed in the simplified version
     mock_builder.add_conditional_edges.assert_not_called()

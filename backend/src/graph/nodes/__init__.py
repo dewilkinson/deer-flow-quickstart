@@ -22,3 +22,4 @@ from .human_feedback import human_feedback_node
 from .reporter import reporter_node
 from .system import system_node
 from .risk_manager import risk_manager_node
+from .portfolio_manager import portfolio_manager_node

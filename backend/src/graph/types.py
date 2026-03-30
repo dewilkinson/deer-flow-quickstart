@@ -28,6 +28,8 @@ class State(MessagesState):
     enable_background_investigation: bool = True
     background_investigation_results: str = None
     macro_history: str = ""
+    portfolio_ledger: str = ""
+    active_watchlist: list[str] = []
     obsidian_settings: dict = {}
     test_mode: bool = False
 

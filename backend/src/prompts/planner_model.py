@@ -20,6 +20,7 @@ class StepType(str, Enum):
     ANALYST = "analyst"
     IMAGING = "imaging"
     SYSTEM = "system"
+    PORTFOLIO_MANAGER = "portfolio_manager"
 
 
 class Step(BaseModel):
