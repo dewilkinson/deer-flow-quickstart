@@ -107,6 +107,15 @@ def _create_llm_use_conf(llm_type: LLMType, conf: Dict[str, Any]) -> BaseChatMod
         # Handle Google AI Studio specific configuration
         gemini_conf = merged_conf.copy()
 
+        # [RELIABILITY] Google AI Studio (Gemini) often hits 429s during stress tests. 
+        # Increase max_retries to handle transient quota limits.
+        try:
+            current_retries = int(gemini_conf.get("max_retries", 3))
+            if current_retries < 5:
+                gemini_conf["max_retries"] = 5
+        except (ValueError, TypeError):
+            gemini_conf["max_retries"] = 5
+
         # Map common keys to Google AI Studio specific keys
         if "api_key" in gemini_conf:
             gemini_conf["google_api_key"] = gemini_conf.pop("api_key")

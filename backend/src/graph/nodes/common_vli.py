@@ -4,13 +4,17 @@
 # License: PolyForm Noncommercial 1.0.0
 
 import logging
+from datetime import datetime
 from typing import Dict, Any
 from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableConfig
+from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_exception, AsyncRetrying
 from src.agents import create_agent_from_registry
 from src.config.configuration import Configuration
+from src.utils.vli_metrics import log_vli_metric
 from src.tools import (
     get_stock_quote,
+    invalidate_market_cache,
     get_web_search_tool,
     crawl_tool,
     snapper
@@ -21,17 +25,35 @@ logger = logging.getLogger(__name__)
 async def _setup_and_execute_agent_step(state, config, agent_type, tools, agent_instructions: str = ""):
     """Executes the agent and captures the result for the reporter."""
     
-    # 1. Diagnostic Trace: Emit a lifecycle log for the dashboard if in Test Mode
-    if state.get("test_mode") or state.get("is_test_mode"):
-        state["messages"].append(AIMessage(
-            content=f"🚀 Node activated: {agent_type.upper()}. Preparing for high-fidelity execution...",
-            name=agent_type
-        ))
+    # 1. Diagnostic Trace: Emit a lifecycle log for the dashboard
+    state["messages"].append(AIMessage(
+        content=f"🚀 Specialist `{agent_type.upper()}` is now executing `{agent_instructions[:50]}...` (Fast-Path bypass enabled for efficiency).",
+        name=agent_type
+    ))
 
     agent = create_agent_from_registry(agent_type, tools)
     
-    # Engagement with the actual agent context
-    result = await agent.ainvoke(state, config)
+    # [PERFORMANCE AUDIT] Track execution latency for the persistent store
+    audit_start = datetime.now()
+    try:
+        # [RELIABILITY] Exponential Backoff for 429 Resource Exhausted errors
+        # Gemini quotas can be tight; we wait between 4s and 60s for recovery.
+        async for attempt in AsyncRetrying(
+            wait=wait_exponential(multiplier=2, min=4, max=60),
+            stop=stop_after_attempt(3),
+            retry=retry_if_exception(lambda e: "RESOURCE_EXHAUSTED" in str(e) or "429" in str(e)),
+            reraise=True
+        ):
+            with attempt:
+                result = await agent.ainvoke(state, config)
+        
+        latency = (datetime.now() - audit_start).total_seconds()
+        log_vli_metric(agent_type, latency, status="pass")
+    except Exception as e:
+        latency = (datetime.now() - audit_start).total_seconds()
+        log_vli_metric(agent_type, latency, status="fail", metadata={"error": str(e)})
+        logger.error(f"Agent `{agent_type}` failed after retries: {e}")
+        raise e
     
     # Extract observations for the dashboard
     observations = []
@@ -99,6 +121,7 @@ def get_orchestrator_tools(config: RunnableConfig):
     configurable = Configuration.from_runnable_config(config)
     return [
         get_stock_quote,
+        invalidate_market_cache,
         get_web_search_tool(configurable.max_search_results),
         crawl_tool,
         snapper
