@@ -10,20 +10,20 @@
 # Copyright (c) 2026 Dave Wilkinson <dwilkins@bluesec.ai>
 # License: PolyForm Noncommercial 1.0.0
 
-from .parser import parser_node
-from .coordinator import coordinator_node
-from .researcher import researcher_node
-from .coder import coder_node
-from .scout import scout_node
-from .journaler import journaler_node
 from .analyst import analyst_node
-from .imaging import imaging_node
+from .coder import coder_node
+from .coordinator import coordinator_node
 from .human_feedback import human_feedback_node
-from .reporter import reporter_node
-from .system import system_node
-from .risk_manager import risk_manager_node
+from .imaging import imaging_node
+from .journaler import journaler_node
+from .parser import parser_node
 from .portfolio_manager import portfolio_manager_node
+from .reporter import reporter_node
+from .researcher import researcher_node
+from .risk_manager import risk_manager_node
+from .scout import scout_node
 from .session_monitor import session_monitor_node
-from .vision_specialist import vision_specialist_node
-from .terminal_specialist import terminal_specialist_node
 from .smc_analyst import smc_analyst_node
+from .system import system_node
+from .terminal_specialist import terminal_specialist_node
+from .vision_specialist import vision_specialist_node

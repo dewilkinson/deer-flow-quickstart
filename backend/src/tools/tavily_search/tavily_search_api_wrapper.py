@@ -7,7 +7,6 @@
 # SPDX-License-Identifier: MIT
 
 import json
-from typing import Dict, List, Optional
 
 import aiohttp
 import requests
@@ -21,15 +20,15 @@ class EnhancedTavilySearchAPIWrapper(OriginalTavilySearchAPIWrapper):
     def raw_results(
         self,
         query: str,
-        max_results: Optional[int] = 5,
-        search_depth: Optional[str] = "advanced",
-        include_domains: Optional[List[str]] = [],
-        exclude_domains: Optional[List[str]] = [],
-        include_answer: Optional[bool] = False,
-        include_raw_content: Optional[bool] = False,
-        include_images: Optional[bool] = False,
-        include_image_descriptions: Optional[bool] = False,
-    ) -> Dict:
+        max_results: int | None = 5,
+        search_depth: str | None = "advanced",
+        include_domains: list[str] | None = [],
+        exclude_domains: list[str] | None = [],
+        include_answer: bool | None = False,
+        include_raw_content: bool | None = False,
+        include_images: bool | None = False,
+        include_image_descriptions: bool | None = False,
+    ) -> dict:
         params = {
             "api_key": self.tavily_api_key.get_secret_value(),
             "query": query,
@@ -53,15 +52,15 @@ class EnhancedTavilySearchAPIWrapper(OriginalTavilySearchAPIWrapper):
     async def raw_results_async(
         self,
         query: str,
-        max_results: Optional[int] = 5,
-        search_depth: Optional[str] = "advanced",
-        include_domains: Optional[List[str]] = [],
-        exclude_domains: Optional[List[str]] = [],
-        include_answer: Optional[bool] = False,
-        include_raw_content: Optional[bool] = False,
-        include_images: Optional[bool] = False,
-        include_image_descriptions: Optional[bool] = False,
-    ) -> Dict:
+        max_results: int | None = 5,
+        search_depth: str | None = "advanced",
+        include_domains: list[str] | None = [],
+        exclude_domains: list[str] | None = [],
+        include_answer: bool | None = False,
+        include_raw_content: bool | None = False,
+        include_images: bool | None = False,
+        include_image_descriptions: bool | None = False,
+    ) -> dict:
         """Get results from the Tavily Search API asynchronously."""
 
         # Function to perform the API call
@@ -89,9 +88,7 @@ class EnhancedTavilySearchAPIWrapper(OriginalTavilySearchAPIWrapper):
         results_json_str = await fetch()
         return json.loads(results_json_str)
 
-    def clean_results_with_images(
-        self, raw_results: Dict[str, List[Dict]]
-    ) -> List[Dict]:
+    def clean_results_with_images(self, raw_results: dict[str, list[dict]]) -> list[dict]:
         results = raw_results["results"]
         """Clean results from Tavily Search API."""
         clean_results = []

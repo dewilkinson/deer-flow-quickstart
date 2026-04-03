@@ -164,9 +164,7 @@ class TestPythonReplTool:
         result = python_repl_tool.func(code)
 
         # Assert
-        mock_logger.warning.assert_called_with(
-            "Python REPL tool is disabled. Please enable it in environment configuration."
-        )
+        mock_logger.warning.assert_called_with("Python REPL tool is disabled. Please enable it in environment configuration.")
         assert "Tool disabled:" in result
         assert "Python REPL tool is disabled" in result
 
@@ -182,17 +180,13 @@ class TestPythonReplTool:
         result = python_repl_tool.func(code)
 
         # Assert
-        mock_logger.warning.assert_called_with(
-            "Python REPL tool is disabled. Please enable it in environment configuration."
-        )
+        mock_logger.warning.assert_called_with("Python REPL tool is disabled. Please enable it in environment configuration.")
         assert "Tool disabled:" in result
 
     @pytest.mark.parametrize("env_value", ["true", "True", "TRUE", "1", "yes", "on"])
     @patch("src.tools.python_repl.repl")
     @patch("src.tools.python_repl.logger")
-    def test_tool_enabled_with_various_truthy_values(
-        self, mock_logger, mock_repl, env_value
-    ):
+    def test_tool_enabled_with_various_truthy_values(self, mock_logger, mock_repl, env_value):
         # Arrange
         with patch.dict(os.environ, {"ENABLE_PYTHON_REPL": env_value}):
             code = "print('enabled')"
@@ -206,9 +200,7 @@ class TestPythonReplTool:
             mock_repl.run.assert_called_once_with(code)
             assert "Successfully executed:" in result
 
-    @pytest.mark.parametrize(
-        "env_value", ["false", "False", "FALSE", "0", "no", "off", ""]
-    )
+    @pytest.mark.parametrize("env_value", ["false", "False", "FALSE", "0", "no", "off", ""])
     @patch("src.tools.python_repl.logger")
     def test_tool_disabled_with_various_falsy_values(self, mock_logger, env_value):
         # Arrange
@@ -219,7 +211,5 @@ class TestPythonReplTool:
             result = python_repl_tool.func(code)
 
             # Assert
-            mock_logger.warning.assert_called_with(
-                "Python REPL tool is disabled. Please enable it in environment configuration."
-            )
+            mock_logger.warning.assert_called_with("Python REPL tool is disabled. Please enable it in environment configuration.")
             assert "Tool disabled:" in result

@@ -6,7 +6,8 @@
 # SPDX-License-Identifier: MIT
 
 # Standard library imports
-from typing import Any, Dict, Iterator, List, Mapping, Optional, Type, Union, cast
+from collections.abc import Iterator, Mapping
+from typing import Any, cast
 
 # Third-party imports
 import openai
@@ -32,9 +33,7 @@ from langchain_openai.chat_models.base import (
 )
 
 
-def _convert_delta_to_message_chunk(
-    delta_dict: Mapping[str, Any], default_class: Type[BaseMessageChunk]
-) -> BaseMessageChunk:
+def _convert_delta_to_message_chunk(delta_dict: Mapping[str, Any], default_class: type[BaseMessageChunk]) -> BaseMessageChunk:
     """Convert a delta dictionary to a message chunk.
 
     Args:
@@ -50,7 +49,7 @@ def _convert_delta_to_message_chunk(
     message_id = delta_dict.get("id")
     role = cast(str, delta_dict.get("role", ""))
     content = cast(str, delta_dict.get("content") or "")
-    additional_kwargs: Dict[str, Any] = {}
+    additional_kwargs: dict[str, Any] = {}
 
     # Handle function calls
     if function_call_data := delta_dict.get("function_call"):
@@ -94,17 +93,13 @@ def _convert_delta_to_message_chunk(
     elif role in ("system", "developer") or default_class == SystemMessageChunk:
         if role == "developer":
             additional_kwargs = {"__openai_role__": "developer"}
-        return SystemMessageChunk(
-            content=content, id=message_id, additional_kwargs=additional_kwargs
-        )
+        return SystemMessageChunk(content=content, id=message_id, additional_kwargs=additional_kwargs)
     elif role == "function" or default_class == FunctionMessageChunk:
         function_name = delta_dict.get("name", "")
         return FunctionMessageChunk(content=content, name=function_name, id=message_id)
     elif role == "tool" or default_class == ToolMessageChunk:
         tool_call_id = delta_dict.get("tool_call_id", "")
-        return ToolMessageChunk(
-            content=content, tool_call_id=tool_call_id, id=message_id
-        )
+        return ToolMessageChunk(content=content, tool_call_id=tool_call_id, id=message_id)
     elif role or default_class == ChatMessageChunk:
         return ChatMessageChunk(content=content, role=role, id=message_id)
     else:
@@ -112,10 +107,10 @@ def _convert_delta_to_message_chunk(
 
 
 def _convert_chunk_to_generation_chunk(
-    chunk: Dict[str, Any],
-    default_chunk_class: Type[BaseMessageChunk],
-    base_generation_info: Optional[Dict[str, Any]],
-) -> Optional[ChatGenerationChunk]:
+    chunk: dict[str, Any],
+    default_chunk_class: type[BaseMessageChunk],
+    base_generation_info: dict[str, Any] | None,
+) -> ChatGenerationChunk | None:
     """Convert a streaming chunk to a generation chunk.
 
     Args:
@@ -137,24 +132,18 @@ def _convert_chunk_to_generation_chunk(
         or chunk.get("chunk", {}).get("choices", [])
     )
 
-    usage_metadata: Optional[UsageMetadata] = (
-        _create_usage_metadata(token_usage) if token_usage else None
-    )
+    usage_metadata: UsageMetadata | None = _create_usage_metadata(token_usage) if token_usage else None
 
     # Handle empty choices
     if not choices:
-        generation_chunk = ChatGenerationChunk(
-            message=default_chunk_class(content="", usage_metadata=usage_metadata)
-        )
+        generation_chunk = ChatGenerationChunk(message=default_chunk_class(content="", usage_metadata=usage_metadata))
         return generation_chunk
 
     choice = choices[0]
     if choice.get("delta") is None:
         return None
 
-    message_chunk = _convert_delta_to_message_chunk(
-        choice["delta"], default_chunk_class
-    )
+    message_chunk = _convert_delta_to_message_chunk(choice["delta"], default_chunk_class)
     generation_info = dict(base_generation_info) if base_generation_info else {}
 
     # Add finish reason and model info if available
@@ -173,9 +162,7 @@ def _convert_chunk_to_generation_chunk(
     if usage_metadata and isinstance(message_chunk, AIMessageChunk):
         message_chunk.usage_metadata = usage_metadata
 
-    generation_chunk = ChatGenerationChunk(
-        message=message_chunk, generation_info=generation_info or None
-    )
+    generation_chunk = ChatGenerationChunk(message=message_chunk, generation_info=generation_info or None)
     return generation_chunk
 
 
@@ -189,8 +176,8 @@ class ChatDashscope(ChatOpenAI):
 
     def _create_chat_result(
         self,
-        response: Union[Dict[str, Any], openai.BaseModel],
-        generation_info: Optional[Dict[str, Any]] = None,
+        response: dict[str, Any] | openai.BaseModel,
+        generation_info: dict[str, Any] | None = None,
     ) -> ChatResult:
         """Create a chat result from the OpenAI response.
 
@@ -209,18 +196,10 @@ class ChatDashscope(ChatOpenAI):
 
         # Extract reasoning content if available
         try:
-            if (
-                hasattr(response, "choices")
-                and response.choices
-                and hasattr(response.choices[0], "message")
-                and hasattr(response.choices[0].message, "reasoning_content")
-            ):
-
+            if hasattr(response, "choices") and response.choices and hasattr(response.choices[0], "message") and hasattr(response.choices[0].message, "reasoning_content"):
                 reasoning_content = response.choices[0].message.reasoning_content
                 if reasoning_content and chat_result.generations:
-                    chat_result.generations[0].message.additional_kwargs[
-                        "reasoning_content"
-                    ] = reasoning_content
+                    chat_result.generations[0].message.additional_kwargs["reasoning_content"] = reasoning_content
         except (IndexError, AttributeError):
             # If reasoning content extraction fails, continue without it
             pass
@@ -229,9 +208,9 @@ class ChatDashscope(ChatOpenAI):
 
     def _stream(
         self,
-        messages: List[BaseMessage],
-        stop: Optional[List[str]] = None,
-        run_manager: Optional[CallbackManagerForLLMRun] = None,
+        messages: list[BaseMessage],
+        stop: list[str] | None = None,
+        run_manager: CallbackManagerForLLMRun | None = None,
         **kwargs: Any,
     ) -> Iterator[ChatGenerationChunk]:
         """Create a streaming generator for chat completions.
@@ -250,16 +229,13 @@ class ChatDashscope(ChatOpenAI):
         """
         kwargs["stream"] = True
         payload = self._get_request_payload(messages, stop=stop, **kwargs)
-        default_chunk_class: Type[BaseMessageChunk] = AIMessageChunk
-        base_generation_info: Dict[str, Any] = {}
+        default_chunk_class: type[BaseMessageChunk] = AIMessageChunk
+        base_generation_info: dict[str, Any] = {}
 
         # Handle response format for beta completions
         if "response_format" in payload:
             if self.include_response_headers:
-                warnings.warn(
-                    "Cannot currently include response headers when response_format is "
-                    "specified."
-                )
+                warnings.warn("Cannot currently include response headers when response_format is specified.")
             payload.pop("stream")
             response_stream = self.root_client.beta.chat.completions.stream(**payload)
             context_manager = response_stream
@@ -312,13 +288,9 @@ class ChatDashscope(ChatOpenAI):
         if hasattr(response, "get_final_completion") and "response_format" in payload:
             try:
                 final_completion = response.get_final_completion()
-                generation_chunk = self._get_generation_chunk_from_completion(
-                    final_completion
-                )
+                generation_chunk = self._get_generation_chunk_from_completion(final_completion)
                 if run_manager:
-                    run_manager.on_llm_new_token(
-                        generation_chunk.text, chunk=generation_chunk
-                    )
+                    run_manager.on_llm_new_token(generation_chunk.text, chunk=generation_chunk)
                 yield generation_chunk
             except AttributeError:
                 # If get_final_completion method doesn't exist, continue without it

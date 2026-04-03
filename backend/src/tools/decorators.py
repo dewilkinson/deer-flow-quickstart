@@ -9,7 +9,8 @@ import functools
 import inspect
 import logging
 import time
-from typing import Any, Callable, Type, TypeVar
+from collections.abc import Callable
+from typing import Any, TypeVar
 
 logger = logging.getLogger(__name__)
 
@@ -28,13 +29,12 @@ def log_io(func: Callable) -> Callable:
     """
 
     if inspect.iscoroutinefunction(func):
+
         @functools.wraps(func)
         async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
             start_time = time.time()
             func_name = func.__name__
-            params = ", ".join(
-                [*(str(arg) for arg in args), *(f"{k}={v}" for k, v in kwargs.items())]
-            )
+            params = ", ".join([*(str(arg) for arg in args), *(f"{k}={v}" for k, v in kwargs.items())])
             logger.debug(f"[ENTRY] Tool {func_name} invoked with parameters: {params}")
 
             try:
@@ -49,22 +49,22 @@ def log_io(func: Callable) -> Callable:
                 duration_ms = (end_time - start_time) * 1000
                 logger.error(f"[ERROR] Tool {func_name} failed after {duration_ms:.2f}ms with error: {str(e)}", exc_info=True)
                 raise
+
         return async_wrapper
     else:
+
         @functools.wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             start_time = time.time()
             # Log input parameters
             func_name = func.__name__
-            params = ", ".join(
-                [*(str(arg) for arg in args), *(f"{k}={v}" for k, v in kwargs.items())]
-            )
+            params = ", ".join([*(str(arg) for arg in args), *(f"{k}={v}" for k, v in kwargs.items())])
             logger.debug(f"[ENTRY] Tool {func_name} invoked with parameters: {params}")
 
             # Execute the function
             try:
                 result = func(*args, **kwargs)
-                
+
                 end_time = time.time()
                 duration_ms = (end_time - start_time) * 1000
                 # Log the output
@@ -86,9 +86,7 @@ class LoggedToolMixin:
     def _log_operation(self, method_name: str, *args: Any, **kwargs: Any) -> None:
         """Helper method to log tool operations."""
         tool_name = self.__class__.__name__.replace("Logged", "")
-        params = ", ".join(
-            [*(str(arg) for arg in args), *(f"{k}={v}" for k, v in kwargs.items())]
-        )
+        params = ", ".join([*(str(arg) for arg in args), *(f"{k}={v}" for k, v in kwargs.items())])
         logger.debug(f"[ENTRY] Tool {tool_name}.{method_name} invoked with parameters: {params}")
 
     def _run(self, *args: Any, **kwargs: Any) -> Any:
@@ -98,9 +96,7 @@ class LoggedToolMixin:
         try:
             result = super()._run(*args, **kwargs)
             duration_ms = (time.time() - start_time) * 1000
-            logger.debug(
-                f"[EXIT] Tool {self.__class__.__name__.replace('Logged', '')} returned successfully in {duration_ms:.2f}ms. Result (truncated): {str(result)[:500]}"
-            )
+            logger.debug(f"[EXIT] Tool {self.__class__.__name__.replace('Logged', '')} returned successfully in {duration_ms:.2f}ms. Result (truncated): {str(result)[:500]}")
             return result
         except Exception as e:
             duration_ms = (time.time() - start_time) * 1000
@@ -108,7 +104,7 @@ class LoggedToolMixin:
             raise
 
 
-def create_logged_tool(base_tool_class: Type[T]) -> Type[T]:
+def create_logged_tool(base_tool_class: type[T]) -> type[T]:
     """
     Factory function to create a logged version of any tool class.
 

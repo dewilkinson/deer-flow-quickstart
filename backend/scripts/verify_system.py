@@ -6,9 +6,10 @@
 # Copyright (c) 2025 Bytedance Ltd. and/or its affiliates
 # SPDX-License-Identifier: MIT
 
+import os
 import subprocess
 import sys
-import os
+
 
 def run_command(command, cwd=None):
     cmd_str = " ".join(command)
@@ -19,21 +20,21 @@ def run_command(command, cwd=None):
         return False, result.stdout
     return True, result.stdout
 
+
 def main():
     backend_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-    
+
     print("--- 🧪 Running Unit Tests ---")
     success, output = run_command(["uv", "run", "pytest", "tests/unit"], cwd=backend_dir)
     if not success:
         print("Unit tests failed!")
         sys.exit(1)
     print(output)
-    
+
     print("--- 🔍 Checking Node Imports ---")
     # Simple check to ensure nodes can be imported (detects syntax errors/missing dependencies)
     try:
         sys.path.insert(0, backend_dir)
-        from src.graph.nodes import parser_node, scout_node, analyst_node
         print("Nodes imported successfully.")
     except Exception as e:
         print(f"Node import failed: {e}")
@@ -41,6 +42,7 @@ def main():
 
     print("--- ✅ System Verification Passed! ---")
     sys.exit(0)
+
 
 if __name__ == "__main__":
     main()

@@ -2,8 +2,8 @@
 # Copyright (c) 2026 Dave Wilkinson <dwilkins@bluesec.ai>
 # License: PolyForm Noncommercial 1.0.0
 
-import sys
 import os
+import sys
 
 # Emergency BSON patch for local environment
 try:
@@ -11,7 +11,8 @@ try:
 except (ImportError, AttributeError):
     try:
         import pymongo.bson as pymongo_bson
-        sys.modules['bson'] = pymongo_bson
+
+        sys.modules["bson"] = pymongo_bson
         from bson import ObjectId
         # patch_logger = __import__("logging").getLogger("bson_patch")
         # patch_logger.info("Successfully monkey-patched BSON in server package")

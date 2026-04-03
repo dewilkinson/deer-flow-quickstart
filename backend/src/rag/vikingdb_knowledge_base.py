@@ -60,18 +60,14 @@ class VikingDBKnowledgeBaseProvider(Retriever):
     def _hash_sha256(self, data: bytes) -> bytes:
         return hashlib.sha256(data).digest()
 
-    def _get_signed_key(
-        self, secret_key: str, date: str, region: str, service: str
-    ) -> bytes:
+    def _get_signed_key(self, secret_key: str, date: str, region: str, service: str) -> bytes:
         k_date = self._hmac_sha256(secret_key.encode("utf-8"), date)
         k_region = self._hmac_sha256(k_date, region)
         k_service = self._hmac_sha256(k_region, service)
         k_signing = self._hmac_sha256(k_service, "request")
         return k_signing
 
-    def _create_canonical_request(
-        self, method: str, path: str, query_params: dict, headers: dict, payload: bytes
-    ) -> str:
+    def _create_canonical_request(self, method: str, path: str, query_params: dict, headers: dict, payload: bytes) -> str:
         canonical_method = method.upper()
         canonical_uri = path if path else "/"
         if query_params:
@@ -111,9 +107,7 @@ class VikingDBKnowledgeBaseProvider(Retriever):
 
         return canonical_request, signed_headers
 
-    def _create_signature(
-        self, method: str, path: str, query_params: dict, headers: dict, payload: bytes
-    ) -> str:
+    def _create_signature(self, method: str, path: str, query_params: dict, headers: dict, payload: bytes) -> str:
         now = datetime.utcnow()
         date_stamp = now.strftime("%Y%m%dT%H%M%SZ")
         auth_date = date_stamp[:8]
@@ -123,41 +117,24 @@ class VikingDBKnowledgeBaseProvider(Retriever):
         headers["X-Content-Sha256"] = self._hash_sha256(payload).hex()
         headers["Content-Type"] = "application/json"
 
-        canonical_request, signed_headers = self._create_canonical_request(
-            method, path, query_params, headers, payload
-        )
+        canonical_request, signed_headers = self._create_canonical_request(method, path, query_params, headers, payload)
 
         algorithm = "HMAC-SHA256"
         credential_scope = f"{auth_date}/{self.region}/{self.service}/request"
-        canonical_request_hash = self._hash_sha256(
-            canonical_request.encode("utf-8")
-        ).hex()
+        canonical_request_hash = self._hash_sha256(canonical_request.encode("utf-8")).hex()
 
-        string_to_sign = "\n".join(
-            [algorithm, date_stamp, credential_scope, canonical_request_hash]
-        )
+        string_to_sign = "\n".join([algorithm, date_stamp, credential_scope, canonical_request_hash])
 
-        signing_key = self._get_signed_key(
-            self.api_sk, auth_date, self.region, self.service
-        )
-        signature = hmac.new(
-            signing_key, string_to_sign.encode("utf-8"), hashlib.sha256
-        ).hexdigest()
+        signing_key = self._get_signed_key(self.api_sk, auth_date, self.region, self.service)
+        signature = hmac.new(signing_key, string_to_sign.encode("utf-8"), hashlib.sha256).hexdigest()
 
-        authorization = (
-            f"{algorithm} "
-            f"Credential={self.api_ak}/{credential_scope}, "
-            f"SignedHeaders={signed_headers}, "
-            f"Signature={signature}"
-        )
+        authorization = f"{algorithm} Credential={self.api_ak}/{credential_scope}, SignedHeaders={signed_headers}, Signature={signature}"
 
         headers["Authorization"] = authorization
 
         return headers
 
-    def _make_signed_request(
-        self, method: str, path: str, params: dict = None, data: dict = None
-    ):
+    def _make_signed_request(self, method: str, path: str, params: dict = None, data: dict = None):
         if data is None:
             payload = b""
         else:
@@ -182,9 +159,7 @@ class VikingDBKnowledgeBaseProvider(Retriever):
         except Exception as e:
             raise ValueError(f"Request failed: {e}")
 
-    def query_relevant_documents(
-        self, query: str, resources: list[Resource] = []
-    ) -> list[Document]:
+    def query_relevant_documents(self, query: str, resources: list[Resource] = []) -> list[Document]:
         """
         Query relevant documents from the knowledge base
         """
@@ -219,9 +194,7 @@ class VikingDBKnowledgeBaseProvider(Retriever):
             path = "/api/knowledge/collection/search_knowledge"
 
             # 使用新的签名请求方法
-            response = self._make_signed_request(
-                method="POST", path=path, data=request_params
-            )
+            response = self._make_signed_request(method="POST", path=path, data=request_params)
 
             try:
                 response_data = response.json()
@@ -229,9 +202,7 @@ class VikingDBKnowledgeBaseProvider(Retriever):
                 raise ValueError(f"Failed to parse JSON response: {e}")
 
             if response_data["code"] != 0:
-                raise ValueError(
-                    f"Failed to query documents from resource: {response_data['message']}"
-                )
+                raise ValueError(f"Failed to query documents from resource: {response_data['message']}")
 
             rsp_data = response_data.get("data", {})
 
@@ -248,13 +219,9 @@ class VikingDBKnowledgeBaseProvider(Retriever):
                     continue
 
                 if doc_id not in all_documents:
-                    all_documents[doc_id] = Document(
-                        id=doc_id, title=doc_info.get("doc_name"), chunks=[]
-                    )
+                    all_documents[doc_id] = Document(id=doc_id, title=doc_info.get("doc_name"), chunks=[])
 
-                chunk = Chunk(
-                    content=item.get("content", ""), similarity=item.get("score", 0.0)
-                )
+                chunk = Chunk(content=item.get("content", ""), similarity=item.get("score", 0.0))
                 all_documents[doc_id].chunks.append(chunk)
 
         return list(all_documents.values())

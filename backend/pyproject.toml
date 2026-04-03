@@ -99,6 +99,12 @@ line-length = 88
 indent-width = 4
 target-version = "py312"
 extend-include = ["*.pyi"]
+ignore = [
+    "E402",  # Module level import not at top of file (allow lazy loading pattern)
+    "E731",  # Do not assign a lambda expression, use a def (common in this codebase)
+]
+# Select rules (defaults + I for import sorting)
+select = ["E", "F", "W", "I"]
 
 [tool.ruff.format]
 indent-style = "space"

@@ -76,9 +76,7 @@ class Retriever(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def query_relevant_documents(
-        self, query: str, resources: list[Resource] = []
-    ) -> list[Document]:
+    def query_relevant_documents(self, query: str, resources: list[Resource] = []) -> list[Document]:
         """
         Query relevant documents from the resources.
         """

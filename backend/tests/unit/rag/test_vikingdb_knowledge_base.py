@@ -150,9 +150,7 @@ class TestVikingDBKnowledgeBaseProviderInit:
             },
             clear=True,
         ):
-            with pytest.raises(
-                ValueError, match="VIKINGDB_KNOWLEDGE_BASE_API_URL is not set"
-            ):
+            with pytest.raises(ValueError, match="VIKINGDB_KNOWLEDGE_BASE_API_URL is not set"):
                 VikingDBKnowledgeBaseProvider()
 
     def test_init_missing_api_ak(self):
@@ -165,9 +163,7 @@ class TestVikingDBKnowledgeBaseProviderInit:
             },
             clear=True,
         ):
-            with pytest.raises(
-                ValueError, match="VIKINGDB_KNOWLEDGE_BASE_API_AK is not set"
-            ):
+            with pytest.raises(ValueError, match="VIKINGDB_KNOWLEDGE_BASE_API_AK is not set"):
                 VikingDBKnowledgeBaseProvider()
 
     def test_init_missing_api_sk(self):
@@ -180,9 +176,7 @@ class TestVikingDBKnowledgeBaseProviderInit:
             },
             clear=True,
         ):
-            with pytest.raises(
-                ValueError, match="VIKINGDB_KNOWLEDGE_BASE_API_SK is not set"
-            ):
+            with pytest.raises(ValueError, match="VIKINGDB_KNOWLEDGE_BASE_API_SK is not set"):
                 VikingDBKnowledgeBaseProvider()
 
 
@@ -225,9 +219,7 @@ class TestVikingDBKnowledgeBaseProviderSignature:
         headers = {"Content-Type": "application/json", "Host": "example.com"}
         payload = b'{"test": "data"}'
 
-        canonical_request, signed_headers = provider._create_canonical_request(
-            method, path, query_params, headers, payload
-        )
+        canonical_request, signed_headers = provider._create_canonical_request(method, path, query_params, headers, payload)
 
         assert "POST" in canonical_request
         assert "/api/test" in canonical_request
@@ -249,9 +241,7 @@ class TestVikingDBKnowledgeBaseProviderSignature:
         headers = {}
         payload = b'{"test": "data"}'
 
-        result = provider._create_signature(
-            method, path, query_params, headers, payload
-        )
+        result = provider._create_signature(method, path, query_params, headers, payload)
 
         assert "X-Date" in result
         assert "Host" in result
@@ -267,9 +257,7 @@ class TestVikingDBKnowledgeBaseProviderSignature:
         mock_response.json.return_value = {"code": 0, "data": {}}
         mock_request.return_value = mock_response
 
-        result = provider._make_signed_request(
-            "POST", "/api/test", data={"test": "data"}
-        )
+        result = provider._make_signed_request("POST", "/api/test", data={"test": "data"})
 
         assert result == mock_response
         mock_request.assert_called_once()
@@ -332,9 +320,7 @@ class TestVikingDBKnowledgeBaseProviderQueryRelevantDocuments:
         assert result[0].chunks[0].similarity == 0.95
 
     @patch.object(VikingDBKnowledgeBaseProvider, "_make_signed_request")
-    def test_query_relevant_documents_with_document_filter(
-        self, mock_request, provider
-    ):
+    def test_query_relevant_documents_with_document_filter(self, mock_request, provider):
         """Test document query with document ID filter"""
         mock_response = MagicMock()
         mock_response.json.return_value = {"code": 0, "data": {"result_list": []}}
@@ -362,9 +348,7 @@ class TestVikingDBKnowledgeBaseProviderQueryRelevantDocuments:
         mock_request.return_value = mock_response
 
         resources = [MockResource("rag://dataset/123")]
-        with pytest.raises(
-            ValueError, match="Failed to query documents from resource: API Error"
-        ):
+        with pytest.raises(ValueError, match="Failed to query documents from resource: API Error"):
             provider.query_relevant_documents("test query", resources)
 
     @patch.object(VikingDBKnowledgeBaseProvider, "_make_signed_request")

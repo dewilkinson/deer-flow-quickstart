@@ -8,18 +8,19 @@
 import logging
 import os
 import uuid
-from typing import Dict, Any
+from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
+
 from src.config.agents import AGENT_LLM_MAP
 from src.llms.llm import get_llm_by_type
 from src.prompts.template import get_prompt_template
+from src.tools.shared_storage import GLOBAL_CONTEXT, PPT_CONTEXT
 
-from src.tools.shared_storage import PPT_CONTEXT, GLOBAL_CONTEXT
 from .state import PPTState
 
 # 1. Private to the Agent Code Itself
-_NODE_RESOURCE_CONTEXT: Dict[str, Any] = {}
+_NODE_RESOURCE_CONTEXT: dict[str, Any] = {}
 
 # 2. Shared context: Persistent, shared by PPT sub-modules
 _SHARED_RESOURCE_CONTEXT = PPT_CONTEXT

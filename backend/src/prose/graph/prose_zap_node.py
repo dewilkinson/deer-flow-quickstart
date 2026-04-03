@@ -23,9 +23,7 @@ def prose_zap_node(state: ProseState):
     prose_content = model.invoke(
         [
             SystemMessage(content=get_prompt_template("prose/prose_zap")),
-            HumanMessage(
-                content=f"For this text: {state['content']}.\nYou have to respect the command: {state['command']}"
-            ),
+            HumanMessage(content=f"For this text: {state['content']}.\nYou have to respect the command: {state['command']}"),
         ],
     )
     logger.info(f"prose_content: {prose_content}")

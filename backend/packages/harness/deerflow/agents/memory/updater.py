@@ -17,9 +17,11 @@ from deerflow.models import create_chat_model
 
 logger = logging.getLogger(__name__)
 
+
 def get_memory_data(agent_name: str | None = None) -> dict[str, Any]:
     """Get the current memory data via storage provider."""
     return get_memory_storage().load(agent_name)
+
 
 def reload_memory_data(agent_name: str | None = None) -> dict[str, Any]:
     """Reload memory data via storage provider."""
@@ -193,7 +195,7 @@ class MemoryUpdater:
         """Apply LLM-generated updates with Weighted Pruning and Provenance."""
         config = get_memory_config()
         now = datetime.utcnow().isoformat() + "Z"
-        
+
         # Instance ID for Provenance (derived from agent_name or thread_id)
         instance_id = agent_name or thread_id or "system"
         importance_weight = config.storage_policies.get(agent_name or "default", {}).get("importance", 1.0)
@@ -241,10 +243,7 @@ class MemoryUpdater:
                     "category": fact.get("category", "context"),
                     "confidence": confidence,
                     "importance": importance_weight,
-                    "provenance": {
-                        "instance_id": instance_id,
-                        "timestamp": now
-                    },
+                    "provenance": {"instance_id": instance_id, "timestamp": now},
                     "createdAt": now,
                     "source": thread_id or "unknown",
                 }
@@ -265,10 +264,11 @@ class MemoryUpdater:
     def prune_memory(self, agent_name: str | None = None) -> str:
         """Manually trigger weighted pruning for the specified memory pool."""
         from deerflow.agents.memory.storage import get_memory_storage
+
         storage = get_memory_storage()
         current_memory = storage.load(agent_name)
         config = get_memory_config()
-        
+
         if len(current_memory.get("facts", [])) <= config.max_facts:
             return f"No pruning needed. Pool has {len(current_memory.get('facts', []))} facts."
 
@@ -278,7 +278,7 @@ class MemoryUpdater:
             key=lambda f: f.get("confidence", 0) * f.get("importance", 1.0),
             reverse=True,
         )[: config.max_facts]
-        
+
         storage.save(current_memory, agent_name)
         return f"Successfully pruned memory. Remaining facts: {len(current_memory['facts'])}"
 

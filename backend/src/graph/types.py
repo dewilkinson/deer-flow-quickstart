@@ -3,8 +3,10 @@
 # License: PolyForm Noncommercial 1.0.0
 
 from langgraph.graph import MessagesState
+
 from src.prompts.planner_model import Plan
 from src.rag import Resource
+
 
 class State(MessagesState):
     """Deeply typed state for the multi-agent graph with session persistence."""
@@ -15,13 +17,13 @@ class State(MessagesState):
     research_topic: str = ""
     observations: list[str] = []
     resources: list[Resource] = []
-    
+
     # Planning & Orchestration (Hub-and-Spoke)
     current_plan: Plan | str = None
     steps_completed: int = 0
     is_plan_approved: bool = False
     plan_iterations: int = 0
-    
+
     # Reports & Persistence
     final_report: str = ""
     auto_accepted_plan: bool = False
@@ -32,7 +34,7 @@ class State(MessagesState):
     active_watchlist: list[str] = []
     obsidian_settings: dict = {}
     gui_overrides: dict = {}
-    
+
     # Simulation & Lifecycle
     test_mode: bool = False
     is_test_mode: bool = False

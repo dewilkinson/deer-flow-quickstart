@@ -32,9 +32,7 @@ async def test__get_tools_from_client_session_success(mock_ClientSession):
     mock_session.list_tools = AsyncMock(return_value=mock_tools_obj)
     mock_ClientSession.return_value = mock_session
 
-    result = await mcp_utils._get_tools_from_client_session(
-        mock_context_manager, timeout_seconds=5
-    )
+    result = await mcp_utils._get_tools_from_client_session(mock_context_manager, timeout_seconds=5)
     assert result == ["tool1", "tool2"]
     mock_session.initialize.assert_awaited_once()
     mock_session.list_tools.assert_awaited_once()
@@ -44,9 +42,7 @@ async def test__get_tools_from_client_session_success(mock_ClientSession):
 @patch("src.server.mcp_utils._get_tools_from_client_session", new_callable=AsyncMock)
 @patch("src.server.mcp_utils.StdioServerParameters")
 @patch("src.server.mcp_utils.stdio_client")
-async def test_load_mcp_tools_stdio_success(
-    mock_stdio_client, mock_StdioServerParameters, mock_get_tools
-):
+async def test_load_mcp_tools_stdio_success(mock_stdio_client, mock_StdioServerParameters, mock_get_tools):
     mock_get_tools.return_value = ["toolA"]
     params = MagicMock()
     mock_StdioServerParameters.return_value = params
@@ -61,9 +57,7 @@ async def test_load_mcp_tools_stdio_success(
         timeout_seconds=3,
     )
     assert result == ["toolA"]
-    mock_StdioServerParameters.assert_called_once_with(
-        command="echo", args=["foo"], env={"FOO": "BAR"}
-    )
+    mock_StdioServerParameters.assert_called_once_with(command="echo", args=["foo"], env={"FOO": "BAR"})
     mock_stdio_client.assert_called_once_with(params)
     mock_get_tools.assert_awaited_once_with(mock_client, 3)
 
@@ -119,9 +113,7 @@ async def test_load_mcp_tools_unsupported_type():
 @patch("src.server.mcp_utils._get_tools_from_client_session", new_callable=AsyncMock)
 @patch("src.server.mcp_utils.StdioServerParameters")
 @patch("src.server.mcp_utils.stdio_client")
-async def test_load_mcp_tools_exception_handling(
-    mock_stdio_client, mock_StdioServerParameters, mock_get_tools
-):
+async def test_load_mcp_tools_exception_handling(mock_stdio_client, mock_StdioServerParameters, mock_get_tools):
     mock_get_tools.side_effect = Exception("unexpected error")
     mock_StdioServerParameters.return_value = MagicMock()
     mock_stdio_client.return_value = MagicMock()

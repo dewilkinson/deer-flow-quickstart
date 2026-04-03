@@ -28,6 +28,7 @@ class LocalSandboxProvider(SandboxProvider):
 
         try:
             from deerflow.config import get_app_config
+
             config = get_app_config()
 
             # 1. Map skills container path to local skills directory

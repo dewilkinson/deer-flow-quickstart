@@ -25,9 +25,7 @@ class TestMakeEvent:
         event_type = "message_chunk"
         data = {"content": "Hello", "role": "assistant"}
         result = _make_event(event_type, data)
-        expected = (
-            'event: message_chunk\ndata: {"content": "Hello", "role": "assistant"}\n\n'
-        )
+        expected = 'event: message_chunk\ndata: {"content": "Hello", "role": "assistant"}\n\n'
         assert result == expected
 
     def test_make_event_with_empty_content(self):
@@ -41,9 +39,7 @@ class TestMakeEvent:
         event_type = "tool_calls"
         data = {"role": "assistant", "tool_calls": []}
         result = _make_event(event_type, data)
-        expected = (
-            'event: tool_calls\ndata: {"role": "assistant", "tool_calls": []}\n\n'
-        )
+        expected = 'event: tool_calls\ndata: {"role": "assistant", "tool_calls": []}\n\n'
         assert result == expected
 
 
@@ -182,19 +178,14 @@ class TestPPTEndpoint:
     def test_generate_ppt_success(self, mock_file, mock_build_graph, client):
         mock_workflow = MagicMock()
         mock_build_graph.return_value = mock_workflow
-        mock_workflow.invoke.return_value = {
-            "generated_file_path": "/fake/path/test.pptx"
-        }
+        mock_workflow.invoke.return_value = {"generated_file_path": "/fake/path/test.pptx"}
 
         request_data = {"content": "Test content for PPT"}
 
         response = client.post("/api/ppt/generate", json=request_data)
 
         assert response.status_code == 200
-        assert (
-            "application/vnd.openxmlformats-officedocument.presentationml.presentation"
-            in response.headers["content-type"]
-        )
+        assert "application/vnd.openxmlformats-officedocument.presentationml.presentation" in response.headers["content-type"]
         assert response.content == b"fake_ppt_data"
 
     @patch("src.server.app.build_ppt_graph")
@@ -266,9 +257,7 @@ class TestMCPEndpoint:
         {"ENABLE_MCP_SERVER_CONFIGURATION": "true"},
     )
     def test_mcp_server_metadata_success(self, mock_load_tools, client):
-        mock_load_tools.return_value = [
-            {"name": "test_tool", "description": "Test tool"}
-        ]
+        mock_load_tools.return_value = [{"name": "test_tool", "description": "Test tool"}]
 
         request_data = {
             "transport": "stdio",
@@ -310,9 +299,7 @@ class TestMCPEndpoint:
         {"ENABLE_MCP_SERVER_CONFIGURATION": "true"},
     )
     def test_mcp_server_metadata_with_exception(self, mock_load_tools, client):
-        mock_load_tools.side_effect = HTTPException(
-            status_code=400, detail="MCP Server Error"
-        )
+        mock_load_tools.side_effect = HTTPException(status_code=400, detail="MCP Server Error")
 
         request_data = {
             "transport": "stdio",
@@ -331,9 +318,7 @@ class TestMCPEndpoint:
         os.environ,
         {"ENABLE_MCP_SERVER_CONFIGURATION": ""},
     )
-    def test_mcp_server_metadata_without_enable_configuration(
-        self, mock_load_tools, client
-    ):
+    def test_mcp_server_metadata_without_enable_configuration(self, mock_load_tools, client):
         request_data = {
             "transport": "stdio",
             "command": "test_command",
@@ -344,10 +329,7 @@ class TestMCPEndpoint:
         response = client.post("/api/mcp/server/metadata", json=request_data)
 
         assert response.status_code == 403
-        assert (
-            response.json()["detail"]
-            == "MCP server configuration is disabled. Set ENABLE_MCP_SERVER_CONFIGURATION=true to enable MCP features."
-        )
+        assert response.json()["detail"] == "MCP server configuration is disabled. Set ENABLE_MCP_SERVER_CONFIGURATION=true to enable MCP features."
 
 
 class TestRAGEndpoints:
@@ -449,10 +431,7 @@ class TestChatStreamEndpoint:
         response = client.post("/api/chat/stream", json=request_data)
 
         assert response.status_code == 403
-        assert (
-            response.json()["detail"]
-            == "MCP server configuration is disabled. Set ENABLE_MCP_SERVER_CONFIGURATION=true to enable MCP features."
-        )
+        assert response.json()["detail"] == "MCP server configuration is disabled. Set ENABLE_MCP_SERVER_CONFIGURATION=true to enable MCP features."
 
     @patch("src.server.app.graph")
     @patch.dict(
@@ -663,9 +642,7 @@ class TestAstreamWorkflowGenerator:
 
     @pytest.mark.asyncio
     @patch("src.server.app.graph")
-    async def test_astream_workflow_generator_ai_message_with_tool_calls(
-        self, mock_graph
-    ):
+    async def test_astream_workflow_generator_ai_message_with_tool_calls(self, mock_graph):
         # Mock AI message with tool calls
         mock_ai_message = AIMessageChunk(content="Making tool call")
         mock_ai_message.id = "msg_789"
@@ -706,9 +683,7 @@ class TestAstreamWorkflowGenerator:
 
     @pytest.mark.asyncio
     @patch("src.server.app.graph")
-    async def test_astream_workflow_generator_ai_message_with_tool_call_chunks(
-        self, mock_graph
-    ):
+    async def test_astream_workflow_generator_ai_message_with_tool_call_chunks(self, mock_graph):
         # Mock AI message with only tool call chunks
         mock_ai_message = AIMessageChunk(content="Streaming tool call")
         mock_ai_message.id = "msg_101"

@@ -1,5 +1,7 @@
 import asyncio
+
 from src.tools.finance import get_stock_quote
+
 
 async def verify_vix():
     print("DEBUG: Calling get_stock_quote.func('VIX')...")
@@ -12,6 +14,7 @@ async def verify_vix():
             print(f"DEBUG: FAILURE - Result: {result}")
     except Exception as e:
         print(f"DEBUG: EXCEPTION - {str(e)}")
+
 
 if __name__ == "__main__":
     asyncio.run(verify_vix())

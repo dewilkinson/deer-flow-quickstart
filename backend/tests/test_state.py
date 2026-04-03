@@ -55,7 +55,7 @@ def load_state_class():
     spec.__dict__["Plan"] = Plan
 
     # Execute the module code
-    with open(types_path, "r") as f:
+    with open(types_path) as f:
         module_code = f.read()
 
     exec(module_code, spec.__dict__)

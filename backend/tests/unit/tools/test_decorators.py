@@ -38,9 +38,7 @@ class TestLoggedToolMixin:
         tool = LoggedTool()
 
         # Mock the parent _run method
-        with patch.object(
-            MockBaseTool, "_run", return_value="mocked_result"
-        ) as mock_super_run:
+        with patch.object(MockBaseTool, "_run", return_value="mocked_result") as mock_super_run:
             args = ("arg1", "arg2")
             kwargs = {"key1": "value1"}
             result = tool._run(*args, **kwargs)
@@ -65,7 +63,7 @@ class TestLoggedToolMixin:
                     call("[ENTRY] Tool MockBaseTool._run invoked with parameters: test_arg"),
                     # The second call has a duration which we can't easily match exactly
                 ],
-                any_order=False
+                any_order=False,
             )
             # Check for the EXIT message separately since it has a variable duration
             exit_call = [c for c in mock_debug.call_args_list if "[EXIT] Tool MockBaseTool returned successfully" in str(c)]
@@ -114,7 +112,7 @@ class TestLoggedToolMixin:
             # ENTRY call
             entry_call = mock_debug.call_args_list[0][0][0]
             assert "[ENTRY] Tool MockBaseTool._run" in entry_call
-            
+
             # EXIT call
             exit_call = mock_debug.call_args_list[1][0][0]
             assert "[EXIT] Tool MockBaseTool returned successfully" in exit_call

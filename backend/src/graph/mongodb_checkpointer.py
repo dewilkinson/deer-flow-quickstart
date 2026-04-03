@@ -2,12 +2,9 @@
 # Copyright (c) 2026 Dave Wilkinson <dwilkins@bluesec.ai>
 # License: PolyForm Noncommercial 1.0.0
 
-import asyncio
 import logging
 from typing import (
     Any,
-    Iterator,
-    Optional,
 )
 
 from langchain_core.runnables import RunnableConfig, run_in_executor
@@ -25,10 +22,12 @@ from pymongo import MongoClient
 
 logger = logging.getLogger(__name__)
 
+
 class NativeMongoDBSaver(BaseCheckpointSaver):
     """A clean, native MongoDB checkpointer that avoids the 'bson' version conflict.
     Uses the project's verified pymongo installation directly.
     """
+
     def __init__(
         self,
         client: MongoClient,
@@ -42,7 +41,7 @@ class NativeMongoDBSaver(BaseCheckpointSaver):
         self.collection = self.db[checkpoint_collection_name]
         self.serde = serde or JsonPlusSerializer()
 
-    def get_tuple(self, config: RunnableConfig) -> Optional[CheckpointTuple]:
+    def get_tuple(self, config: RunnableConfig) -> CheckpointTuple | None:
         thread_id = config["configurable"]["thread_id"]
         checkpoint_ns = config["configurable"].get("checkpoint_ns", "")
         checkpoint_id = get_checkpoint_id(config)
@@ -103,7 +102,7 @@ class NativeMongoDBSaver(BaseCheckpointSaver):
             logger.exception(f"CRITICAL ERROR in NativeMongoDBSaver.put: {e}")
             raise
 
-    async def aget_tuple(self, config: RunnableConfig) -> Optional[CheckpointTuple]:
+    async def aget_tuple(self, config: RunnableConfig) -> CheckpointTuple | None:
         return await run_in_executor(None, self.get_tuple, config)
 
     async def aput(

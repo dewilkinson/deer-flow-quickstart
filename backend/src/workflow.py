@@ -80,9 +80,7 @@ async def run_agent_workflow_async(
         "recursion_limit": get_recursion_limit(default=100),
     }
     last_message_cnt = 0
-    async for s in graph.astream(
-        input=initial_state, config=config, stream_mode="values"
-    ):
+    async for s in graph.astream(input=initial_state, config=config, stream_mode="values"):
         try:
             if isinstance(s, dict) and "messages" in s:
                 if len(s["messages"]) <= last_message_cnt:

@@ -2,9 +2,11 @@
 # SPDX-License-Identifier: MIT
 
 from __future__ import annotations
-from uuid import uuid4
-from types import SimpleNamespace
+
 from pathlib import Path
+from types import SimpleNamespace
+from uuid import uuid4
+
 import pytest
 
 import src.rag.milvus as milvus_mod
@@ -13,7 +15,6 @@ from src.rag.retriever import Resource
 
 
 class DummyEmbedding:
-
     def __init__(self, **kwargs):
         self.kwargs = kwargs
 
@@ -67,9 +68,7 @@ def test_list_local_markdown_resources_populated(project_root):
     target_dir.mkdir(parents=True, exist_ok=True)
 
     # File with heading
-    (target_dir / "file1.md").write_text(
-        "# Title One\n\nContent body.", encoding="utf-8"
-    )
+    (target_dir / "file1.md").write_text("# Title One\n\nContent body.", encoding="utf-8")
     # File without heading -> fallback title
     (target_dir / "file_two.md").write_text("No heading here.", encoding="utf-8")
     # Non-markdown file should be ignored
@@ -167,9 +166,7 @@ def test_split_content_chunking(monkeypatch):
     monkeypatch.setenv("MILVUS_CHUNK_SIZE", "40")  # small to force split
     _patch_init(monkeypatch)
     retriever = MilvusProvider()
-    long_content = (
-        "Para1 text here.\n\nPara2 second block.\n\nPara3 final."  # 3 paragraphs
-    )
+    long_content = "Para1 text here.\n\nPara2 second block.\n\nPara3 final."  # 3 paragraphs
     chunks = retriever._split_content(long_content)
     assert len(chunks) >= 2  # forced split
     assert all(chunks)  # no empty chunks
@@ -253,9 +250,7 @@ def test_query_relevant_documents_lite_success(monkeypatch):
     retriever.embedding_model.embed_query = lambda text: [0.1, 0.2, 0.3]  # type: ignore
 
     class DummyMilvusLite:
-        def search(
-            self, collection_name, data, anns_field, param, limit, output_fields
-        ):  # noqa: D401
+        def search(self, collection_name, data, anns_field, param, limit, output_fields):  # noqa: D401
             # Simulate two result entries
             return [
                 [
@@ -282,9 +277,7 @@ def test_query_relevant_documents_lite_success(monkeypatch):
 
     retriever.client = DummyMilvusLite()
     # Filter for only d2 via resource list
-    docs = retriever.query_relevant_documents(
-        "question", resources=[Resource(uri="milvus://d2", title="", description="")]
-    )
+    docs = retriever.query_relevant_documents("question", resources=[Resource(uri="milvus://d2", title="", description="")])
     assert len(docs) == 1 and docs[0].id == "d2" and docs[0].chunks[0].similarity == 0.8
 
 
@@ -328,9 +321,7 @@ def test_query_relevant_documents_remote_success(monkeypatch):
 
     retriever.client = RemoteClient()
     # Filter to only d1
-    docs = retriever.query_relevant_documents(
-        "q", resources=[Resource(uri="milvus://d1", title="", description="")]
-    )
+    docs = retriever.query_relevant_documents("q", resources=[Resource(uri="milvus://d1", title="", description="")])
     assert len(docs) == 1 and docs[0].id == "d1" and docs[0].chunks[0].similarity == 0.7
 
 
@@ -369,9 +360,7 @@ def test_create_collection_lite(monkeypatch):
         def list_collections(self):  # noqa: D401
             return []  # empty triggers creation
 
-        def create_collection(
-            self, collection_name, schema, index_params
-        ):  # noqa: D401
+        def create_collection(self, collection_name, schema, index_params):  # noqa: D401
             created["name"] = collection_name
             created["schema"] = schema
             created["index"] = index_params
@@ -425,9 +414,7 @@ def test_insert_document_chunk_lite_and_error(monkeypatch):
             captured["data"] = data
 
     retriever.client = DummyMilvusLite()
-    retriever._insert_document_chunk(
-        doc_id="id1", content="hello", title="T", url="u", metadata={"m": 1}
-    )
+    retriever._insert_document_chunk(doc_id="id1", content="hello", title="T", url="u", metadata={"m": 1})
     assert captured["data"][0][retriever.id_field] == "id1"
 
     # error path: patch embedding to raise
@@ -436,9 +423,7 @@ def test_insert_document_chunk_lite_and_error(monkeypatch):
 
     retriever.embedding_model.embed_query = bad_embed  # type: ignore[attr-defined]
     with pytest.raises(RuntimeError):
-        retriever._insert_document_chunk(
-            doc_id="id2", content="err", title="T", url="u", metadata={}
-        )
+        retriever._insert_document_chunk(doc_id="id2", content="err", title="T", url="u", metadata={})
 
 
 def test_insert_document_chunk_remote(monkeypatch):
@@ -453,9 +438,7 @@ def test_insert_document_chunk_remote(monkeypatch):
             added["meta"] = metadatas
 
     retriever.client = RemoteClient()
-    retriever._insert_document_chunk(
-        doc_id="idx", content="ct", title="Title", url="urlx", metadata={"k": 2}
-    )
+    retriever._insert_document_chunk(doc_id="idx", content="ct", title="Title", url="urlx", metadata={"k": 2})
     assert added["meta"][0][retriever.id_field] == "idx"
 
 
@@ -552,12 +535,8 @@ def test_load_examples_force_reload(monkeypatch):
     retriever = MilvusProvider()
     retriever.client = SimpleNamespace()
     called = {"clear": 0, "load": 0}
-    monkeypatch.setattr(
-        retriever, "_clear_example_documents", lambda: called.__setitem__("clear", 1)
-    )
-    monkeypatch.setattr(
-        retriever, "_load_example_files", lambda: called.__setitem__("load", 1)
-    )
+    monkeypatch.setattr(retriever, "_clear_example_documents", lambda: called.__setitem__("clear", 1))
+    monkeypatch.setattr(retriever, "_load_example_files", lambda: called.__setitem__("load", 1))
     retriever.load_examples(force_reload=True)
     assert called == {"clear": 1, "load": 1}
 
@@ -794,9 +773,7 @@ def test_load_example_files_single_chunk_no_suffix(monkeypatch):
     examples_path.mkdir(exist_ok=True)
 
     file_single = examples_path / "single.md"
-    file_single.write_text(
-        "# Single Title\nOnly one small paragraph.", encoding="utf-8"
-    )
+    file_single.write_text("# Single Title\nOnly one small paragraph.", encoding="utf-8")
 
     monkeypatch.setenv("MILVUS_EXAMPLES_DIR", examples_dir_name)
     retriever = MilvusProvider()

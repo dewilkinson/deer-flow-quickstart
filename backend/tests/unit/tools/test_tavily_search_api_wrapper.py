@@ -14,9 +14,7 @@ from src.tools.tavily_search.tavily_search_api_wrapper import (
 class TestEnhancedTavilySearchAPIWrapper:
     @pytest.fixture
     def wrapper(self):
-        with patch(
-            "src.tools.tavily_search.tavily_search_api_wrapper.OriginalTavilySearchAPIWrapper"
-        ):
+        with patch("src.tools.tavily_search.tavily_search_api_wrapper.OriginalTavilySearchAPIWrapper"):
             wrapper = EnhancedTavilySearchAPIWrapper(tavily_api_key="dummy-key")
             # The parent class is mocked, so initialization won't fail
             return wrapper
@@ -58,9 +56,7 @@ class TestEnhancedTavilySearchAPIWrapper:
         assert call_args.kwargs["json"]["max_results"] == 10
 
     @patch("src.tools.tavily_search.tavily_search_api_wrapper.requests.post")
-    def test_raw_results_with_all_parameters(
-        self, mock_post, wrapper, mock_response_data
-    ):
+    def test_raw_results_with_all_parameters(self, mock_post, wrapper, mock_response_data):
         mock_response = Mock()
         mock_response.json.return_value = mock_response_data
         mock_response.raise_for_status.return_value = None
@@ -106,9 +102,7 @@ class TestEnhancedTavilySearchAPIWrapper:
 
         # Create mock session that returns the context manager
         mock_session = AsyncMock()
-        mock_session.post = MagicMock(
-            return_value=mock_response_cm
-        )  # Use MagicMock, not AsyncMock
+        mock_session.post = MagicMock(return_value=mock_response_cm)  # Use MagicMock, not AsyncMock
 
         # Create mock session class
         mock_session_cm = AsyncMock()
@@ -134,9 +128,7 @@ class TestEnhancedTavilySearchAPIWrapper:
 
         # Create mock session that returns the context manager
         mock_session = AsyncMock()
-        mock_session.post = MagicMock(
-            return_value=mock_response_cm
-        )  # Use MagicMock, not AsyncMock
+        mock_session.post = MagicMock(return_value=mock_response_cm)  # Use MagicMock, not AsyncMock
 
         # Create mock session class
         mock_session_cm = AsyncMock()

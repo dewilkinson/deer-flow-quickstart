@@ -1,5 +1,4 @@
 from src.services.inbox_rules import InboxRuleEngine
-import os
 
 engine = InboxRuleEngine("C:\\tmp")
 test_file = "March 30, 2026.md"

@@ -2,23 +2,21 @@
 # SPDX-License-Identifier: MIT
 
 import pytest
-
 from langchain_core.messages import (
     AIMessageChunk,
+    ChatMessageChunk,
+    FunctionMessageChunk,
     HumanMessageChunk,
     SystemMessageChunk,
-    FunctionMessageChunk,
     ToolMessageChunk,
 )
 
 from src.llms import llm as llm_module
-from langchain_core.messages import ChatMessageChunk
 from src.llms.providers import dashscope as dashscope_module
-
 from src.llms.providers.dashscope import (
     ChatDashscope,
-    _convert_delta_to_message_chunk,
     _convert_chunk_to_generation_chunk,
+    _convert_delta_to_message_chunk,
 )
 
 
@@ -87,12 +85,7 @@ def test_convert_delta_to_message_chunk_roles_and_extras():
 
 def test_convert_chunk_to_generation_chunk_skip_and_usage():
     # Skips content.delta type
-    assert (
-        _convert_chunk_to_generation_chunk(
-            {"type": "content.delta"}, AIMessageChunk, None
-        )
-        is None
-    )
+    assert _convert_chunk_to_generation_chunk({"type": "content.delta"}, AIMessageChunk, None) is None
 
     # Proper chunk with usage and finish info
     chunk = {
@@ -122,8 +115,9 @@ def test_llm_selects_dashscope_and_sets_enable_thinking(monkeypatch, dashscope_c
     monkeypatch.setattr(llm_module, "ChatDashscope", DummyChatDashscope)
 
     # Aggressively clear environment to avoid local dev machine overrides (e.g. Google AI Studio platform)
-    from unittest.mock import patch
     import os
+    from unittest.mock import patch
+
     with patch.dict(os.environ, {}, clear=True):
         # basic -> enable_thinking False
         inst = llm_module._create_llm_use_conf("basic", dashscope_conf)
@@ -147,8 +141,9 @@ def test_llm_verify_ssl_false_adds_http_clients(monkeypatch, dashscope_conf):
     }
 
     # Aggressively clear environment to avoid local dev machine overrides
-    from unittest.mock import patch
     import os
+    from unittest.mock import patch
+
     with patch.dict(os.environ, {}, clear=True):
         inst = llm_module._create_llm_use_conf("basic", dashscope_conf)
         assert "http_client" in inst.kwargs
@@ -228,13 +223,7 @@ def test_convert_chunk_to_generation_chunk_includes_base_info_and_logprobs():
 
 
 def test_convert_chunk_to_generation_chunk_beta_stream_format():
-    chunk = {
-        "chunk": {
-            "choices": [
-                {"delta": {"role": "assistant", "content": "From beta stream format"}}
-            ]
-        }
-    }
+    chunk = {"chunk": {"choices": [{"delta": {"role": "assistant", "content": "From beta stream format"}}]}}
     gen = _convert_chunk_to_generation_chunk(chunk, AIMessageChunk, None)
     assert gen is not None
     assert gen.message.content == "From beta stream format"
@@ -258,9 +247,7 @@ def test_chatdashscope_create_chat_result_adds_reasoning_content(monkeypatch):
     def fake_super_create(self, response, generation_info=None):
         return DummyChatResult()
 
-    monkeypatch.setattr(
-        dashscope_module.ChatOpenAI, "_create_chat_result", fake_super_create
-    )
+    monkeypatch.setattr(dashscope_module.ChatOpenAI, "_create_chat_result", fake_super_create)
 
     # Patch openai.BaseModel in the module under test
     class DummyBaseModel:
@@ -283,10 +270,7 @@ def test_chatdashscope_create_chat_result_adds_reasoning_content(monkeypatch):
 
     llm = ChatDashscope(model="dummy", api_key="k")
     result = llm._create_chat_result(FakeResponse())
-    assert (
-        result.generations[0].message.additional_kwargs.get("reasoning_content")
-        == "Reasoning..."
-    )
+    assert result.generations[0].message.additional_kwargs.get("reasoning_content") == "Reasoning..."
 
 
 def test_chatdashscope_create_chat_result_dict_passthrough(monkeypatch):
@@ -305,9 +289,7 @@ def test_chatdashscope_create_chat_result_dict_passthrough(monkeypatch):
     def fake_super_create(self, response, generation_info=None):
         return DummyChatResult()
 
-    monkeypatch.setattr(
-        dashscope_module.ChatOpenAI, "_create_chat_result", fake_super_create
-    )
+    monkeypatch.setattr(dashscope_module.ChatOpenAI, "_create_chat_result", fake_super_create)
 
     llm = ChatDashscope(model="dummy", api_key="k")
     result = llm._create_chat_result({"raw": "dict"})

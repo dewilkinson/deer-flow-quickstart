@@ -6,7 +6,6 @@
 # SPDX-License-Identifier: MIT
 
 import os
-from typing import List, Optional
 from urllib.parse import urlparse
 
 import requests
@@ -22,7 +21,7 @@ class RAGFlowProvider(Retriever):
     api_url: str
     api_key: str
     page_size: int = 10
-    cross_languages: Optional[List[str]] = None
+    cross_languages: list[str] | None = None
 
     def __init__(self):
         api_url = os.getenv("RAGFLOW_API_URL")
@@ -44,9 +43,7 @@ class RAGFlowProvider(Retriever):
         if cross_languages:
             self.cross_languages = cross_languages.split(",")
 
-    def query_relevant_documents(
-        self, query: str, resources: list[Resource] = []
-    ) -> list[Document]:
+    def query_relevant_documents(self, query: str, resources: list[Resource] = []) -> list[Document]:
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
@@ -71,9 +68,7 @@ class RAGFlowProvider(Retriever):
         if self.cross_languages:
             payload["cross_languages"] = self.cross_languages
 
-        response = requests.post(
-            f"{self.api_url}/api/v1/retrieval", headers=headers, json=payload
-        )
+        response = requests.post(f"{self.api_url}/api/v1/retrieval", headers=headers, json=payload)
 
         if response.status_code != 200:
             raise Exception(f"Failed to query documents: {response.text}")
@@ -112,9 +107,7 @@ class RAGFlowProvider(Retriever):
         if query:
             params["name"] = query
 
-        response = requests.get(
-            f"{self.api_url}/api/v1/datasets", headers=headers, params=params
-        )
+        response = requests.get(f"{self.api_url}/api/v1/datasets", headers=headers, params=params)
 
         if response.status_code != 200:
             raise Exception(f"Failed to list resources: {response.text}")

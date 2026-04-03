@@ -4,17 +4,18 @@
 # Copyright (c) 2026 Dave Wilkinson <dwilkins@bluesec.ai>
 # License: PolyForm Noncommercial 1.0.0
 
-import logging
 import asyncio
+import logging
 import re
-from datetime import datetime, timedelta
+from datetime import datetime
+from typing import Any
 from zoneinfo import ZoneInfo
-from typing import List, Dict, Any, Optional
+
 from langchain_core.tools import tool
-from .finance import get_symbol_history_data, get_sortino_ratio, _fetch_batch_history, _extract_ticker_data
-from .smc import get_smc_analysis
+
 from src.services.macro_registry import macro_registry
 
+from .finance import _extract_ticker_data, _fetch_batch_history, get_symbol_history_data
 from .shared_storage import ANALYST_CONTEXT, GLOBAL_CONTEXT
 
 NY_TZ = ZoneInfo("America/New_York")
@@ -22,7 +23,7 @@ NY_TZ = ZoneInfo("America/New_York")
 logger = logging.getLogger(__name__)
 
 # 1. Private to the Agent Code Itself
-_NODE_RESOURCE_CONTEXT: Dict[str, Any] = {}
+_NODE_RESOURCE_CONTEXT: dict[str, Any] = {}
 
 # 2. Shared context
 _SHARED_RESOURCE_CONTEXT = ANALYST_CONTEXT
@@ -32,14 +33,13 @@ _GLOBAL_RESOURCE_CONTEXT = GLOBAL_CONTEXT
 
 
 # Global cache for macro data
-_MACRO_CACHE: Dict[str, Any] = {
-    "data": None,
-    "timestamp": None
-}
+_MACRO_CACHE: dict[str, Any] = {"data": None, "timestamp": None}
+
 
 # Registry-backed Macro Symbol Set
 def get_macro_tickers():
     return macro_registry.get_macros()
+
 
 # The following are maintained for legacy compatibility but now proxy to the registry
 MACRO_TICKERS = get_macro_tickers()
@@ -53,10 +53,11 @@ MACRO_NAMES = {
     "IWM": "Russell 2000 ETF",
     "GLD": "SPDR Gold ETF",
     "BTC": "Bitcoin (USD)",
-    "USO": "United States Oil Fund"
+    "USO": "United States Oil Fund",
 }
 
 TIMEFRAMES = ["1h", "1d"]
+
 
 @tool
 async def fetch_market_macros() -> str:
@@ -67,17 +68,17 @@ async def fetch_market_macros() -> str:
     data = await get_macro_data()
     if not data:
         return "Error: Unable to synthesize macro market data at this time."
-    
+
     report = "## Market Macros - High Fidelity Stock Analysis\n\n"
-    
+
     for item in data:
         # User requested cleaner format without '^', '=F' tokens
-        display_label = item['label']
-        
+        display_label = item["label"]
+
         report += f"### {display_label} ({item['name']})\n"
         report += f"- **Price**: {item['price']:.2f}\n"
         report += f"- **Change**: {item['change']:.2f}%\n\n"
-        
+
     return report
 
 
@@ -86,7 +87,8 @@ _INTERVAL = "1h"
 _LOOKBACK = 10
 _INTERVAL = "1h"
 
-async def get_macro_data() -> List[Dict[str, Any]]:
+
+async def get_macro_data() -> list[dict[str, Any]]:
     """
     Structured version of market macros for API consumption.
     Refactored for speed:
@@ -101,11 +103,7 @@ async def get_macro_data() -> List[Dict[str, Any]]:
     labels = list(current_macros.keys())
 
     # 1. Bulk Fetch Quotes (15m for speed)
-    history_report = await get_symbol_history_data.ainvoke({
-        "symbols": tickers,
-        "period": "1d",
-        "interval": "15m"
-    })
+    history_report = await get_symbol_history_data.ainvoke({"symbols": tickers, "period": "1d", "interval": "15m"})
 
     # 2. Bulk Fetch Sparklines (last 5 days)
     sparkline_data = await asyncio.to_thread(_fetch_batch_history, tickers, "5d", _INTERVAL)
@@ -113,12 +111,13 @@ async def get_macro_data() -> List[Dict[str, Any]]:
     # Parse prices from bulk report
     prices = {}
     for line in history_report.split("###"):
-        if not line.strip(): continue
+        if not line.strip():
+            continue
         try:
             name_part = line.split("\n")[0].strip()
             close_match = re.search(r"Close\*\*:\s*([\d\.,]+)", line)
             if close_match:
-                prices[name_part] = float(close_match.group(1).replace(',', ''))
+                prices[name_part] = float(close_match.group(1).replace(",", ""))
         except Exception as e:
             logger.error(f"Error parsing price for part: {e}")
 
@@ -131,8 +130,8 @@ async def get_macro_data() -> List[Dict[str, Any]]:
                 ticker_spark_df = _extract_ticker_data(sparkline_data, yahoo_ticker)
                 if not ticker_spark_df.empty:
                     # Calculate % change from start of period
-                    start_price = float(ticker_spark_df.iloc[0]['Close'])
-                    current_price = float(ticker_spark_df.iloc[-1]['Close'])
+                    start_price = float(ticker_spark_df.iloc[0]["Close"])
+                    current_price = float(ticker_spark_df.iloc[-1]["Close"])
                     if start_price > 0:
                         change_pct = ((current_price - start_price) / start_price) * 100
 
@@ -142,11 +141,8 @@ async def get_macro_data() -> List[Dict[str, Any]]:
                         ts = row.name
                         if ts.tzinfo is None:
                             ts = ts.replace(tzinfo=ZoneInfo("UTC"))
-                        
-                        sparkline.append({
-                            "v": float(row['Close']),
-                            "t": ts.astimezone(NY_TZ).strftime(' %m/%d  %I:%M %p').lower()
-                        })
+
+                        sparkline.append({"v": float(row["Close"]), "t": ts.astimezone(NY_TZ).strftime(" %m/%d  %I:%M %p").lower()})
             except Exception as e:
                 logger.error(f"Sparkline error for {yahoo_ticker}: {e}")
 
@@ -158,25 +154,16 @@ async def get_macro_data() -> List[Dict[str, Any]]:
                 "change": change_pct,
                 "sortino": 0.0,
                 "trends": {},
-                "sparkline": sparkline
+                "sparkline": sparkline,
             }
         except Exception as e:
             logger.error(f"Error {label}: {e}")
-            return {
-                "label": label, 
-                "name": MACRO_NAMES.get(label, ""), 
-                "ticker": yahoo_ticker, 
-                "price": 0.0, 
-                "change": 0.0, 
-                "sortino": 0.0, 
-                "trends": {},
-                "sparkline": []
-            }
+            return {"label": label, "name": MACRO_NAMES.get(label, ""), "ticker": yahoo_ticker, "price": 0.0, "change": 0.0, "sortino": 0.0, "trends": {}, "sparkline": []}
 
     # 3. Parallelize processing (Now extremely fast since no sub-tool calls are made)
     tasks = [process_one(l, t) for l, t in MACRO_TICKERS.items()]
     results = await asyncio.gather(*tasks)
-    
+
     now = datetime.now()
     _MACRO_CACHE["data"] = results
     _MACRO_CACHE["timestamp"] = now

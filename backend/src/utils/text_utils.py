@@ -5,8 +5,9 @@
 # Copyright (c) 2025 Bytedance Ltd. and/or its affiliates
 # SPDX-License-Identifier: MIT
 
-import re
 import html
+import re
+
 
 def sanitize_content(text: str) -> str:
     """
@@ -15,24 +16,24 @@ def sanitize_content(text: str) -> str:
     """
     if not text:
         return ""
-        
+
     # Remove script and style tags and their contents
-    text = re.sub(r'<(script|style)[^>]*>.*?</\1>', '', text, flags=re.DOTALL | re.IGNORECASE)
-    
+    text = re.sub(r"<(script|style)[^>]*>.*?</\1>", "", text, flags=re.DOTALL | re.IGNORECASE)
+
     # Remove all other HTML tags but keep content
-    text = re.sub(r'<[^>]+>', '', text)
-    
+    text = re.sub(r"<[^>]+>", "", text)
+
     # Unescape HTML entities
     text = html.unescape(text)
-    
+
     # Remove potentially malicious patterns (basic protection)
     # e.g., javascript: protocols in what would be links
-    text = re.sub(r'javascript:[^\s]*', '[REMOVED]', text, flags=re.IGNORECASE)
-    
+    text = re.sub(r"javascript:[^\s]*", "[REMOVED]", text, flags=re.IGNORECASE)
+
     # Remove malicious links/patterns like common XSS or auto-exec
-    text = re.sub(r'onload\s*=\s*"[^"]*"', '', text, flags=re.IGNORECASE)
-    
+    text = re.sub(r'onload\s*=\s*"[^"]*"', "", text, flags=re.IGNORECASE)
+
     # Normalize whitespaces
-    text = re.sub(r'\s+', ' ', text).strip()
-    
+    text = re.sub(r"\s+", " ", text).strip()
+
     return text

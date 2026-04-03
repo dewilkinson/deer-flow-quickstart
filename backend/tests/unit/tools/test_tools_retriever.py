@@ -41,9 +41,7 @@ def test_retriever_tool_run_with_results():
 
     result = tool._run("test keywords")
 
-    mock_retriever.query_relevant_documents.assert_called_once_with(
-        "test keywords", resources
-    )
+    mock_retriever.query_relevant_documents.assert_called_once_with("test keywords", resources)
     assert isinstance(result, list)
     assert len(result) == 1
     assert result[0] == doc.to_dict()

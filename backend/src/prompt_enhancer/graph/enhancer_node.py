@@ -30,9 +30,7 @@ def prompt_enhancer_node(state: PromptEnhancerState):
         if state.get("context"):
             context_info = f"\n\nAdditional context: {state['context']}"
 
-        original_prompt_message = HumanMessage(
-            content=f"Please enhance this prompt:{context_info}\n\nOriginal prompt: {state['prompt']}"
-        )
+        original_prompt_message = HumanMessage(content=f"Please enhance this prompt:{context_info}\n\nOriginal prompt: {state['prompt']}")
 
         messages = apply_prompt_template(
             "prompt_enhancer/prompt_enhancer",
@@ -50,9 +48,7 @@ def prompt_enhancer_node(state: PromptEnhancerState):
         logger.debug(f"Response content: {response_content}")
 
         # Try to extract content from XML tags first
-        xml_match = re.search(
-            r"<enhanced_prompt>(.*?)</enhanced_prompt>", response_content, re.DOTALL
-        )
+        xml_match = re.search(r"<enhanced_prompt>(.*?)</enhanced_prompt>", response_content, re.DOTALL)
 
         if xml_match:
             # Extract content from XML tags and clean it up

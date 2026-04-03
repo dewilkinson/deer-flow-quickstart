@@ -61,6 +61,7 @@ def _normalize_presented_filepath(
 
 from langchain_core.tools import InjectedToolArg
 
+
 @tool("present_files", parse_docstring=True)
 def present_file_tool(
     runtime: Annotated[ToolRuntime, InjectedToolArg],

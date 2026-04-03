@@ -2,14 +2,17 @@
 # SPDX-License-Identifier: MIT
 
 import os
-import pytest
+from unittest.mock import MagicMock, patch
+
 import mongomock
-from unittest.mock import patch, MagicMock
-import src.graph.checkpoint as checkpoint
+import pytest
 from postgres_mock_utils import PostgreSQLMockInstance
+
+import src.graph.checkpoint as checkpoint
 
 POSTGRES_URL = "postgresql://postgres:postgres@localhost:5432/checkpointing_db"
 MONGO_URL = "mongodb://admin:admin@localhost:27017/checkpointing_db?authSource=admin"
+
 
 def has_real_db_connection():
     # Check the environment if the MongoDB server is available
@@ -18,27 +21,28 @@ def has_real_db_connection():
         return True
     return False
 
+
 def test_with_local_postgres_db():
     """Ensure the ChatStreamManager can be initialized with a local PostgreSQL DB."""
-    with patch('psycopg.connect') as mock_connect:
+    with patch("psycopg.connect") as mock_connect:
         # Setup mock PostgreSQL connection
         pg_mock = PostgreSQLMockInstance()
         mock_connect.return_value = pg_mock.connect()
         manager = checkpoint.ChatStreamManager(
             checkpoint_saver=True,
             db_uri=POSTGRES_URL,
-    )
+        )
     assert manager.postgres_conn is not None
     assert manager.mongo_client is None
 
 
 def test_with_local_mongo_db():
     """Ensure the ChatStreamManager can be initialized with a local MongoDB."""
-    with patch('src.graph.checkpoint.MongoClient') as mock_mongo_client:
+    with patch("src.graph.checkpoint.MongoClient") as mock_mongo_client:
         # Setup mongomock
         mock_client = mongomock.MongoClient()
         mock_mongo_client.return_value = mock_client
-        
+
         manager = checkpoint.ChatStreamManager(
             checkpoint_saver=True,
             db_uri=MONGO_URL,
@@ -63,9 +67,7 @@ def test_process_stream_partial_buffer_postgres(monkeypatch):
     def _no_pg(self):
         self.postgres_conn = None
 
-    monkeypatch.setattr(
-        checkpoint.ChatStreamManager, "_init_postgresql", _no_pg, raising=True
-    )
+    monkeypatch.setattr(checkpoint.ChatStreamManager, "_init_postgresql", _no_pg, raising=True)
     manager = checkpoint.ChatStreamManager(
         checkpoint_saver=True,
         db_uri=POSTGRES_URL,
@@ -80,7 +82,7 @@ def test_process_stream_partial_buffer_postgres(monkeypatch):
 
 def test_process_stream_partial_buffer_mongo():
     """Partial chunks should be buffered; Use mongomock instead of real MongoDB."""
-    with patch('src.graph.checkpoint.MongoClient') as mock_mongo_client:
+    with patch("src.graph.checkpoint.MongoClient") as mock_mongo_client:
         # Setup mongomock
         mock_client = mongomock.MongoClient()
         mock_mongo_client.return_value = mock_client
@@ -95,6 +97,7 @@ def test_process_stream_partial_buffer_mongo():
         items = manager.store.search(("messages", "t2"), limit=10)
         values = [it.dict()["value"] for it in items]
         assert "hello" in values
+
 
 @pytest.mark.skipif(not has_real_db_connection(), reason="PostgreSQL Server is not available")
 def test_persist_postgresql_local_db():
@@ -124,19 +127,13 @@ def test_persist_postgresql_called_with_aggregated_chunks():
         db_uri=POSTGRES_URL,
     )
 
-    assert (
-        manager.process_stream_message("thd3", "Hello", finish_reason="partial") is True
-    )
-    assert (
-        manager.process_stream_message("thd3", " World", finish_reason="stop") is True
-    )
+    assert manager.process_stream_message("thd3", "Hello", finish_reason="partial") is True
+    assert manager.process_stream_message("thd3", " World", finish_reason="stop") is True
 
     # Verify the messages were aggregated correctly
     with manager.postgres_conn.cursor() as cursor:
         # Check if conversation already exists
-        cursor.execute(
-            "SELECT messages FROM chat_streams WHERE thread_id = %s", ("thd3",)
-        )
+        cursor.execute("SELECT messages FROM chat_streams WHERE thread_id = %s", ("thd3",))
         existing_record = cursor.fetchone()
         assert existing_record is not None
         assert existing_record["messages"] == ["Hello", " World"]
@@ -151,34 +148,34 @@ def test_persist_not_attempted_when_saver_disabled():
 
 def test_persist_mongodb_local_db():
     """Ensure that the ChatStreamManager can persist to a mocked MongoDB."""
-    with patch('src.graph.checkpoint.MongoClient') as mock_mongo_client:
+    with patch("src.graph.checkpoint.MongoClient") as mock_mongo_client:
         # Setup mongomock
         mock_client = mongomock.MongoClient()
         mock_mongo_client.return_value = mock_client
-        
+
         manager = checkpoint.ChatStreamManager(
             checkpoint_saver=True,
             db_uri=MONGO_URL,
         )
         assert manager.mongo_db is not None
         assert manager.postgres_conn is None
-        
+
         # Simulate a message to persist
         thread_id = "test_thread"
         messages = ["This is a test message."]
         result = manager._persist_to_mongodb(thread_id, messages)
         assert result is True
-        
+
         # Verify data was persisted in mock
         collection = manager.mongo_db.chat_streams
         doc = collection.find_one({"thread_id": thread_id})
         assert doc is not None
         assert doc["messages"] == messages
-        
+
         # Simulate a message with existing thread
         result = manager._persist_to_mongodb(thread_id, ["Another message."])
         assert result is True
-        
+
         # Verify update worked
         doc = collection.find_one({"thread_id": thread_id})
         assert doc["messages"] == ["Another message."]
@@ -193,12 +190,8 @@ def test_persist_mongodb_called_with_aggregated_chunks():
         db_uri=MONGO_URL,
     )
 
-    assert (
-        manager.process_stream_message("thd5", "Hello", finish_reason="partial") is True
-    )
-    assert (
-        manager.process_stream_message("thd5", " World", finish_reason="stop") is True
-    )
+    assert manager.process_stream_message("thd5", "Hello", finish_reason="partial") is True
+    assert manager.process_stream_message("thd5", " World", finish_reason="stop") is True
 
     # Verify the messages were aggregated correctly
     collection = manager.mongo_db.chat_streams
@@ -214,9 +207,7 @@ def test_invalid_inputs_return_false(monkeypatch):
         self.mongo_client = None
         self.mongo_db = None
 
-    monkeypatch.setattr(
-        checkpoint.ChatStreamManager, "_init_mongodb", _no_mongo, raising=True
-    )
+    monkeypatch.setattr(checkpoint.ChatStreamManager, "_init_mongodb", _no_mongo, raising=True)
 
     manager = checkpoint.ChatStreamManager(
         checkpoint_saver=True,
@@ -228,9 +219,7 @@ def test_invalid_inputs_return_false(monkeypatch):
 
 def test_unsupported_db_uri_scheme():
     """Manager should log warning for unsupported database URI schemes."""
-    manager = checkpoint.ChatStreamManager(
-        checkpoint_saver=True, db_uri="redis://localhost:6379/0"
-    )
+    manager = checkpoint.ChatStreamManager(checkpoint_saver=True, db_uri="redis://localhost:6379/0")
     # Should not have any database connections
     assert manager.mongo_client is None
     assert manager.postgres_conn is None
@@ -239,31 +228,21 @@ def test_unsupported_db_uri_scheme():
 
 def test_process_stream_with_interrupt_finish_reason():
     """Test that 'interrupt' finish_reason triggers persistence like 'stop'."""
-    with patch('src.graph.checkpoint.MongoClient') as mock_mongo_client:
+    with patch("src.graph.checkpoint.MongoClient") as mock_mongo_client:
         # Setup mongomock
         mock_client = mongomock.MongoClient()
         mock_mongo_client.return_value = mock_client
-        
+
         manager = checkpoint.ChatStreamManager(
             checkpoint_saver=True,
             db_uri=MONGO_URL,
         )
 
         # Add partial message
-        assert (
-            manager.process_stream_message(
-                "int_test", "Interrupted", finish_reason="partial"
-            )
-            is True
-        )
+        assert manager.process_stream_message("int_test", "Interrupted", finish_reason="partial") is True
         # Interrupt should trigger persistence
-        assert (
-            manager.process_stream_message(
-                "int_test", " message", finish_reason="interrupt"
-            )
-            is True
-        )
-        
+        assert manager.process_stream_message("int_test", " message", finish_reason="interrupt") is True
+
         # Verify persistence occurred
         collection = manager.mongo_db.chat_streams
         doc = collection.find_one({"thread_id": "int_test"})
@@ -313,10 +292,7 @@ def test_store_namespace_consistency():
     manager = checkpoint.ChatStreamManager(checkpoint_saver=False)
 
     # Process a partial message
-    assert (
-        manager.process_stream_message("ns_test", "chunk1", finish_reason="partial")
-        is True
-    )
+    assert manager.process_stream_message("ns_test", "chunk1", finish_reason="partial") is True
 
     # Verify cursor is stored correctly
     cursor = manager.store.get(("messages", "ns_test"), "cursor")
@@ -324,10 +300,7 @@ def test_store_namespace_consistency():
     assert cursor.value["index"] == 0
 
     # Add another chunk
-    assert (
-        manager.process_stream_message("ns_test", "chunk2", finish_reason="partial")
-        is True
-    )
+    assert manager.process_stream_message("ns_test", "chunk2", finish_reason="partial") is True
 
     # Verify cursor is incremented
     cursor = manager.store.get(("messages", "ns_test"), "cursor")
@@ -343,9 +316,7 @@ def test_cursor_initialization_edge_cases():
     manager.store.put(namespace, "cursor", {})  # Missing 'index' key
 
     # Should handle missing index gracefully
-    result = manager.process_stream_message(
-        "edge_test", "test", finish_reason="partial"
-    )
+    result = manager.process_stream_message("edge_test", "test", finish_reason="partial")
     assert result is True
 
     # Should default to 0 and increment to 1
@@ -358,33 +329,16 @@ def test_multiple_threads_isolation():
     manager = checkpoint.ChatStreamManager(checkpoint_saver=False)
 
     # Process messages for different threads
-    assert (
-        manager.process_stream_message("thread1", "msg1", finish_reason="partial")
-        is True
-    )
-    assert (
-        manager.process_stream_message("thread2", "msg2", finish_reason="partial")
-        is True
-    )
-    assert (
-        manager.process_stream_message("thread1", "msg3", finish_reason="partial")
-        is True
-    )
+    assert manager.process_stream_message("thread1", "msg1", finish_reason="partial") is True
+    assert manager.process_stream_message("thread2", "msg2", finish_reason="partial") is True
+    assert manager.process_stream_message("thread1", "msg3", finish_reason="partial") is True
 
     # Verify isolation
     thread1_items = manager.store.search(("messages", "thread1"), limit=10)
     thread2_items = manager.store.search(("messages", "thread2"), limit=10)
 
-    thread1_values = [
-        item.dict()["value"]
-        for item in thread1_items
-        if isinstance(item.dict()["value"], str)
-    ]
-    thread2_values = [
-        item.dict()["value"]
-        for item in thread2_items
-        if isinstance(item.dict()["value"], str)
-    ]
+    thread1_values = [item.dict()["value"] for item in thread1_items if isinstance(item.dict()["value"], str)]
+    thread2_values = [item.dict()["value"] for item in thread2_items if isinstance(item.dict()["value"], str)]
 
     assert "msg1" in thread1_values
     assert "msg3" in thread1_values
@@ -395,7 +349,7 @@ def test_multiple_threads_isolation():
 
 def test_mongodb_insert_and_update_paths():
     """Exercise MongoDB insert, update, and exception branches using mongomock."""
-    with patch('src.graph.checkpoint.MongoClient') as mock_mongo_client:
+    with patch("src.graph.checkpoint.MongoClient") as mock_mongo_client:
         # Setup mongomock
         mock_client = mongomock.MongoClient()
         mock_mongo_client.return_value = mock_client
@@ -404,7 +358,7 @@ def test_mongodb_insert_and_update_paths():
 
         # Insert success (new thread)
         assert manager._persist_to_mongodb("th1", ["message1"]) is True
-        
+
         # Verify insert worked
         collection = manager.mongo_db.chat_streams
         doc = collection.find_one({"thread_id": "th1"})
@@ -413,7 +367,7 @@ def test_mongodb_insert_and_update_paths():
 
         # Update success (existing thread)
         assert manager._persist_to_mongodb("th1", ["message2"]) is True
-        
+
         # Verify update worked
         doc = collection.find_one({"thread_id": "th1"})
         assert doc["messages"] == ["message2"]
@@ -421,9 +375,9 @@ def test_mongodb_insert_and_update_paths():
         # Test error case by mocking collection methods
         original_find_one = collection.find_one
         collection.find_one = MagicMock(side_effect=RuntimeError("Database error"))
-        
+
         assert manager._persist_to_mongodb("th2", ["message"]) is False
-        
+
         # Restore original method
         collection.find_one = original_find_one
 
@@ -576,9 +530,7 @@ def test_context_manager_calls_close(monkeypatch):
         self.mongo_client = None
         self.mongo_db = None
 
-    monkeypatch.setattr(
-        checkpoint.ChatStreamManager, "_init_mongodb", _noop, raising=True
-    )
+    monkeypatch.setattr(checkpoint.ChatStreamManager, "_init_mongodb", _noop, raising=True)
 
     manager = checkpoint.ChatStreamManager(checkpoint_saver=True, db_uri=MONGO_URL)
 
@@ -593,19 +545,19 @@ def test_context_manager_calls_close(monkeypatch):
 
 def test_init_mongodb_success_and_failure(monkeypatch):
     """MongoDB init should succeed with mongomock and fail gracefully with errors."""
-    
+
     # Success path with mongomock
-    with patch('src.graph.checkpoint.MongoClient') as mock_mongo_client:
+    with patch("src.graph.checkpoint.MongoClient") as mock_mongo_client:
         mock_client = mongomock.MongoClient()
         mock_mongo_client.return_value = mock_client
-        
+
         manager = checkpoint.ChatStreamManager(checkpoint_saver=True, db_uri=MONGO_URL)
         assert manager.mongo_db is not None
 
     # Failure path
-    with patch('src.graph.checkpoint.MongoClient') as mock_mongo_client:
+    with patch("src.graph.checkpoint.MongoClient") as mock_mongo_client:
         mock_mongo_client.side_effect = RuntimeError("Connection failed")
-        
+
         manager = checkpoint.ChatStreamManager(checkpoint_saver=True, db_uri=MONGO_URL)
         # Should have no mongo_db set on failure
         assert getattr(manager, "mongo_db", None) is None
@@ -627,9 +579,7 @@ def test_init_postgresql_calls_connect_and_create_table(monkeypatch):
         flags["created"] += 1
         return FakeConn()
 
-    monkeypatch.setattr(
-        checkpoint.ChatStreamManager, "_init_postgresql", fake_connect, raising=True
-    )
+    monkeypatch.setattr(checkpoint.ChatStreamManager, "_init_postgresql", fake_connect, raising=True)
 
     manager = checkpoint.ChatStreamManager(checkpoint_saver=True, db_uri=POSTGRES_URL)
     assert manager.postgres_conn is None
@@ -639,9 +589,7 @@ def test_init_postgresql_calls_connect_and_create_table(monkeypatch):
 def test_chat_stream_message_wrapper(monkeypatch):
     """Wrapper should delegate when enabled and return False when disabled."""
     # When saver enabled, should call default manager
-    monkeypatch.setattr(
-        checkpoint, "get_bool_env", lambda k, d=False: True, raising=True
-    )
+    monkeypatch.setattr(checkpoint, "get_bool_env", lambda k, d=False: True, raising=True)
 
     called = {"args": None}
 
@@ -659,9 +607,7 @@ def test_chat_stream_message_wrapper(monkeypatch):
     assert called["args"] == ("tid", "msg", "stop")
 
     # When saver disabled, returns False and does not call manager
-    monkeypatch.setattr(
-        checkpoint, "get_bool_env", lambda k, d=False: False, raising=True
-    )
+    monkeypatch.setattr(checkpoint, "get_bool_env", lambda k, d=False: False, raising=True)
     called["args"] = None
     assert checkpoint.chat_stream_message("tid", "msg", "stop") is False
     assert called["args"] is None

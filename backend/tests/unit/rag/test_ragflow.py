@@ -100,9 +100,7 @@ def test_query_relevant_documents_success(mock_post, monkeypatch):
     mock_response.json.return_value = {
         "data": {
             "doc_aggs": [{"doc_id": "doc456", "doc_name": "Doc Title"}],
-            "chunks": [
-                {"document_id": "doc456", "content": "chunk text", "similarity": 0.9}
-            ],
+            "chunks": [{"document_id": "doc456", "content": "chunk text", "similarity": 0.9}],
         }
     }
     mock_post.return_value = mock_response

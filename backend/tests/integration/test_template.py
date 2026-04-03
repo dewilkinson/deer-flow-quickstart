@@ -102,9 +102,7 @@ def test_current_time_format():
     messages = apply_prompt_template("coder", test_state)
     system_content = messages[0]["content"]
 
-    assert any(
-        line.strip().startswith("CURRENT_TIME:") for line in system_content.split("\n")
-    )
+    assert any(line.strip().startswith("CURRENT_TIME:") for line in system_content.split("\n"))
 
 
 def test_apply_prompt_template_reporter():

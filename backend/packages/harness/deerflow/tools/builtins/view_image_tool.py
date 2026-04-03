@@ -4,12 +4,10 @@ from pathlib import Path
 from typing import Annotated
 
 from langchain.tools import InjectedToolCallId, ToolRuntime, tool
-from langchain_core.tools import InjectedToolArg
 from langchain_core.messages import ToolMessage
+from langchain_core.tools import InjectedToolArg
 from langgraph.types import Command
-from langgraph.typing import ContextT
 
-from deerflow.agents.thread_state import ThreadState
 from deerflow.sandbox.tools import get_thread_data, replace_virtual_path
 
 

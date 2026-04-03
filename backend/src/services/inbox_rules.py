@@ -4,7 +4,8 @@
 import os
 import re
 from datetime import datetime
-from typing import List, Dict, Optional, Any
+from typing import Any
+
 
 class InboxRuleEngine:
     def __init__(self, vault_root: str):
@@ -14,7 +15,7 @@ class InboxRuleEngine:
         self.archive_dir = os.path.join("_cobalt", "archives", "action_plans")
         self.rules_enabled = True
 
-    def get_inbox_proposals(self, file_list: List[str]) -> List[Dict[str, Any]]:
+    def get_inbox_proposals(self, file_list: list[str]) -> list[dict[str, Any]]:
         """Analyze inbox files and return suggested filing actions."""
         if not self.rules_enabled:
             return []
@@ -38,7 +39,7 @@ class InboxRuleEngine:
         """Check if a file matches any manual filing rule, ignoring engine enabled state."""
         return self._check_journal_rule(filename) is not None or self._check_action_plan_rule(filename) is not None
 
-    def _check_journal_rule(self, filename: str) -> Optional[Dict[str, Any]]:
+    def _check_journal_rule(self, filename: str) -> dict[str, Any] | None:
         """Detect and normalize Daily Journal files."""
         # Regex for common date formats like 'March 30, 2026' or '2026-03-30'
         # Group 1: Month Name, Group 2: Day, Group 3: Year
@@ -59,25 +60,13 @@ class InboxRuleEngine:
             target_date = f"{match_iso.group(1)}-{match_iso.group(2)}-{match_iso.group(3)}"
 
         if target_date:
-            return {
-                "original_name": filename,
-                "suggested_name": f"{target_date}.md",
-                "target_folder": self.journal_dir,
-                "rule_name": "Daily Journal",
-                "action_type": "move_journal"
-            }
+            return {"original_name": filename, "suggested_name": f"{target_date}.md", "target_folder": self.journal_dir, "rule_name": "Daily Journal", "action_type": "move_journal"}
         return None
 
-    def _check_action_plan_rule(self, filename: str) -> Optional[Dict[str, Any]]:
+    def _check_action_plan_rule(self, filename: str) -> dict[str, Any] | None:
         """Detect and archive Action Plan files."""
         if "Action Plan" in filename:
-            return {
-                "original_name": filename,
-                "suggested_name": filename,
-                "target_folder": self.archive_dir,
-                "rule_name": "Action Plan Archival",
-                "action_type": "archive_plan"
-            }
+            return {"original_name": filename, "suggested_name": filename, "target_folder": self.archive_dir, "rule_name": "Action Plan Archival", "action_type": "archive_plan"}
         return None
 
     def handle_collision(self, target_path: str) -> str:
@@ -85,7 +74,7 @@ class InboxRuleEngine:
         base_path, ext = os.path.splitext(target_path)
         counter = 1
         new_path = target_path
-        
+
         while os.path.exists(new_path):
             new_path = f"{base_path} {counter}{ext}"
             counter += 1

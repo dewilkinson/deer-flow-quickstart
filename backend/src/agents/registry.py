@@ -5,20 +5,21 @@
 # Copyright (c) 2025 Bytedance Ltd. and/or its affiliates
 # SPDX-License-Identifier: MIT
 
-import os
 import json
 import logging
-from typing import Dict, Any, List, Optional
+import os
 from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
+
 class AgentRegistry:
     """A registry for managing agent configurations in a modular way."""
-    
+
     def __init__(self, definitions_dir: str):
         self.definitions_dir = definitions_dir
-        self.agents: Dict[str, Dict[str, Any]] = {}
+        self.agents: dict[str, dict[str, Any]] = {}
         self.load_definitions()
 
     def load_definitions(self):
@@ -26,13 +27,13 @@ class AgentRegistry:
         if not os.path.exists(self.definitions_dir):
             logger.warning(f"Agent definitions directory not found: {self.definitions_dir}")
             return
-            
+
         logger.info(f"Loading agent definitions from {self.definitions_dir}")
         for filename in os.listdir(self.definitions_dir):
             if filename.endswith(".json"):
                 path = os.path.join(self.definitions_dir, filename)
                 try:
-                    with open(path, "r", encoding="utf-8") as f:
+                    with open(path, encoding="utf-8") as f:
                         config = json.load(f)
                         agent_type = config.get("type")
                         if agent_type:
@@ -41,13 +42,14 @@ class AgentRegistry:
                 except Exception as e:
                     logger.error(f"Error loading agent definition from {path}: {str(e)}")
 
-    def get_agent_config(self, agent_type: str) -> Optional[Dict[str, Any]]:
+    def get_agent_config(self, agent_type: str) -> dict[str, Any] | None:
         """Retrieves the configuration for a specific agent type."""
         return self.agents.get(agent_type)
 
-    def list_agents(self) -> List[str]:
+    def list_agents(self) -> list[str]:
         """Returns a list of all registered agent types."""
         return list(self.agents.keys())
+
 
 # Initialize the registry with the default path
 _current_dir = Path(__file__).parent.resolve()

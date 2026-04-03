@@ -1,7 +1,7 @@
 # Copyright (c) 2025 Bytedance Ltd. and/or its affiliates
 # SPDX-License-Identifier: MIT
 
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
@@ -103,9 +103,7 @@ class TestTavilySearchWithImages:
             search_tool.include_image_descriptions,
         )
 
-        mock_api_wrapper.clean_results_with_images.assert_called_once_with(
-            sample_raw_results
-        )
+        mock_api_wrapper.clean_results_with_images.assert_called_once_with(sample_raw_results)
 
     def test_run_exception(self, search_tool, mock_api_wrapper):
         """Test synchronous run with exception."""
@@ -146,16 +144,12 @@ class TestTavilySearchWithImages:
             search_tool.include_image_descriptions,
         )
 
-        mock_api_wrapper.clean_results_with_images.assert_called_once_with(
-            sample_raw_results
-        )
+        mock_api_wrapper.clean_results_with_images.assert_called_once_with(sample_raw_results)
 
     @pytest.mark.asyncio
     async def test_arun_exception(self, search_tool, mock_api_wrapper):
         """Test asynchronous run with exception."""
-        mock_api_wrapper.raw_results_async = AsyncMock(
-            side_effect=Exception("Async API Error")
-        )
+        mock_api_wrapper.raw_results_async = AsyncMock(side_effect=Exception("Async API Error"))
 
         result, raw = await search_tool._arun("test query")
 
@@ -193,9 +187,7 @@ class TestTavilySearchWithImages:
         mock_api_wrapper.raw_results_async = AsyncMock(return_value=sample_raw_results)
         mock_api_wrapper.clean_results_with_images.return_value = sample_cleaned_results
 
-        result, raw = await search_tool._arun(
-            "test query", run_manager=mock_run_manager
-        )
+        result, raw = await search_tool._arun("test query", run_manager=mock_run_manager)
 
         assert result == sample_cleaned_results
         assert raw == sample_raw_results

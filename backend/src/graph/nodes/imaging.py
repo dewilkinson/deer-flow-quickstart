@@ -4,25 +4,28 @@
 # License: PolyForm Noncommercial 1.0.0
 
 import logging
-from typing import Dict, Any
+from typing import Any
+
 from langchain_core.runnables import RunnableConfig
 
 from src.config.configuration import Configuration
-from src.tools import get_stock_quote, get_web_search_tool, python_repl_tool, get_image_from_url, get_image_from_local_path, snapper
+from src.tools import get_image_from_local_path, get_image_from_url, get_stock_quote, get_web_search_tool, python_repl_tool, snapper
 from src.tools.shared_storage import ANALYST_CONTEXT, GLOBAL_CONTEXT
+
 from ..types import State
 from .common_vli import _setup_and_execute_agent_step
 
 logger = logging.getLogger(__name__)
 
 # 1. Private to the Agent Code Itself
-_NODE_RESOURCE_CONTEXT: Dict[str, Any] = {}
+_NODE_RESOURCE_CONTEXT: dict[str, Any] = {}
 
 # 2. Shared context: Persistent, shared by agents of the SAME type (Analyst/Imaging)
 _SHARED_RESOURCE_CONTEXT = ANALYST_CONTEXT
 
 # 3. Global context: Shared across all agent types
 _GLOBAL_RESOURCE_CONTEXT = GLOBAL_CONTEXT
+
 
 async def imaging_node(state: State, config: RunnableConfig):
     """Imaging node implementation."""

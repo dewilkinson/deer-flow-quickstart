@@ -6,10 +6,10 @@
 # SPDX-License-Identifier: MIT
 
 from src.config.tools import SELECTED_RAG_PROVIDER, RAGProvider
+from src.rag.milvus import MilvusProvider
 from src.rag.ragflow import RAGFlowProvider
 from src.rag.retriever import Retriever
 from src.rag.vikingdb_knowledge_base import VikingDBKnowledgeBaseProvider
-from src.rag.milvus import MilvusProvider
 
 
 def build_retriever() -> Retriever | None:

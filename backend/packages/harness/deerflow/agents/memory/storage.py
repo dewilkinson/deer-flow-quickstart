@@ -59,7 +59,7 @@ class MemoryStorage(abc.ABC):
 
     def _check_registry(self, target_id: str | None) -> None:
         """Enforce explicit registry for shared and global memory.
-        
+
         If target_id is None, it's global memory. If it's a string, it's an agent or shared pool.
         Hard fails if the ID is not in the authorized storage_registry.
         """
@@ -67,7 +67,7 @@ class MemoryStorage(abc.ABC):
         # Private storage for known agents is always allowed via policy map check if needed,
         # but shared/global IDs must be in the registry.
         if not config.storage_registry:
-            return # Registry disabled (backward compatibility)
+            return  # Registry disabled (backward compatibility)
 
         registry_id = target_id or "global"
         if registry_id not in config.storage_registry:
@@ -81,6 +81,7 @@ class FileMemoryStorage(MemoryStorage):
     def __init__(self):
         """Initialize the file memory storage."""
         from deerflow.agents.memory.lock import get_lock_provider
+
         self._lock_provider = get_lock_provider()
         # Per-agent memory cache: keyed by agent_name (None = global)
         # Value: (memory_data, file_mtime)
@@ -150,7 +151,7 @@ class FileMemoryStorage(MemoryStorage):
         self._check_registry(agent_name)
         file_path = self._get_memory_file_path(agent_name)
         lock_id = f"memory_{agent_name or 'global'}"
-        
+
         if not self._lock_provider.acquire(lock_id):
             logger.error("Failed to acquire lock for %s", lock_id)
             return False
@@ -162,7 +163,7 @@ class FileMemoryStorage(MemoryStorage):
             with open(temp_path, "w", encoding="utf-8") as f:
                 json.dump(memory_data, f, indent=2, ensure_ascii=False)
             temp_path.replace(file_path)
-            
+
             try:
                 mtime = file_path.stat().st_mtime
             except OSError:
@@ -181,22 +182,23 @@ class FileMemoryStorage(MemoryStorage):
         file_path = self._get_memory_file_path(agent_name)
         if not file_path.exists():
             return "No memory to backup."
-            
+
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         backup_name = f"{agent_name or 'global'}_{timestamp}.json"
         backup_path = get_paths().backups_dir / backup_name
-        
+
         try:
             get_paths().backups_dir.mkdir(parents=True, exist_ok=True)
             import shutil
+
             shutil.copy2(file_path, backup_path)
-            
+
             # Retention: Delete oldest if > 10
             backups = sorted(get_paths().backups_dir.glob(f"{agent_name or 'global'}_*.json"), key=os.path.getmtime)
             if len(backups) > 10:
                 for old in backups[:-10]:
                     old.unlink()
-            
+
             return str(backup_path)
         except Exception as e:
             return f"Backup failed: {str(e)}"
@@ -207,11 +209,13 @@ class ObsidianMemoryStorage(MemoryStorage):
 
     def __init__(self):
         from deerflow.agents.memory.lock import get_lock_provider
+
         self._lock_provider = get_lock_provider()
         self._memory_cache: dict[str | None, tuple[dict[str, Any], float | None]] = {}
 
     def _get_obsidian_path(self, agent_name: str | None = None) -> Path:
         from deerflow.community.obsidian.tools import _resolve_obsidian_path
+
         root = get_paths().obsidian_memory_dir()
         if agent_name is None:
             return _resolve_obsidian_path(str(root / "global.md"))
@@ -248,7 +252,7 @@ Manual edits within the JSON block may be overwritten.
         file_path = self._get_obsidian_path(agent_name)
         if not file_path.exists():
             return create_empty_memory()
-        
+
         try:
             content = file_path.read_text(encoding="utf-8")
             return self._extract_json_from_md(content)
@@ -262,7 +266,7 @@ Manual edits within the JSON block may be overwritten.
         self._check_registry(agent_name)
         file_path = self._get_obsidian_path(agent_name)
         lock_id = f"obsidian_memory_{agent_name or 'global'}"
-        
+
         if not self._lock_provider.acquire(lock_id):
             return False
 
@@ -283,23 +287,25 @@ Manual edits within the JSON block may be overwritten.
         file_path = self._get_obsidian_path(agent_name)
         if not file_path.exists():
             return "No memory to backup."
-            
+
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         rel_path = f"_memory/backups/{agent_name or 'global'}_{timestamp}.md"
         from deerflow.community.obsidian.tools import _resolve_obsidian_path
+
         backup_path = _resolve_obsidian_path(rel_path)
-        
+
         try:
             backup_path.parent.mkdir(parents=True, exist_ok=True)
             import shutil
+
             shutil.copy2(file_path, backup_path)
-            
+
             # Retention: Delete oldest if > 10
             backups = sorted(backup_path.parent.glob(f"{agent_name or 'global'}_*.md"), key=os.path.getmtime)
             if len(backups) > 10:
                 for old in backups[:-10]:
                     old.unlink()
-                    
+
             return rel_path
         except Exception as e:
             return f"Backup failed: {str(e)}"
@@ -325,6 +331,7 @@ def get_memory_storage() -> MemoryStorage:
         try:
             module_path, class_name = storage_class_path.rsplit(".", 1)
             import importlib
+
             module = importlib.import_module(module_path)
             storage_class = getattr(module, class_name)
             _storage_instance = storage_class()

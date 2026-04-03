@@ -13,17 +13,13 @@ from src.rag.retriever import Resource
 class RAGConfigResponse(BaseModel):
     """Response model for RAG config."""
 
-    provider: str | None = Field(
-        None, description="The provider of the RAG, default is ragflow"
-    )
+    provider: str | None = Field(None, description="The provider of the RAG, default is ragflow")
 
 
 class RAGResourceRequest(BaseModel):
     """Request model for RAG resource."""
 
-    query: str | None = Field(
-        None, description="The query of the resource need to be searched"
-    )
+    query: str | None = Field(None, description="The query of the resource need to be searched")
 
 
 class RAGResourcesResponse(BaseModel):

@@ -2,8 +2,8 @@
 # Copyright (c) 2026 Dave Wilkinson <dwilkins@bluesec.ai>
 # License: PolyForm Noncommercial 1.0.0
 
-from typing import Literal
 from collections import defaultdict
+from typing import Literal
 
 # Define available LLM types
 LLMType = Literal["basic", "reasoning", "vision", "code"]
@@ -13,7 +13,7 @@ _BASE_AGENT_LLM_MAP: dict[str, LLMType] = {
     "coordinator": "reasoning",
     "parser": "reasoning",
     "planner": "reasoning",
-    "researcher":"basic",
+    "researcher": "basic",
     "coder": "basic",
     "reporter": "basic",
     "podcast_script_writer": "basic",
@@ -22,10 +22,8 @@ _BASE_AGENT_LLM_MAP: dict[str, LLMType] = {
     "prompt_enhancer": "basic",
     "scout": "basic",
     "journaler": "basic",
-
     "portfolio_manager": "reasoning",
     "risk_manager": "reasoning",
-
     "analyst": "reasoning",
     "smc_analyst": "reasoning",
     "imaging": "vision",

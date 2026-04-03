@@ -1,15 +1,19 @@
 # Tests for the Risk Manager Agent Node
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import MagicMock, patch, AsyncMock
 from langchain_core.messages import HumanMessage
+
 from src.graph.nodes.risk_manager import risk_manager_node
-from src.graph.types import State, Plan
+from src.graph.types import Plan, State
+
 
 @pytest.mark.asyncio
 async def test_risk_manager_node_initialization():
-    # We aren't testing the full LLM graph execution here, just verifying the 
+    # We aren't testing the full LLM graph execution here, just verifying the
     # node is importable and conforms to the signature
     assert callable(risk_manager_node)
+
 
 @pytest.mark.asyncio
 async def test_risk_manager_node_verbosity_and_execution():
@@ -17,38 +21,28 @@ async def test_risk_manager_node_verbosity_and_execution():
     with patch("src.graph.nodes.risk_manager._setup_and_execute_agent_step", new_callable=AsyncMock) as mock_exec:
         mock_exec.return_value = {"messages": [HumanMessage(content="Risk Manager evaluation complete. [LIQUIDATE]")]}
 
-        state = State(
-            current_plan=Plan(
-                title="Risk Evaluation",
-                thought="",
-                steps=[],
-                direct_response="",
-                locale="en-US",
-                has_enough_context=False
-            ),
-            research_topic="Test Subject",
-            verbosity=3
-        )
-        
+        state = State(current_plan=Plan(title="Risk Evaluation", thought="", steps=[], direct_response="", locale="en-US", has_enough_context=False), research_topic="Test Subject", verbosity=3)
+
         config = MagicMock()
         result = await risk_manager_node(state, config)
-        
+
         # Verify result structure output matches expected
         assert "messages" in result
-        
+
         # Verify _setup_and_execute_agent_step was called, verify kwargs
         mock_exec.assert_called_once()
         args, kwargs = mock_exec.call_args
-        
+
         # Check that specific tools are present in the tools payload
         tools = args[3]
-        tool_names = [getattr(t, 'name', getattr(t, '__name__', str(t))) for t in tools]
+        tool_names = [getattr(t, "name", getattr(t, "__name__", str(t))) for t in tools]
         assert "fetch_market_macros" in tool_names
         assert "get_sortino_ratio" in tool_names
         assert "get_volume_profile" in tool_names
-        
+
         # Verify verbosity instructions
         assert "verbosity=3" in kwargs.get("agent_instructions", "")
+
 
 def test_risk_manager_apex_parenthesis_formatting():
     """Manually test formatting logic strictly mandated by the apex 500 prompt."""

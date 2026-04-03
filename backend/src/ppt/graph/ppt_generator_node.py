@@ -9,13 +9,13 @@ import logging
 import os
 import subprocess
 import uuid
-from typing import Dict, Any
+from typing import Any
 
 from src.ppt.graph.state import PPTState
-from src.tools.shared_storage import PPT_CONTEXT, GLOBAL_CONTEXT
+from src.tools.shared_storage import GLOBAL_CONTEXT, PPT_CONTEXT
 
 # 1. Private to the Agent Code Itself
-_NODE_RESOURCE_CONTEXT: Dict[str, Any] = {}
+_NODE_RESOURCE_CONTEXT: dict[str, Any] = {}
 
 # 2. Shared context: Persistent, shared by PPT sub-modules
 _SHARED_RESOURCE_CONTEXT = PPT_CONTEXT
@@ -30,9 +30,7 @@ def ppt_generator_node(state: PPTState):
     logger.info("Generating ppt file...")
     # use marp cli to generate ppt file
     # https://github.com/marp-team/marp-cli?tab=readme-ov-file
-    generated_file_path = os.path.join(
-        os.getcwd(), f"generated_ppt_{uuid.uuid4()}.pptx"
-    )
+    generated_file_path = os.path.join(os.getcwd(), f"generated_ppt_{uuid.uuid4()}.pptx")
     subprocess.run(["marp", state["ppt_file_path"], "-o", generated_file_path])
     # remove the temp file
     os.remove(state["ppt_file_path"])

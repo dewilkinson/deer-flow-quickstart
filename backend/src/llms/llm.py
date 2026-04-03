@@ -7,14 +7,13 @@
 
 import os
 from pathlib import Path
-from typing import Any, Dict, get_args
+from typing import Any, get_args
 
 import httpx
 from langchain_core.language_models import BaseChatModel
 from langchain_deepseek import ChatDeepSeek
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import AzureChatOpenAI, ChatOpenAI
-from typing import get_args
 
 from src.config import load_yaml_config
 from src.config.agents import LLMType
@@ -24,6 +23,7 @@ from src.llms.providers.dashscope import ChatDashscope
 _llm_cache: dict[LLMType, BaseChatModel] = {}
 
 import logging
+
 logger = logging.getLogger(__name__)
 
 
@@ -42,7 +42,7 @@ def _get_llm_type_config_keys() -> dict[str, str]:
     }
 
 
-def _get_env_llm_conf(llm_type: str) -> Dict[str, Any]:
+def _get_env_llm_conf(llm_type: str) -> dict[str, Any]:
     """
     Get LLM configuration from environment variables.
     Environment variables should follow the format: {LLM_TYPE}__{KEY}
@@ -54,7 +54,7 @@ def _get_env_llm_conf(llm_type: str) -> Dict[str, Any]:
         if key.startswith(prefix):
             conf_key = key[len(prefix) :].lower()
             conf[conf_key] = value
-            
+
     # Fallback: Use basic model credentials for vision if vision is unconfigured
     # Note: Gemini 1.5/2.5 Flash acts as a multimodal vision model out of the box
     if llm_type == "vision" and not conf:
@@ -67,7 +67,7 @@ def _get_env_llm_conf(llm_type: str) -> Dict[str, Any]:
     return conf
 
 
-def _create_llm_use_conf(llm_type: LLMType, conf: Dict[str, Any]) -> BaseChatModel:
+def _create_llm_use_conf(llm_type: LLMType, conf: dict[str, Any]) -> BaseChatModel:
     """Create LLM instance using configuration."""
     llm_type_config_keys = _get_llm_type_config_keys()
     config_key = llm_type_config_keys.get(llm_type)
@@ -110,7 +110,7 @@ def _create_llm_use_conf(llm_type: LLMType, conf: Dict[str, Any]) -> BaseChatMod
         # Handle Google AI Studio specific configuration
         gemini_conf = merged_conf.copy()
 
-        # [RELIABILITY] Google AI Studio (Gemini) often hits 429s during stress tests. 
+        # [RELIABILITY] Google AI Studio (Gemini) often hits 429s during stress tests.
         # Increase max_retries to handle transient quota limits.
         try:
             current_retries = int(gemini_conf.get("max_retries", 3))
@@ -134,7 +134,7 @@ def _create_llm_use_conf(llm_type: LLMType, conf: Dict[str, Any]) -> BaseChatMod
         # [RELIABILITY] Exact model name logging for VLI SMC Stabilization
         model_name = gemini_conf.get("model", "unknown")
         logger.info(f"LLM Tool: Initializing Gemini model '{model_name}' (Type: {llm_type})")
-        
+
         # [NEW] Support Gemini 3 'thinking_level' parameter
         if llm_type == "reasoning" and "thinking_level" in merged_conf:
             gemini_conf["thinking_level"] = merged_conf["thinking_level"]

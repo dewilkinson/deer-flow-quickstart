@@ -10,7 +10,7 @@
 import asyncio
 import base64
 import logging
-from typing import Annotated, Dict, Any
+from typing import Annotated
 
 from langchain_core.tools import tool
 
@@ -25,70 +25,58 @@ _NODE_RESOURCE_CONTEXT = SCOUT_CONTEXT
 
 def _snapper_worker(url: str) -> str:
     """Worker for local screen capture or headless browser snapshot using Edge."""
-    import os
-    import json
-    import tempfile
-    import subprocess
     import io
+    import json
+    import os
+    import subprocess
+    import tempfile
+
     from PIL import ImageGrab
-    
+
     try:
         # Check if we should capture a specific URL via Headless Edge
         if url and url.lower().startswith("http"):
             logger.info(f"VLI_SYSTEM: Capturing headless snapshot of {url}...")
-            
+
             edge_path = r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
             if not os.path.exists(edge_path):
                 # Fallback to simple command if path is different (should be rare on this machine)
                 edge_path = "msedge"
-                
+
             temp_file = os.path.join(tempfile.gettempdir(), f"vli_snap_{os.getpid()}.png")
-            
+
             # CLI command for headless screenshot
             # --headless=new is the modern Chromium headless mode
-            cmd = [
-                edge_path,
-                "--headless=new",
-                f"--screenshot={temp_file}",
-                "--window-size=1920,1080",
-                "--hide-scrollbars",
-                url
-            ]
-            
+            cmd = [edge_path, "--headless=new", f"--screenshot={temp_file}", "--window-size=1920,1080", "--hide-scrollbars", url]
+
             try:
                 subprocess.run(cmd, check=True, timeout=15, capture_output=True)
                 if os.path.exists(temp_file):
                     with open(temp_file, "rb") as f:
                         screenshot_bytes = f.read()
-                    os.remove(temp_file) # Cleanup
-                    
+                    os.remove(temp_file)  # Cleanup
+
                     b64 = base64.b64encode(screenshot_bytes).decode("utf-8")
-                    return json.dumps({
-                        "images": [f"data:image/png;base64,{b64}"],
-                        "source": f"Headless Snapshot of {url}"
-                    })
+                    return json.dumps({"images": [f"data:image/png;base64,{b64}"], "source": f"Headless Snapshot of {url}"})
                 else:
                     raise FileNotFoundError("Edge failed to generate screenshot file.")
             except Exception as e:
                 logger.error(f"Headless snap failed: {e}. Falling back to Desktop grab.")
                 # Fallback to desktop capture if headless fails
-        
+
         # Default: Capture Desktop
         logger.info(f"Taking a snapshot of the local screen in place of {url}...")
         screenshot = ImageGrab.grab()
-        
+
         # Save to bytes buffer
         buffer = io.BytesIO()
         screenshot.save(buffer, format="PNG")
         screenshot_bytes = buffer.getvalue()
-        
+
         # Encode to base64
         b64 = base64.b64encode(screenshot_bytes).decode("utf-8")
-        return json.dumps({
-            "images": [f"data:image/png;base64,{b64}"],
-            "source": "Local Desktop Screen Capture"
-        })
-        
+        return json.dumps({"images": [f"data:image/png;base64,{b64}"], "source": "Local Desktop Screen Capture"})
+
     except Exception as e:
         error_msg = f"Failed to take snapshot. Error: {repr(e)}"
         logger.error(error_msg)

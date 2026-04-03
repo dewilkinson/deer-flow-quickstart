@@ -116,9 +116,7 @@ class TestBuildGraph:
             # If there are configuration issues (like missing LLM config),
             # we still consider the test successful if the graph structure is built
             if "LLM" in str(e) or "configuration" in str(e).lower():
-                pytest.skip(
-                    f"Skipping integration test due to configuration issues: {e}"
-                )
+                pytest.skip(f"Skipping integration test due to configuration issues: {e}")
             else:
                 raise
 

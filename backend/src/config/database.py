@@ -5,18 +5,20 @@
 # Copyright (c) 2025 Bytedance Ltd. and/or its affiliates
 # SPDX-License-Identifier: MIT
 
-from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, ForeignKey, Boolean, Float, text
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, relationship
-from sqlalchemy.pool import QueuePool
 import os
 from datetime import datetime
-from typing import Optional
+
+from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, Text, create_engine
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import relationship, sessionmaker
+from sqlalchemy.pool import QueuePool
 
 Base = declarative_base()
 
+
 class ResearchProject(Base):
     """Model for research projects."""
+
     __tablename__ = "research_projects"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -32,8 +34,10 @@ class ResearchProject(Base):
     findings = relationship("ResearchFinding", back_populates="project", cascade="all, delete-orphan")
     sessions = relationship("ResearchSession", back_populates="project", cascade="all, delete-orphan")
 
+
 class ResearchDocument(Base):
     """Model for research documents."""
+
     __tablename__ = "research_documents"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -54,8 +58,10 @@ class ResearchDocument(Base):
     project = relationship("ResearchProject", back_populates="documents")
     chunks = relationship("DocumentChunk", back_populates="document", cascade="all, delete-orphan")
 
+
 class DocumentChunk(Base):
     """Model for document chunks (for RAG)."""
+
     __tablename__ = "document_chunks"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -68,8 +74,10 @@ class DocumentChunk(Base):
     # Relationships
     document = relationship("ResearchDocument", back_populates="chunks")
 
+
 class ResearchFinding(Base):
     """Model for research findings and insights."""
+
     __tablename__ = "research_findings"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -86,8 +94,10 @@ class ResearchFinding(Base):
     # Relationships
     project = relationship("ResearchProject", back_populates="findings")
 
+
 class ResearchSession(Base):
     """Model for research sessions/chat history."""
+
     __tablename__ = "research_sessions"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -102,8 +112,10 @@ class ResearchSession(Base):
     project = relationship("ResearchProject", back_populates="sessions")
     messages = relationship("SessionMessage", back_populates="session", cascade="all, delete-orphan")
 
+
 class SessionMessage(Base):
     """Model for individual messages in research sessions."""
+
     __tablename__ = "session_messages"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -116,6 +128,7 @@ class SessionMessage(Base):
 
     # Relationships
     session = relationship("ResearchSession", back_populates="messages")
+
 
 # Database connection and session management
 def get_database_url() -> str:
@@ -134,6 +147,7 @@ def get_database_url() -> str:
 
     return f"postgresql+psycopg://{user}:{password}@{host}:{port}/{database}"
 
+
 def get_database_engine():
     """Create and return database engine."""
     database_url = get_database_url()
@@ -148,17 +162,14 @@ def get_database_engine():
             pool_timeout=30,
             pool_recycle=3600,
             pool_pre_ping=True,
-            echo=False  # Set to True for SQL query logging
+            echo=False,  # Set to True for SQL query logging
         )
     else:
         # For other databases, use default settings
-        engine = create_engine(
-            database_url,
-            pool_pre_ping=True,
-            echo=False
-        )
+        engine = create_engine(database_url, pool_pre_ping=True, echo=False)
 
     return engine
+
 
 def get_session_local():
     """Get session local for database operations."""
@@ -166,10 +177,12 @@ def get_session_local():
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     return SessionLocal
 
+
 def create_tables():
     """Create all database tables."""
     engine = get_database_engine()
     Base.metadata.create_all(bind=engine)
+
 
 def get_db():
     """Dependency for FastAPI to get database session."""
@@ -178,6 +191,7 @@ def get_db():
         yield db
     finally:
         db.close()
+
 
 # Initialize database on import
 def init_database():

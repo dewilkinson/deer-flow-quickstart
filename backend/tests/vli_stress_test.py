@@ -1,23 +1,115 @@
 import argparse
-import time
 import json
 import os
-import requests
+import time
 from datetime import datetime
+
+import requests
 
 # 100 Real Stock Symbols
 REAL_SYMBOLS = [
-    "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "TSLA", "BRK.B", "UNH", "JNJ",
-    "JPM", "V", "PG", "MA", "HD", "CVX", "ABBV", "LLY", "MRK", "PEP",
-    "COST", "KO", "AVGO", "TMO", "WMT", "MCD", "CSCO", "ABT", "DHR", "ACN",
-    "DIS", "PFE", "NFLX", "LIN", "ADBE", "TXN", "CMCSA", "AMD", "PM", "VZ",
-    "NKE", "NEE", "INTC", "QCOM", "RTX", "HON", "UNP", "LOW", "SPGI", "IBM",
-    "AMAT", "BA", "GE", "SYK", "ELV", "GS", "INTU", "COP", "NOW", "PLD",
-    "SBUX", "ISRG", "BLK", "MDLZ", "T", "MDT", "CB", "TJX", "C", "GILD",
-    "AXP", "ADI", "LMT", "VRTX", "SYY", "CVS", "ZTS", "CI", "BDX", "REGN",
-    "SLB", "PGR", "MMC", "TGT", "EOG", "BSX", "SO", "CME", "AON", "NOC",
-    "ITW", "WM", "CSX", "EQIX", "DUK", "APD", "ICE", "KMB", "SHW", "CL"
+    "AAPL",
+    "MSFT",
+    "GOOGL",
+    "AMZN",
+    "NVDA",
+    "META",
+    "TSLA",
+    "BRK.B",
+    "UNH",
+    "JNJ",
+    "JPM",
+    "V",
+    "PG",
+    "MA",
+    "HD",
+    "CVX",
+    "ABBV",
+    "LLY",
+    "MRK",
+    "PEP",
+    "COST",
+    "KO",
+    "AVGO",
+    "TMO",
+    "WMT",
+    "MCD",
+    "CSCO",
+    "ABT",
+    "DHR",
+    "ACN",
+    "DIS",
+    "PFE",
+    "NFLX",
+    "LIN",
+    "ADBE",
+    "TXN",
+    "CMCSA",
+    "AMD",
+    "PM",
+    "VZ",
+    "NKE",
+    "NEE",
+    "INTC",
+    "QCOM",
+    "RTX",
+    "HON",
+    "UNP",
+    "LOW",
+    "SPGI",
+    "IBM",
+    "AMAT",
+    "BA",
+    "GE",
+    "SYK",
+    "ELV",
+    "GS",
+    "INTU",
+    "COP",
+    "NOW",
+    "PLD",
+    "SBUX",
+    "ISRG",
+    "BLK",
+    "MDLZ",
+    "T",
+    "MDT",
+    "CB",
+    "TJX",
+    "C",
+    "GILD",
+    "AXP",
+    "ADI",
+    "LMT",
+    "VRTX",
+    "SYY",
+    "CVS",
+    "ZTS",
+    "CI",
+    "BDX",
+    "REGN",
+    "SLB",
+    "PGR",
+    "MMC",
+    "TGT",
+    "EOG",
+    "BSX",
+    "SO",
+    "CME",
+    "AON",
+    "NOC",
+    "ITW",
+    "WM",
+    "CSX",
+    "EQIX",
+    "DUK",
+    "APD",
+    "ICE",
+    "KMB",
+    "SHW",
+    "CL",
 ]
+
 
 def run_chunk(chunk_index: int):
     start_idx = chunk_index * 10
@@ -51,7 +143,7 @@ def run_chunk(chunk_index: int):
         {"desc": "Image scanner", "prompt": f"Capture a snapshot of the chart for {chunk_symbols[6]} using the snapper tool"},
         {"desc": "Batch multi-fetch", "prompt": f"Get the price for {chunk_symbols[7]} and {chunk_symbols[8]} explicitly setting use_fast_path to False for both"},
         {"desc": "Global Inv & Fetch", "prompt": f"Invalidate the entire market cache using invalidate_market_cache, then get the price for {chunk_symbols[9]}"},
-        {"desc": "Fast fetch", "prompt": f"Get the current price for {chunk_symbols[4]}"}
+        {"desc": "Fast fetch", "prompt": f"Get the current price for {chunk_symbols[4]}"},
     ]
 
     results = []
@@ -59,48 +151,35 @@ def run_chunk(chunk_index: int):
     for i, task in enumerate(tasks):
         print(f"\n[Task {i}] {task['desc']}...")
         print(f"  Prompt: {task['prompt']}")
-        
+
         start_time = time.time()
-        
+
         try:
             resp = requests.post(
-                "http://127.0.0.1:8000/api/vli/action-plan", 
-                json={"text": task['prompt'], "is_action_plan": False},
-                timeout=120 # generous timeout for LLM
+                "http://127.0.0.1:8000/api/vli/action-plan",
+                json={"text": task["prompt"], "is_action_plan": False},
+                timeout=120,  # generous timeout for LLM
             )
             resp.raise_for_status()
             elapsed_ms = (time.time() - start_time) * 1000
             data = resp.json()
             response_text = data.get("response", "No response text")
             print(f"  => SUCCESS ({elapsed_ms:.1f}ms)")
-            
-            results.append({
-                "task_index": i,
-                "desc": task['desc'],
-                "prompt": task['prompt'],
-                "latency_ms": elapsed_ms,
-                "status": "Success",
-                "notes": response_text[:100].replace('\n', ' ') + "..."
-            })
+
+            results.append({"task_index": i, "desc": task["desc"], "prompt": task["prompt"], "latency_ms": elapsed_ms, "status": "Success", "notes": response_text[:100].replace("\n", " ") + "..."})
         except Exception as e:
             import sys
+
             elapsed_ms = (time.time() - start_time) * 1000
             print(f"  => CRITICAL FAILURE ({elapsed_ms:.1f}ms): {e}")
-            results.append({
-                "task_index": i,
-                "desc": task['desc'],
-                "prompt": task['prompt'],
-                "latency_ms": elapsed_ms,
-                "status": "Failed",
-                "notes": str(e)
-            })
+            results.append({"task_index": i, "desc": task["desc"], "prompt": task["prompt"], "latency_ms": elapsed_ms, "status": "Failed", "notes": str(e)})
             export_report(chunk_index, results)
             print(f"\n[FATAL] Test aborted at Task {i} due to failure.")
             sys.exit(1)
-            
+
         # Fixed 3s delay between tasks for high-speed stress testing
         if i < len(tasks) - 1:
-            print(f"  [Waiting 3.0s for next task...]")
+            print("  [Waiting 3.0s for next task...]")
             time.sleep(3.0)
 
     # Export report to Obsidian Inbox on full pass
@@ -112,13 +191,7 @@ def export_report(chunk_index, results):
     os.makedirs(inbox_dir, exist_ok=True)
     report_file = os.path.join(inbox_dir, f"stress_test_report_chunk_{chunk_index}.md")
 
-    md_lines = [
-        f"# VLI Stress Test Report - Chunk {chunk_index}",
-        f"**Date:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
-        "",
-        "| Task | Description | Prompt | Latency (ms) | Status | Notes |",
-        "|---|---|---|---|---|---|"
-    ]
+    md_lines = [f"# VLI Stress Test Report - Chunk {chunk_index}", f"**Date:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", "", "| Task | Description | Prompt | Latency (ms) | Status | Notes |", "|---|---|---|---|---|---|"]
 
     for r in results:
         md_lines.append(f"| {r['task_index']} | {r['desc']} | `{r['prompt']}` | {r['latency_ms']:.1f} | {r['status']} | {r['notes']} |")
@@ -141,5 +214,5 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="VLI Stress Test Harness")
     parser.add_argument("--chunk", type=int, default=0, help="Chunk index (0-9) to run")
     args = parser.parse_args()
-    
+
     run_chunk(args.chunk)

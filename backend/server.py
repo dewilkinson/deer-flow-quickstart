@@ -4,8 +4,9 @@
 """
 Server script for running the Cobalt Multiagent API.
 """
-import sys
+
 import os
+import sys
 
 # 1. FINAL BSON MONKEY-PATCH: Namespace Stitching
 try:
@@ -15,21 +16,24 @@ except (ImportError, AttributeError):
     try:
         # Patch the base bson module
         import pymongo.bson as pymongo_bson
-        sys.modules['bson'] = pymongo_bson
-        
+
+        sys.modules["bson"] = pymongo_bson
+
         # Manually stitch ObjectId if missing
         from bson.objectid import ObjectId
-        setattr(sys.modules['bson'], 'ObjectId', ObjectId)
-        
+
+        setattr(sys.modules["bson"], "ObjectId", ObjectId)
+
         print(f"Successfully stitched BSON ObjectId into sys.modules: {ObjectId}")
     except Exception as e:
         print(f"Failed to stitch BSON: {str(e)}")
         pass
 
-import asyncio
 import argparse
+import asyncio
 import logging
 import signal
+
 import uvicorn
 
 # Configure logging
@@ -67,7 +71,7 @@ if __name__ == "__main__":
     current_dir = os.path.dirname(os.path.abspath(__file__))
     if current_dir not in sys.path:
         sys.path.append(current_dir)
-        
+
     # Parse command line arguments
     parser = argparse.ArgumentParser(description="Run the Cobalt Multiagent API server")
     parser.add_argument(
@@ -100,17 +104,17 @@ if __name__ == "__main__":
     # Determine reload setting
     # CRITICAL: We avoid "reload=True" on Windows to keep our monkey-patch in memory.
     reload = False
-    
+
     try:
         # 2. DIRECT IMPORT OF APP OBJECT WITHIN THE PATCHED CONTEXT
         # This will now succeed because BSON has ObjectId.
         from src.server.app import app
-        
+
         logger.info(f"Starting Cobalt Multiagent API server on {args.host}:{args.port}")
-        
+
         # 3. USE DIRECT APP OBJECT INSTEAD OF STRING: No more context-less re-imports
         uvicorn.run(
-            "src.server.app:app" if reload else app, # Use string for reload=True compatibility
+            "src.server.app:app" if reload else app,  # Use string for reload=True compatibility
             host=args.host,
             port=args.port,
             reload=reload,
@@ -120,5 +124,6 @@ if __name__ == "__main__":
     except Exception as e:
         logger.error(f"Failed to start server: {str(e)}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)

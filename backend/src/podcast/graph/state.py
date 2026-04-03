@@ -5,7 +5,6 @@
 # Copyright (c) 2025 Bytedance Ltd. and/or its affiliates
 # SPDX-License-Identifier: MIT
 
-from typing import Optional
 
 from langgraph.graph import MessagesState
 
@@ -19,8 +18,8 @@ class PodcastState(MessagesState):
     input: str = ""
 
     # Output
-    output: Optional[bytes] = None
+    output: bytes | None = None
 
     # Assets
-    script: Optional[Script] = None
+    script: Script | None = None
     audio_chunks: list[bytes] = []

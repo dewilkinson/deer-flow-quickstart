@@ -22,19 +22,18 @@ class JinaClient:
         if os.getenv("JINA_API_KEY"):
             headers["Authorization"] = f"Bearer {os.getenv('JINA_API_KEY')}"
         else:
-            logger.warning(
-                "Jina API key is not set. Provide your own key to access a higher rate limit. See https://jina.ai/reader for more information."
-            )
+            logger.warning("Jina API key is not set. Provide your own key to access a higher rate limit. See https://jina.ai/reader for more information.")
         data = {"url": url}
-        
+
         logger.debug(f"[WEB REQUEST] JinaClient fetching: {url}")
         import time
+
         start_time = time.time()
         try:
             # Set a 30 second timeout for external crawling
             response = requests.post("https://r.jina.ai/", headers=headers, json=data, timeout=30.0)
             duration_ms = (time.time() - start_time) * 1000
-            
+
             logger.debug(f"[WEB RESPONSE] JinaClient received status {response.status_code} in {duration_ms:.2f}ms for: {url}")
             response.raise_for_status()
             return response.text

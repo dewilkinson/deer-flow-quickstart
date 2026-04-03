@@ -9,22 +9,23 @@
 
 import abc
 import logging
-import os
 import sys
 import time
 from pathlib import Path
-from typing import Optional, Any
+from typing import Any
 
 try:
     import fcntl
+
     HAS_FCNTL = True
 except ImportError:
     HAS_FCNTL = False
     if sys.platform == "win32":
-        import msvcrt
+        pass
 
 try:
     import redis
+
     REDIS_AVAILABLE = True
 except ImportError:
     REDIS_AVAILABLE = False
@@ -60,7 +61,7 @@ class FileLockProvider(LockProvider):
     def acquire(self, lock_id: str, timeout: float = 10.0) -> bool:
         lock_file = self._get_lock_file(lock_id)
         start_time = time.time()
-        
+
         while time.time() - start_time < timeout:
             try:
                 f = open(lock_file, "w")
@@ -68,14 +69,15 @@ class FileLockProvider(LockProvider):
                     fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
                 elif sys.platform == "win32":
                     import msvcrt
+
                     msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, 1)
                 self._locks[lock_id] = f
                 return True
-            except (IOError, OSError):
-                if 'f' in locals() and f:
+            except OSError:
+                if "f" in locals() and f:
                     f.close()
                 time.sleep(0.1)
-        
+
         return False
 
     def release(self, lock_id: str) -> None:
@@ -86,9 +88,10 @@ class FileLockProvider(LockProvider):
                     fcntl.flock(f, fcntl.LOCK_UN)
                 elif sys.platform == "win32":
                     import msvcrt
+
                     msvcrt.locking(f.fileno(), msvcrt.LK_UNLCK, 1)
                 f.close()
-            except (IOError, OSError):
+            except OSError:
                 pass
 
 
@@ -103,15 +106,16 @@ class RedisLockProvider(LockProvider):
 
     def acquire(self, lock_id: str, timeout: float = 10.0) -> bool:
         import uuid
+
         token = str(uuid.uuid4())
         start_time = time.time()
-        
+
         while time.time() - start_time < timeout:
             if self._client.set(f"lock:{lock_id}", token, nx=True, px=int(timeout * 1000)):
                 self._locks[lock_id] = token
                 return True
             time.sleep(0.1)
-        
+
         return False
 
     def release(self, lock_id: str) -> None:
@@ -132,9 +136,9 @@ def get_lock_provider() -> LockProvider:
     """Get the configured lock provider."""
     from deerflow.config.memory_config import get_memory_config
     from deerflow.config.paths import get_paths
-    
+
     config = get_memory_config()
     if config.lock_type == "redis" and config.redis_url:
         return RedisLockProvider(config.redis_url)
-    
+
     return FileLockProvider(get_paths().shared_dir / ".locks")

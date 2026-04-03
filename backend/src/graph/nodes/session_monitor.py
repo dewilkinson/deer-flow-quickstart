@@ -3,31 +3,31 @@
 # Copyright (c) 2026 Dave Wilkinson <dwilkins@bluesec.ai>
 # License: PolyForm Noncommercial 1.0.0
 
-import os
 import logging
-from typing import Dict, Any
+import os
+
 from langchain_core.runnables import RunnableConfig
 
-from src.tools.shared_storage import GLOBAL_CONTEXT
 from ..types import State
 from .common_vli import _setup_and_execute_agent_step
 
 logger = logging.getLogger(__name__)
 
+
 async def session_monitor_node(state: State, config: RunnableConfig):
     """Session Monitor node implementation."""
     logger.info("Session Monitor Node: Analyzing raw telemetry backlog.")
-    
+
     # Read the telemetry backlog
     vault_path = os.environ.get("OBSIDIAN_VAULT_PATH")
     backlog_content = "No telemetry backlog found."
     telemetry_file = None
-    
+
     if vault_path:
         cobalt_dir = os.path.join(vault_path, "_cobalt")
         telemetry_file = os.path.join(cobalt_dir, "VLI_Raw_Telemetry.md")
         if os.path.exists(telemetry_file):
-            with open(telemetry_file, "r", encoding="utf-8") as f:
+            with open(telemetry_file, encoding="utf-8") as f:
                 backlog_content = f.read()
 
     # Inject the backlog explicitly into the prompt context via instructions
@@ -42,9 +42,9 @@ async def session_monitor_node(state: State, config: RunnableConfig):
     )
 
     # Execute the agent
-    tools = [] # Pure analysis based on the ingested state
+    tools = []  # Pure analysis based on the ingested state
     result = await _setup_and_execute_agent_step(state, config, "session_monitor", tools, agent_instructions=instructions)
-    
+
     # If successful, archive/clear the telemetry queue
     if telemetry_file and os.path.exists(telemetry_file):
         try:

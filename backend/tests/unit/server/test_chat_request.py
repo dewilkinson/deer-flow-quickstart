@@ -65,9 +65,7 @@ def test_chat_request_defaults():
 
 
 def test_chat_request_with_values():
-    resource = Resource(
-        name="test", type="doc", uri="some-uri-value", title="some-title-value"
-    )
+    resource = Resource(name="test", type="doc", uri="some-uri-value", title="some-title-value")
     msg = ChatMessage(role="user", content="hi")
     req = ChatRequest(
         messages=[msg],
@@ -155,9 +153,7 @@ def test_tts_request_validation_error():
 @patch("src.server.mcp_utils._get_tools_from_client_session", new_callable=AsyncMock)
 @patch("src.server.mcp_utils.StdioServerParameters")
 @patch("src.server.mcp_utils.stdio_client")
-async def test_load_mcp_tools_exception_handling(
-    mock_stdio_client, mock_StdioServerParameters, mock_get_tools
-):  # Changed to async def
+async def test_load_mcp_tools_exception_handling(mock_stdio_client, mock_StdioServerParameters, mock_get_tools):  # Changed to async def
     mock_get_tools.side_effect = Exception("unexpected error")
     mock_StdioServerParameters.return_value = MagicMock()
     mock_stdio_client.return_value = MagicMock()

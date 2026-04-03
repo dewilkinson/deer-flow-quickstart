@@ -49,9 +49,7 @@ class TestGetWebSearchTool:
 
     @patch("src.tools.search.SELECTED_SEARCH_ENGINE", "unsupported_engine")
     def test_get_web_search_tool_unsupported_engine(self):
-        with pytest.raises(
-            ValueError, match="Unsupported search engine: unsupported_engine"
-        ):
+        with pytest.raises(ValueError, match="Unsupported search engine: unsupported_engine"):
             get_web_search_tool(max_search_results=1)
 
     @patch("src.tools.search.SELECTED_SEARCH_ENGINE", SearchEngine.BRAVE_SEARCH.value)

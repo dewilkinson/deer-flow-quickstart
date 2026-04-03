@@ -1,16 +1,16 @@
+import asyncio
+import json
+import logging
+import os
+import random
+import sys
+from datetime import datetime
+from pathlib import Path
+
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-import asyncio
-import json
-import random
-import logging
-
-import sys
-import os
-from pathlib import Path
-from datetime import datetime
-from dotenv import load_dotenv
 
 env_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".env"))
 load_dotenv(dotenv_path=env_path)
@@ -42,9 +42,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 async def event_generator():
     """Generates server-sent events for the network visualization."""
-    
+
     # Send structure defining the grid
     init_payload = {
         "type": "init",
@@ -54,24 +55,17 @@ async def event_generator():
             {"id": "agent-writer", "type": "agent", "label": "Writer"},
             {"id": "storage-global", "type": "storage", "label": "Global Cache"},
             {"id": "storage-local", "type": "storage", "label": "Local Memory (JSON)"},
-            {"id": "storage-obsidian", "type": "storage", "label": "Obsidian Vault (.md)"}
-        ]
+            {"id": "storage-obsidian", "type": "storage", "label": "Obsidian Vault (.md)"},
+        ],
     }
     yield f"data: {json.dumps(init_payload)}\n\n"
-    
+
     file_storage = FileMemoryStorage()
     obsidian_storage = ObsidianMemoryStorage()
     from deerflow.community.obsidian.tools import _resolve_obsidian_path
 
     def transmit(action: str, source: str, target: str, message: str, result: str = "none"):
-        payload = {
-            "type": "event",
-            "action": action, 
-            "source": source,
-            "target": target,
-            "message": message,
-            "result": result
-        }
+        payload = {"type": "event", "action": action, "source": source, "target": target, "message": message, "result": result}
         return f"data: {json.dumps(payload)}\n\n"
 
     try:
@@ -80,6 +74,7 @@ async def event_generator():
         thrash_root = Path(vault_path) / "_cobalt" / "_memory" / "thrash"
         if thrash_root.exists():
             import shutil
+
             shutil.rmtree(thrash_root)
             logger.info("Purged previous thrash data at %s", thrash_root)
             yield transmit("clean", "storage-obsidian", "storage-obsidian", "Purged previous thrash data")
@@ -95,14 +90,14 @@ async def event_generator():
         # Phase 2: High-Volume Storage Thrash
         folders = ["Alpha", "Beta", "Gamma", "Delta", "Epsilon"]
         agents = ["agent-planner", "agent-researcher", "agent-writer"]
-        
+
         add_log_event = lambda m: f"data: {json.dumps({'type': 'event', 'action': 'info', 'message': m})}\n\n"
         yield add_log_event("Starting Multi-Folder Storage Thrash...")
 
         # Phase 2: Systematic Storage Thrash (Fills & Hits)
         folders = ["Alpha", "Beta", "Gamma", "Delta", "Epsilon"]
         agents = ["agent-planner", "agent-researcher", "agent-writer"]
-        
+
         add_log_event = lambda m: f"data: {json.dumps({'type': 'event', 'action': 'info', 'message': m})}\n\n"
         yield add_log_event("Starting Multi-Phase Cache Stress Test...")
 
@@ -123,18 +118,18 @@ async def event_generator():
             target_path = f"thrash/{folder}/{agent_name}_update_{i}"
             full_path = _resolve_obsidian_path(f"_cobalt/_memory/{target_path}.md")
             full_path.parent.mkdir(parents=True, exist_ok=True)
-            
+
             data = {"iteration": i, "timestamp": datetime.utcnow().isoformat(), "payload": "Resident Data"}
             content = f"---\nresidency: true\n---\n# Data Block {i}\n\n```json\n{json.dumps(data, indent=2)}\n```"
             full_path.write_text(content, encoding="utf-8")
-            
+
             yield transmit("write", agent_id, "storage-obsidian", f"Wrote to {folder}/segment_{i}", "success")
             await asyncio.sleep(0.1)
 
         # C: Read Hits (Verifying Performance)
         yield add_log_event("[PHASE C] Verifying Sub-Millisecond Access (Hits)...")
         for i in range(1, 21):
-            folder = folders[(i+5) % 5]
+            folder = folders[(i + 5) % 5]
             agent_id = agents[i % 3]
             yield transmit("read", "storage-obsidian", agent_id, f"Read hit from {folder}/segment_{i}", "hit")
             await asyncio.sleep(0.1)
@@ -145,7 +140,7 @@ async def event_generator():
             folder = random.choice(folders)
             agent_id = random.choice(agents)
             action = random.choice(["read", "write"])
-            
+
             if action == "write":
                 yield transmit("write", agent_id, "storage-obsidian", f"Wrote to {folder}/final_{i}", "success")
             else:
@@ -171,7 +166,9 @@ async def simulate_network():
     """Starts the network workflow visualization test."""
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
+
 if __name__ == "__main__":
     import uvicorn
+
     # Make sure we run on 8001 to not conflict with normal backend
     uvicorn.run("mock_storage_workflow:app", host="0.0.0.0", port=8001, reload=True)

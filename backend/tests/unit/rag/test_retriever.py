@@ -15,9 +15,7 @@ def test_chunk_init():
 def test_document_init_and_to_dict():
     chunk1 = Chunk(content="chunk1", similarity=0.8)
     chunk2 = Chunk(content="chunk2", similarity=0.7)
-    doc = Document(
-        id="doc1", url="http://example.com", title="Title", chunks=[chunk1, chunk2]
-    )
+    doc = Document(id="doc1", url="http://example.com", title="Title", chunks=[chunk1, chunk2])
     assert doc.id == "doc1"
     assert doc.url == "http://example.com"
     assert doc.title == "Title"

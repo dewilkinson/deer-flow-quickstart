@@ -85,18 +85,14 @@ class TestRepairJsonOutput:
         """Test with nested JSON object"""
         content = '{"outer": {"inner": {"deep": "value"}}}'
         result = repair_json_output(content)
-        expected = json.dumps(
-            {"outer": {"inner": {"deep": "value"}}}, ensure_ascii=False
-        )
+        expected = json.dumps({"outer": {"inner": {"deep": "value"}}}, ensure_ascii=False)
         assert result == expected
 
     def test_json_array_with_objects(self):
         """Test JSON array containing objects"""
         content = '[{"id": 1, "name": "test1"}, {"id": 2, "name": "test2"}]'
         result = repair_json_output(content)
-        expected = json.dumps(
-            [{"id": 1, "name": "test1"}, {"id": 2, "name": "test2"}], ensure_ascii=False
-        )
+        expected = json.dumps([{"id": 1, "name": "test1"}, {"id": 2, "name": "test2"}], ensure_ascii=False)
         assert result == expected
 
     def test_content_with_json_in_middle(self):

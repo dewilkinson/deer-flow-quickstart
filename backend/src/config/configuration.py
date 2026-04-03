@@ -8,13 +8,13 @@
 import logging
 import os
 from dataclasses import dataclass, field, fields
-from typing import Any, Optional
+from typing import Any
 
 from langchain_core.runnables import RunnableConfig
 
+from src.config.loader import get_int_env, get_str_env
 from src.config.report_style import ReportStyle
 from src.rag.retriever import Resource
-from src.config.loader import get_str_env, get_int_env, get_bool_env
 
 logger = logging.getLogger(__name__)
 
@@ -35,10 +35,7 @@ def get_recursion_limit(default: int = 25) -> int:
         logger.info(f"Recursion limit set to: {parsed_limit}")
         return parsed_limit
     else:
-        logger.warning(
-            f"AGENT_RECURSION_LIMIT value '{env_value_str}' (parsed as {parsed_limit}) is not positive. "
-            f"Using default value {default}."
-        )
+        logger.warning(f"AGENT_RECURSION_LIMIT value '{env_value_str}' (parsed as {parsed_limit}) is not positive. Using default value {default}.")
         return default
 
 
@@ -46,32 +43,26 @@ def get_recursion_limit(default: int = 25) -> int:
 class Configuration:
     """The configurable fields."""
 
-    resources: list[Resource] = field(
-        default_factory=list
-    )  # Resources to be used for the research
+    resources: list[Resource] = field(default_factory=list)  # Resources to be used for the research
     max_plan_iterations: int = 1  # Maximum number of plan iterations
     max_step_num: int = 3  # Maximum number of steps in a plan
     max_search_results: int = 3  # Maximum number of search results
     mcp_settings: dict = None  # MCP settings, including dynamic loaded tools
-    snaptrade_settings: dict = field(default_factory=dict) # SnapTrade credentials and settings
-    obsidian_settings: dict = field(default_factory=dict) # Obsidian vault and note settings
+    snaptrade_settings: dict = field(default_factory=dict)  # SnapTrade credentials and settings
+    obsidian_settings: dict = field(default_factory=dict)  # Obsidian vault and note settings
     report_style: str = ReportStyle.ACADEMIC.value  # Report style
     enable_deep_thinking: bool = False  # Whether to enable deep thinking
     developer_mode: bool = True  # Enable root-level system node access by default
 
     @classmethod
-    def from_runnable_config(
-        cls, config: Optional[RunnableConfig] = None
-    ) -> "Configuration":
+    def from_runnable_config(cls, config: RunnableConfig | None = None) -> "Configuration":
         """Create a Configuration instance from a RunnableConfig."""
-        configurable = (
-            config["configurable"] if config and "configurable" in config else {}
-        )
+        configurable = config["configurable"] if config and "configurable" in config else {}
         values: dict[str, Any] = {}
         for f in fields(cls):
             if not f.init:
                 continue
-            
+
             value = None
             # Check environment variable first
             env_val = os.environ.get(f.name.upper())
@@ -80,7 +71,7 @@ class Configuration:
             # Then check configurable
             elif f.name in configurable:
                 value = configurable[f.name]
-            
+
             if value is not None and value != "" and value != 0:
                 # Type conversion based on field type
                 field_type = f.type
@@ -93,5 +84,5 @@ class Configuration:
                         values[f.name] = value
                 except (ValueError, TypeError):
                     values[f.name] = value
-        
+
         return cls(**{k: v for k, v in values.items() if v is not None})

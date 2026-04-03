@@ -9,11 +9,12 @@ import json
 import logging
 import uuid
 from datetime import datetime
-from typing import List, Optional, Tuple
+
 import psycopg
+from langgraph.store.memory import InMemoryStore
 from psycopg.rows import dict_row
 from pymongo import MongoClient
-from langgraph.store.memory import InMemoryStore
+
 from src.config.loader import get_bool_env, get_str_env
 
 
@@ -33,9 +34,7 @@ class ChatStreamManager:
         logger (logging.Logger): Logger instance for this class
     """
 
-    def __init__(
-        self, checkpoint_saver: bool = False, db_uri: Optional[str] = None
-    ) -> None:
+    def __init__(self, checkpoint_saver: bool = False, db_uri: str | None = None) -> None:
         """
         Initialize the ChatStreamManager with database connections.
 
@@ -57,15 +56,10 @@ class ChatStreamManager:
         if self.checkpoint_saver:
             if self.db_uri.startswith("mongodb://"):
                 self._init_mongodb()
-            elif self.db_uri.startswith("postgresql://") or self.db_uri.startswith(
-                "postgres://"
-            ):
+            elif self.db_uri.startswith("postgresql://") or self.db_uri.startswith("postgres://"):
                 self._init_postgresql()
             else:
-                self.logger.warning(
-                    f"Unsupported database URI scheme: {self.db_uri}. "
-                    "Supported schemes: mongodb://, postgresql://, postgres://"
-                )
+                self.logger.warning(f"Unsupported database URI scheme: {self.db_uri}. Supported schemes: mongodb://, postgresql://, postgres://")
         else:
             self.logger.warning("Checkpoint saver is disabled")
 
@@ -114,9 +108,7 @@ class ChatStreamManager:
             if self.postgres_conn:
                 self.postgres_conn.rollback()
 
-    def process_stream_message(
-        self, thread_id: str, message: str, finish_reason: str
-    ) -> bool:
+    def process_stream_message(self, thread_id: str, message: str, finish_reason: str) -> bool:
         """
         Process and store a chat stream message chunk.
 
@@ -142,7 +134,7 @@ class ChatStreamManager:
 
         try:
             # Create namespace for this thread's messages
-            store_namespace: Tuple[str, str] = ("messages", thread_id)
+            store_namespace: tuple[str, str] = ("messages", thread_id)
 
             # Get or initialize message cursor for tracking chunks
             cursor = self.store.get(store_namespace, "cursor")
@@ -161,21 +153,15 @@ class ChatStreamManager:
 
             # Check if conversation is complete and should be persisted
             if finish_reason in ("stop", "interrupt"):
-                return self._persist_complete_conversation(
-                    thread_id, store_namespace, current_index
-                )
+                return self._persist_complete_conversation(thread_id, store_namespace, current_index)
 
             return True
 
         except Exception as e:
-            self.logger.error(
-                f"Error processing stream message for thread {thread_id}: {e}"
-            )
+            self.logger.error(f"Error processing stream message for thread {thread_id}: {e}")
             return False
 
-    def _persist_complete_conversation(
-        self, thread_id: str, store_namespace: Tuple[str, str], final_index: int
-    ) -> bool:
+    def _persist_complete_conversation(self, thread_id: str, store_namespace: tuple[str, str], final_index: int) -> bool:
         """
         Persist completed conversation to database (MongoDB or PostgreSQL).
 
@@ -196,7 +182,7 @@ class ChatStreamManager:
             memories = self.store.search(store_namespace, limit=final_index + 2)
 
             # Extract message content, filtering out cursor metadata
-            messages: List[str] = []
+            messages: list[str] = []
             for item in memories:
                 value = item.dict().get("value", "")
                 # Skip cursor metadata, only include actual message chunks
@@ -221,12 +207,10 @@ class ChatStreamManager:
                 return False
 
         except Exception as e:
-            self.logger.error(
-                f"Error persisting conversation for thread {thread_id}: {e}"
-            )
+            self.logger.error(f"Error persisting conversation for thread {thread_id}: {e}")
             return False
 
-    def _persist_to_mongodb(self, thread_id: str, messages: List[str]) -> bool:
+    def _persist_to_mongodb(self, thread_id: str, messages: list[str]) -> bool:
         """Persist conversation to MongoDB."""
         try:
             # Get MongoDB collection for chat streams
@@ -243,10 +227,7 @@ class ChatStreamManager:
                     {"thread_id": thread_id},
                     {"$set": {"messages": messages, "ts": current_timestamp}},
                 )
-                self.logger.info(
-                    f"Updated conversation for thread {thread_id}: "
-                    f"{update_result.modified_count} documents modified"
-                )
+                self.logger.info(f"Updated conversation for thread {thread_id}: {update_result.modified_count} documents modified")
                 return update_result.modified_count > 0
             else:
                 # Create new conversation document
@@ -257,23 +238,19 @@ class ChatStreamManager:
                     "id": uuid.uuid4().hex,
                 }
                 insert_result = collection.insert_one(new_document)
-                self.logger.info(
-                    f"Created new conversation: {insert_result.inserted_id}"
-                )
+                self.logger.info(f"Created new conversation: {insert_result.inserted_id}")
                 return insert_result.inserted_id is not None
 
         except Exception as e:
             self.logger.error(f"Error persisting to MongoDB: {e}")
             return False
 
-    def _persist_to_postgresql(self, thread_id: str, messages: List[str]) -> bool:
+    def _persist_to_postgresql(self, thread_id: str, messages: list[str]) -> bool:
         """Persist conversation to PostgreSQL."""
         try:
             with self.postgres_conn.cursor() as cursor:
                 # Check if conversation already exists
-                cursor.execute(
-                    "SELECT id FROM chat_streams WHERE thread_id = %s", (thread_id,)
-                )
+                cursor.execute("SELECT id FROM chat_streams WHERE thread_id = %s", (thread_id,))
                 existing_record = cursor.fetchone()
 
                 current_timestamp = datetime.now()
@@ -292,10 +269,7 @@ class ChatStreamManager:
                     affected_rows = cursor.rowcount
                     self.postgres_conn.commit()
 
-                    self.logger.info(
-                        f"Updated conversation for thread {thread_id}: "
-                        f"{affected_rows} rows modified"
-                    )
+                    self.logger.info(f"Updated conversation for thread {thread_id}: {affected_rows} rows modified")
                     return affected_rows > 0
                 else:
                     # Create new conversation record
@@ -310,9 +284,7 @@ class ChatStreamManager:
                     affected_rows = cursor.rowcount
                     self.postgres_conn.commit()
 
-                    self.logger.info(
-                        f"Created new conversation with ID: {conversation_id}"
-                    )
+                    self.logger.info(f"Created new conversation with ID: {conversation_id}")
                     return affected_rows > 0
 
         except Exception as e:
@@ -368,8 +340,6 @@ def chat_stream_message(thread_id: str, message: str, finish_reason: str) -> boo
     """
     checkpoint_saver = get_bool_env("LANGGRAPH_CHECKPOINT_SAVER", False)
     if checkpoint_saver:
-        return _default_manager.process_stream_message(
-            thread_id, message, finish_reason
-        )
+        return _default_manager.process_stream_message(thread_id, message, finish_reason)
     else:
         return False

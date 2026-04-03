@@ -1,10 +1,10 @@
 import posixpath
 import re
 from pathlib import Path
+from typing import Annotated
 
 from langchain.tools import ToolRuntime, tool
 from langchain_core.tools import InjectedToolArg
-from typing import Annotated
 from langgraph.typing import ContextT
 
 from deerflow.agents.thread_state import ThreadDataState, ThreadState
@@ -102,7 +102,7 @@ def _resolve_skills_path(path: str) -> str:
     if path == skills_container:
         return skills_host
 
-    relative = path[len(skills_container):].lstrip("/")
+    relative = path[len(skills_container) :].lstrip("/")
     return _join_path_preserving_style(skills_host, relative)
 
 

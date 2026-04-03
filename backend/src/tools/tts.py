@@ -12,7 +12,7 @@ Text-to-Speech module using volcengine TTS API.
 import json
 import logging
 import uuid
-from typing import Any, Dict, Optional
+from typing import Any
 
 import requests
 
@@ -22,7 +22,6 @@ logger = logging.getLogger(__name__)
 
 # Agent-specific resource context (Shared by all sub-modules)
 _NODE_RESOURCE_CONTEXT = GENERAL_CONTEXT
-
 
 
 class VolcengineTTS:
@@ -66,8 +65,8 @@ class VolcengineTTS:
         text_type: str = "plain",
         with_frontend: int = 1,
         frontend_type: str = "unitTson",
-        uid: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        uid: str | None = None,
+    ) -> dict[str, Any]:
         """
         Convert text to speech using volcengine TTS API.
 
@@ -115,9 +114,7 @@ class VolcengineTTS:
         try:
             sanitized_text = text.replace("\r\n", "").replace("\n", "")
             logger.debug(f"Sending TTS request for text: {sanitized_text[:50]}...")
-            response = requests.post(
-                self.api_url, json.dumps(request_json), headers=self.header
-            )
+            response = requests.post(self.api_url, json.dumps(request_json), headers=self.header)
             response_json = response.json()
 
             if response.status_code != 200:

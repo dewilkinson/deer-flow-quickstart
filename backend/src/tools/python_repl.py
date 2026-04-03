@@ -7,7 +7,8 @@
 
 import logging
 import os
-from typing import Annotated, Optional, Dict, Any
+from typing import Annotated
+
 from .shared_storage import CODER_CONTEXT
 
 logger = logging.getLogger(__name__)
@@ -32,16 +33,14 @@ def _is_python_repl_enabled() -> bool:
 
 
 # Initialize REPL and logger
-repl: Optional[PythonREPL] = PythonREPL() if _is_python_repl_enabled() else None
+repl: PythonREPL | None = PythonREPL() if _is_python_repl_enabled() else None
 logger = logging.getLogger(__name__)
 
 
 @tool
 @log_io
 def python_repl_tool(
-    code: Annotated[
-        str, "The python code to execute to do further analysis or calculation."
-    ],
+    code: Annotated[str, "The python code to execute to do further analysis or calculation."],
 ):
     """Use this to execute python code and do data analysis or calculation. If you want to see the output of a value,
     you should print it out with `print(...)`. This is visible to the user."""

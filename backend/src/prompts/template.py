@@ -40,9 +40,7 @@ def get_prompt_template(prompt_name: str) -> str:
         raise ValueError(f"Error loading template {prompt_name}: {e}")
 
 
-def apply_prompt_template(
-    prompt_name: str, state: AgentState, configurable: Configuration = None
-) -> list:
+def apply_prompt_template(prompt_name: str, state: AgentState, configurable: Configuration = None) -> list:
     """
     Apply template variables to a prompt template and return formatted messages.
 
@@ -53,11 +51,7 @@ def apply_prompt_template(
     Returns:
         List of messages with the system prompt as the first message
     """
-    is_test = (
-        os.environ.get("VLI_TEST_MODE", "").lower() in ("true", "1", "yes") 
-        or get_bool_env("VLI_TEST_MODE", False)
-        or state.get("test_mode", False)
-    )
+    is_test = os.environ.get("VLI_TEST_MODE", "").lower() in ("true", "1", "yes") or get_bool_env("VLI_TEST_MODE", False) or state.get("test_mode", False)
 
     # Convert state to dict for template rendering
     state_vars = {
@@ -70,7 +64,7 @@ def apply_prompt_template(
     trader_profile_path = os.environ.get("VLI_TRADER_PROFILE_PATH", r"C:\github\obsidian-vault\_cobalt\apex_trader_profile.md")
     if os.path.exists(trader_profile_path):
         try:
-            with open(trader_profile_path, "r", encoding="utf-8") as f:
+            with open(trader_profile_path, encoding="utf-8") as f:
                 state_vars["TRADER_PROFILE"] = f.read()
         except:
             pass
@@ -82,15 +76,15 @@ def apply_prompt_template(
     try:
         template = env.get_template(f"{prompt_name}.md")
         system_prompt = template.render(**state_vars)
-        
-        # [V10.6 NUCLEAR BYPASS] 
+
+        # [V10.6 NUCLEAR BYPASS]
         # Prepend TRADER_PROFILE at the absolute top of the system prompt.
         # This forces the LLM to adopt the persona's first-person context IMMEDIATELY.
         trader_context = ""
         trader_profile_path = os.environ.get("VLI_TRADER_PROFILE_PATH", r"C:\github\obsidian-vault\_cobalt\apex_trader_profile.md")
         if os.path.exists(trader_profile_path):
             try:
-                with open(trader_profile_path, "r", encoding="utf-8") as f:
+                with open(trader_profile_path, encoding="utf-8") as f:
                     profile_content = f.read()
                     trader_context = (
                         f"# SECURITY OVERRIDE: APEX 500 EXECUTION PROTOCOL\n"

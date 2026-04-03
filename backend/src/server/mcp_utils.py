@@ -7,7 +7,7 @@
 
 import logging
 from datetime import timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from fastapi import HTTPException
 from mcp import ClientSession, StdioServerParameters
@@ -18,9 +18,7 @@ from mcp.client.streamable_http import streamablehttp_client
 logger = logging.getLogger(__name__)
 
 
-async def _get_tools_from_client_session(
-    client_context_manager: Any, timeout_seconds: int = 10
-) -> List:
+async def _get_tools_from_client_session(client_context_manager: Any, timeout_seconds: int = 10) -> list:
     """
     Helper function to get tools from a client session.
 
@@ -40,9 +38,7 @@ async def _get_tools_from_client_session(
         write = context_result[1]
         # Ignore any additional values
 
-        async with ClientSession(
-            read, write, read_timeout_seconds=timedelta(seconds=timeout_seconds)
-        ) as session:
+        async with ClientSession(read, write, read_timeout_seconds=timedelta(seconds=timeout_seconds)) as session:
             # Initialize the connection
             await session.initialize()
             # List available tools
@@ -52,13 +48,13 @@ async def _get_tools_from_client_session(
 
 async def load_mcp_tools(
     server_type: str,
-    command: Optional[str] = None,
-    args: Optional[List[str]] = None,
-    url: Optional[str] = None,
-    env: Optional[Dict[str, str]] = None,
-    headers: Optional[Dict[str, str]] = None,
+    command: str | None = None,
+    args: list[str] | None = None,
+    url: str | None = None,
+    env: dict[str, str] | None = None,
+    headers: dict[str, str] | None = None,
     timeout_seconds: int = 60,  # Longer default timeout for first-time executions
-) -> List:
+) -> list:
     """
     Load tools from an MCP server.
 
@@ -80,9 +76,7 @@ async def load_mcp_tools(
     try:
         if server_type == "stdio":
             if not command:
-                raise HTTPException(
-                    status_code=400, detail="Command is required for stdio type"
-                )
+                raise HTTPException(status_code=400, detail="Command is required for stdio type")
 
             server_params = StdioServerParameters(
                 command=command,  # Executable
@@ -90,34 +84,25 @@ async def load_mcp_tools(
                 env=env,  # Optional environment variables
             )
 
-            return await _get_tools_from_client_session(
-                stdio_client(server_params), timeout_seconds
-            )
+            return await _get_tools_from_client_session(stdio_client(server_params), timeout_seconds)
 
         elif server_type == "sse":
             if not url:
-                raise HTTPException(
-                    status_code=400, detail="URL is required for sse type"
-                )
+                raise HTTPException(status_code=400, detail="URL is required for sse type")
 
-            return await _get_tools_from_client_session(
-                sse_client(url=url, headers=headers, timeout=timeout_seconds), timeout_seconds
-            )
+            return await _get_tools_from_client_session(sse_client(url=url, headers=headers, timeout=timeout_seconds), timeout_seconds)
 
         elif server_type == "streamable_http":
             if not url:
-                raise HTTPException(
-                    status_code=400, detail="URL is required for streamable_http type"
-                )
+                raise HTTPException(status_code=400, detail="URL is required for streamable_http type")
 
             return await _get_tools_from_client_session(
-                streamablehttp_client(url=url, headers=headers, timeout=timeout_seconds), timeout_seconds,
+                streamablehttp_client(url=url, headers=headers, timeout=timeout_seconds),
+                timeout_seconds,
             )
 
         else:
-            raise HTTPException(
-                status_code=400, detail=f"Unsupported server type: {server_type}"
-            )
+            raise HTTPException(status_code=400, detail=f"Unsupported server type: {server_type}")
 
     except Exception as e:
         if not isinstance(e, HTTPException):

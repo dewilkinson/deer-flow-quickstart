@@ -55,9 +55,7 @@ def test_to_message_multiple_images():
     article = Article("Title", html)
     article.url = "http://x/"
     result = article.to_message()
-    image_urls = [
-        item["image_url"]["url"] for item in result if item["type"] == "image_url"
-    ]
+    image_urls = [item["image_url"]["url"] for item in result if item["type"] == "image_url"]
     assert "http://x/a.png" in image_urls
     assert "http://x/b.jpg" in image_urls
     text_items = [item for item in result if item["type"] == "text"]

@@ -455,7 +455,6 @@ class SubagentExecutor:
         return task_id
 
 
-
 def get_background_task_result(task_id: str) -> SubagentResult | None:
     """Get the result of a background task.
 

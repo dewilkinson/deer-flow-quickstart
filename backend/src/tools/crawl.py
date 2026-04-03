@@ -8,10 +8,12 @@
 # SPDX-License-Identifier: MIT
 
 import logging
-from typing import Annotated, Dict, Any
+from typing import Annotated
 
 from langchain_core.tools import tool
+
 from src.crawler import Crawler
+
 from .decorators import log_io
 from .shared_storage import SCOUT_CONTEXT
 
@@ -19,7 +21,6 @@ logger = logging.getLogger(__name__)
 
 # Agent-specific resource context (Shared by all Scout sub-modules)
 _NODE_RESOURCE_CONTEXT = SCOUT_CONTEXT
-
 
 
 @tool
