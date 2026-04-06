@@ -2,4 +2,4 @@
 trigger: always_on
 ---
 
-Do not collapse the model's responsers in the chat conversation flow
+Do not collapse the model's nested responses in the chat conversation flow

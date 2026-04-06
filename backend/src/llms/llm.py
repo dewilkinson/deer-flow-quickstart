@@ -142,6 +142,15 @@ def _create_llm_use_conf(llm_type: LLMType, conf: dict[str, Any]) -> BaseChatMod
             if "temperature" not in gemini_conf:
                 gemini_conf["temperature"] = 1.0
 
+        # [RELIABILITY] Disable safety constraints that cause Empty String Crypto generation
+        from langchain_google_genai import HarmCategory, HarmBlockThreshold
+        gemini_conf["safety_settings"] = {
+            HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
+            HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
+            HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
+            HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
+        }
+
         try:
             return ChatGoogleGenerativeAI(**gemini_conf)
         except Exception as e:

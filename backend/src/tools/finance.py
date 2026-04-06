@@ -56,12 +56,10 @@ _thread_local = threading.local()
 
 
 def _get_session():
-    """Retrieve or create a thread-local curl_cffi session."""
-    if not hasattr(_thread_local, "session"):
-        logger.info("Initializing new curl_cffi session for current thread...")
-        _thread_local.session = Session(impersonate="chrome120")
-        _thread_local.session.headers.update({"Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8", "Accept-Language": "en-US,en;q=0.9", "Referer": "https://finance.yahoo.com/"})
-    return _thread_local.session
+    """Retrieve a fresh curl_cffi session to prevent TCP connection stalling on sequential API calls."""
+    session = Session(impersonate="chrome120", timeout=30.0)
+    session.headers.update({"Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8", "Accept-Language": "en-US,en;q=0.9", "Referer": "https://finance.yahoo.com/"})
+    return session
 
 
 _eager_worker_task = None
@@ -193,6 +191,7 @@ def _fetch_batch_history(tickers: list[str], period: str = "5d", interval: str =
             session=_get_session(),
             progress=False,
             threads=False,  # Maintain throttle integrity
+            timeout=10.0,
         )
         duration_ms = (time.time() - start_time) * 1000
 
@@ -816,8 +815,8 @@ async def run_smc_analysis(ticker: str, interval: str = "auto") -> str:
             ob = smc.ob(df, swings)
             structure = smc.bos_choch(df, swings)
 
-            fvg_count = len(fvg[fvg["FVG"] != 0]) if "FVG" in fvg.columns else 0
-            ob_count = len(ob[ob["OB"] != 0]) if "OB" in ob.columns else 0
+            fvg_count = len(fvg[fvg["FVG"].fillna(0) != 0]) if "FVG" in fvg.columns else 0
+            ob_count = len(ob[ob["OB"].fillna(0) != 0]) if "OB" in ob.columns else 0
 
             report = [f"## Custom Single-Pass SMC Analysis: {ticker} ({interval})", ""]
             last_struct = structure.iloc[-1]
@@ -880,8 +879,8 @@ async def run_smc_analysis(ticker: str, interval: str = "auto") -> str:
             mSwings = smc.swing_highs_lows(mDF, swing_length=15)
             mStruct = smc.bos_choch(mDF, mSwings)
 
-            latest_bos = mStruct[mStruct["BOS"] != 0].tail(1)
-            latest_choch = mStruct[mStruct["CHOCH"] != 0].tail(1)
+            latest_bos = mStruct[mStruct["BOS"].fillna(0) != 0].tail(1)
+            latest_choch = mStruct[mStruct["CHOCH"].fillna(0) != 0].tail(1)
 
             # Simple bias heuristic based on the latest structural event
             m_struct_detail = ""
@@ -912,20 +911,20 @@ async def run_smc_analysis(ticker: str, interval: str = "auto") -> str:
             tOB = smc.ob(tDF, tSwings)
             tFVG = smc.fvg(tDF)
 
-            ob_c = len(tOB[tOB["OB"] != 0]) if "OB" in tOB.columns else 0
-            fvg_c = len(tFVG[tFVG["FVG"] != 0]) if "FVG" in tFVG.columns else 0
+            ob_c = len(tOB[tOB["OB"].fillna(0) != 0]) if "OB" in tOB.columns else 0
+            fvg_c = len(tFVG[tFVG["FVG"].fillna(0) != 0]) if "FVG" in tFVG.columns else 0
             tactical_ready = ob_c > 0 or fvg_c > 0
 
             report.append(f"### 2. Tactical Map ({tactical_tf})")
             report.append(f"- **Zones Mapped**: {ob_c} Order Blocks | {fvg_c} Fair Value Gaps.")
             
             if ob_c > 0:
-                last_ob = tOB[tOB["OB"] != 0].iloc[-1]
+                last_ob = tOB[tOB["OB"].fillna(0) != 0].iloc[-1]
                 dir_str = "Bullish (Demand)" if last_ob["OB"] == 1 else "Bearish (Supply)"
                 report.append(f"- **Active Order Block**: {dir_str} at `{last_ob['Bottom']:.4f}` - `{last_ob['Top']:.4f}`")
                 
             if fvg_c > 0:
-                last_fvg = tFVG[tFVG["FVG"] != 0].iloc[-1]
+                last_fvg = tFVG[tFVG["FVG"].fillna(0) != 0].iloc[-1]
                 dir_str = "Bullish (Imbalance)" if last_fvg["FVG"] == 1 else "Bearish (Imbalance)"
                 report.append(f"- **Active FVG**: {dir_str} at `{last_fvg['Bottom']:.4f}` - `{last_fvg['Top']:.4f}`")
         else:
@@ -945,7 +944,7 @@ async def run_smc_analysis(ticker: str, interval: str = "auto") -> str:
             # liquidity is tracked against swings
             trLiq = smc.liquidity(trDF, trSwings)
 
-            liq_event = trLiq[trLiq["Liquidity"] != 0].tail(1)
+            liq_event = trLiq[trLiq["Liquidity"].fillna(0) != 0].tail(1)
             if not liq_event.empty:
                 # 1 = Bullish Sweep (Sell-side liquidity grabbed), -1 = Bearish Sweep
                 sweep_dir = "Bullish" if liq_event["Liquidity"].iloc[-1] == 1 else "Bearish"

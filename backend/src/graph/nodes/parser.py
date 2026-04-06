@@ -118,9 +118,9 @@ async def parser_node(state: State, config: RunnableConfig) -> Command[Literal["
         # Prevent the parser from hallucinating a direct response if the user is asking for deep analysis.
         # This occurs if previous Direct Mode mock responses are still in the thread history.
         tech_keywords = ["analyze", "analysis", "smc", "sortino", "sharpe", "report"]
-        last_msg_text = str(messages[-1].content).lower() if messages else ""
-        if any(kw in last_msg_text for kw in tech_keywords) and not state.get("direct_mode", False):
-            logger.warning(f"[VLI_PARSER] Guardrail triggered: Parser attempted to bypass graph for technical query '{last_msg_text}'. Routing to Coordinator.")
+        user_query_content = str(raw_messages[-1].content).lower() if raw_messages else ""
+        if any(kw in user_query_content for kw in tech_keywords) and not state.get("direct_mode", False):
+            logger.warning(f"[VLI_PARSER] Guardrail triggered: Parser attempted to bypass graph for technical query '{user_query_content}'. Routing to Coordinator.")
             plan_obj.has_enough_context = False
             plan_obj.direct_response = ""
             return Command(

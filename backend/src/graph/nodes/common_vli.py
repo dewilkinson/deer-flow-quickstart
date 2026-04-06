@@ -21,8 +21,8 @@ logger = logging.getLogger(__name__)
 async def _setup_and_execute_agent_step(state, config, agent_type, tools, agent_instructions: str = ""):
     """Executes the agent and captures the result for the reporter."""
 
-    # 1. Diagnostic Trace: Emit a lifecycle log for the dashboard
-    state["messages"].append(AIMessage(content=f"🚀 Specialist `{agent_type.upper()}` is now executing `{agent_instructions[:50]}...` (Fast-Path bypass enabled for efficiency).", name=agent_type))
+    # 1. Diagnostic Trace: Emit a lifecycle log for the terminal (but keep progress out of persistent history)
+    logger.info(f"🚀 Specialist `{agent_type.upper()}` is now executing `{agent_instructions[:50]}...` (Fast-Path bypass enabled for efficiency).")
 
     agent = create_agent_from_registry(agent_type, tools)
 
@@ -86,7 +86,11 @@ async def _setup_and_execute_agent_step(state, config, agent_type, tools, agent_
         if isinstance(last_msg, AIMessage):
             new_messages[-1] = AIMessage(content=last_msg.content, name=agent_type)
         elif hasattr(last_msg, "content"):
-            new_messages[-1] = AIMessage(content=str(last_msg.content), name=agent_type)
+            content = last_msg.content
+            if isinstance(content, list):
+                new_messages[-1] = AIMessage(content=content, name=agent_type)
+            else:
+                new_messages[-1] = AIMessage(content=str(content), name=agent_type)
         else:
             # Absolute fallback: append a sentinel
             new_messages.append(AIMessage(content="Step complete.", name=agent_type))

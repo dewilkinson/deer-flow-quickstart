@@ -770,49 +770,35 @@ async def _invoke_vli_agent(text: str, image: str | None = None, direct_mode: bo
             logger.warning("VLI Agent: Reset requested. Terminating jobs.")
             return "Session Reset Signal Received. Execution Terminated.", {}
 
-        # Run the graph and get the final state with an aggressive timeout (60s)
-        final_state = await asyncio.wait_for(graph.ainvoke(workflow_input, config=workflow_config), timeout=60.0)
+        # Run the graph and get the final state with an aggressive timeout (115s to respect AsyncRetries safely)
+        final_state = await asyncio.wait_for(graph.ainvoke(workflow_input, config=workflow_config), timeout=115.0)
         
         # 1. Prioritize explicitly set 'final_report'
         if final_state.get("final_report"):
             return final_state["final_report"], final_state
 
-        out_str = ""
-        # 2. Extract the last assistant message as a fallback
-        if "messages" in final_state and final_state["messages"]:
-            for msg in reversed(final_state["messages"]):
-                if isinstance(msg, AIMessage) and msg.content:
-                    if isinstance(msg.content, list):
-                        text_parts = []
-                        for item in msg.content:
-                            if isinstance(item, dict):
-                                if "text" in item:
-                                    text_parts.append(item["text"])
-                                elif "image_url" in item and isinstance(item["image_url"], dict) and "url" in item["image_url"]:
-                                    text_parts.append(f"\n![Captured Image]({item['image_url']['url']})\n")
-                            elif isinstance(item, str):
-                                text_parts.append(item)
+        # 2. Extract final textual output from history (Fallback)
+        res = ""
+        for m in reversed(final_state.get("messages", [])):
+            if isinstance(m, AIMessage):
+                content = str(getattr(m, "content", ""))
+                # DO NOT RETURN SYNTHESIZING AS A PAYLOAD!
+                if m.name == "coordinator" and "Synthesizing" in content:
+                    continue
+                res = content
+                break
+                
+        if res:
+            return res, final_state
 
-                        buffer = " ".join(text_parts).strip()
-                        if buffer and not buffer.startswith("Plan formulated:"):
-                            return buffer, final_state
-                    elif isinstance(msg.content, str):
-                        if not msg.content.startswith("Plan formulated:"):
-                            return msg.content, final_state
-
-        if not out_str:
-            out_str = "Directive processed (No specific output generated)."
-            
-        return out_str, final_state
+        return "", final_state
 
     except asyncio.TimeoutError:
-        logger.warning("VLI Agent: Master orchestration timed out (60s).")
-        error_msg = "Agent processing timed out (60s). Please check logs or retry."
-        return error_msg, {"messages": [AIMessage(content=error_msg, name="system")]}
+        logger.warning("VLI Agent: Master orchestration timed out (115s).")
+        raise Exception("Agent processing timed out (115s). Please check logs or retry.")
     except Exception as e:
         logger.error(f"VLI Agent: Failed with error: {e}")
-        error_msg = f"Agent reasoning encountered a structural failure: {str(e)}"
-        return error_msg, {"messages": [AIMessage(content=error_msg, name="system")]}
+        raise Exception(f"Agent reasoning encountered a structural failure: {str(e)}")
 
 
 @app.post("/api/vli/action-plan")
@@ -849,13 +835,26 @@ async def post_vli_action_plan(request: VLIActionPlanRequest):
     if request.is_action_plan or len(request.text) > 300:
         with open(plan_file, "w", encoding="utf-8") as f:
             f.write(request.text)
-        return {"response": "Plan captured. Vault updated. Session Monitor is analyzing directives..."}
+        return {"response": "Plan captured. Vault updated. Session Monitor is analyzing directives...", "status": "OK", "error_details": None}
 
     # Real Agent Routing for Chat/Directives
     logger.info(f"VLI: Routing directive to Gemini Agent: {request.text[:50]}...")
     final_vli_state = {} # Ensure initialization
     try:
         response_text, final_vli_state = await _invoke_vli_agent(request.text, request.image, request.direct_mode)
+        if not response_text:
+            # [V10 AUDIT] Log structural completion (Empty Payload)
+            try:
+                from src.config.vli import get_vli_path
+                telemetry_file = get_vli_path("VLI_Raw_Telemetry.md")
+                timestamp = datetime.now().strftime("[%H:%M:%S]")
+                with open(telemetry_file, "a", encoding="utf-8") as tf:
+                    tf.write(f"\n{timestamp} **VLI TRANSACTION RESOLVED**\n")
+                    tf.write("- **Session Status**: `ERROR`\n")
+                    tf.write("- **Action**: Pipeline completed without report synthesis.\n\n---\n")
+            except:
+                pass
+            return {"response": "", "status": "ERROR", "error_details": "Pipeline execution completed, but no final report was synthesized."}
     except Exception as e:
         # [V10 AUDIT] Log structural failures to telemetry
         try:
@@ -864,12 +863,14 @@ async def post_vli_action_plan(request: VLIActionPlanRequest):
             timestamp = datetime.now().strftime("[%H:%M:%S]")
             with open(telemetry_file, "a", encoding="utf-8") as tf:
                 # Distinguish between timeout and other errors
-                status_label = "FAILED : TIMEOUT" if "timed out" in str(e).lower() else "CRITICAL_FAIL"
+                status_label = "TIMEOUT" if "timed out" in str(e).lower() else "ERROR"
                 tf.write(f"\n{timestamp} **SYSTEM ERROR:** Agent Reasoning Failed - {str(e)}\n")
                 tf.write(f"- **Status**: `{status_label}`\n- **Action**: Execution aborted.\n\n---\n")
         except:
             pass
-        raise HTTPException(status_code=500, detail=str(e))
+            
+        status_code = "TIMEOUT" if "timed out" in str(e).lower() else "ERROR"
+        return {"response": "", "status": status_code, "error_details": str(e)}
 
     # --- Final Telemetry Audit: Session COMPLETED (v10 Consolidated) ---
     try:
@@ -892,9 +893,21 @@ async def post_vli_action_plan(request: VLIActionPlanRequest):
             
         preview = str(response_text)[:100].strip().replace("\n", " ")
         
+        if not response_text.strip() or "empty payload" in response_text.lower() or "synthesis failed" in response_text.lower():
+            # [RELIABILITY] Even if orchestration technically succeeded without exceptions,
+            # an empty string or failing sentinel from reporter signifies a structural failure.
+            status_code = "ERROR"
+            with open(telemetry_file, "a", encoding="utf-8") as tf:
+                tf.write(f"\n{timestamp} **VLI TRANSACTION RESOLVED**\n")
+                tf.write("- **Session Status**: `ERROR`\n")
+                tf.write(f"- **Agents Spun Up**: `{len(agents_run)}` {agent_list}\n")
+                tf.write(f"- **Directive**: `{request.text[:40]}...`\n")
+                tf.write(f"- **Response Preview**: {response_text[:100]}...\n\n---\n")
+            return {"response": response_text, "status": status_code, "error_details": "Reporter generated an empty payload or triggered a synthesis fail fallback."}
+            
         with open(telemetry_file, "a", encoding="utf-8") as tf:
             tf.write(f"\n{timestamp} **VLI TRANSACTION RESOLVED**\n")
-            tf.write("- **Session Status**: `COMPLETED`\n")
+            tf.write("- **Session Status**: `OK`\n")
             tf.write(f"- **Agents Spun Up**: `{len(agents_run)}` {agent_list}\n")
             tf.write(f"- **Directive**: `{request.text[:40]}...`\n")
             tf.write(f"- **Response Preview**: {preview}...\n\n---\n")
@@ -903,7 +916,7 @@ async def post_vli_action_plan(request: VLIActionPlanRequest):
     except Exception as le:
         logger.error(f"VLI: Failed to log final completion audit: {le}")
 
-    return {"response": response_text}
+    return {"response": response_text, "status": "OK", "error_details": None}
 
 
 # --- VLI REACTIVE PIPELINE (INBOX WATCHER & ARCHIVER) ---

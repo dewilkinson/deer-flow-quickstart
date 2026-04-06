@@ -77,7 +77,8 @@ def coordinator_node(state: State, config: RunnableConfig) -> dict[str, Any]:
         steps_completed += 1
         logger.info(f"[COORD] Incremented completion to {steps_completed}/{len(current_plan.steps)} due to {last_agent_name}")
         if steps_completed >= len(current_plan.steps):
-            return {"steps_completed": steps_completed, "messages": [AIMessage(content="Finalizing research session. Synthesizing results...", name="coordinator")]}
+            logger.info("[COORD] Finalizing research session. Synthesizing results...")
+            return {"steps_completed": steps_completed}
         return {"steps_completed": steps_completed}
 
     # 3. Apply Multi-Step Planning Template
@@ -122,4 +123,5 @@ def coordinator_node(state: State, config: RunnableConfig) -> dict[str, Any]:
             user_context = state.get("messages", [])[-1].content if state.get("messages") else "the target ticker"
             plan_obj.steps = [Step(need_search=False, title="Forced Technical Execution", description=f"Run deep structural analysis to gather empirical data for user request: {user_context}", step_type=StepType.SMC_ANALYST)]
 
-    return {"current_plan": plan_obj, "steps_completed": steps_completed, "messages": [AIMessage(content=f"Plan formulated: {plan_obj.title}. Ready to execute {len(plan_obj.steps)} steps.", name="coordinator")]}
+    logger.info(f"[COORD] Plan formulated: {plan_obj.title}. Ready to execute {len(plan_obj.steps)} steps.")
+    return {"current_plan": plan_obj, "steps_completed": steps_completed}

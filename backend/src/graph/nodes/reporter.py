@@ -6,6 +6,7 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from src.config.agents import AGENT_LLM_MAP
 from src.llms.llm import get_llm_by_type
+from langchain_core.runnables import RunnableConfig
 from src.prompts.template import apply_prompt_template
 
 from ..types import State
@@ -13,17 +14,7 @@ from ..types import State
 logger = logging.getLogger(__name__)
 
 
-async def reporter_node(state: State):
-    # 1. Telemetry Logging: Mark session as synthesizing
-    try:
-        from src.config.vli import get_vli_path
-        telemetry_file = get_vli_path("VLI_Raw_Telemetry.md")
-        timestamp = datetime.now().strftime("%H:%M:%S")
-        with open(telemetry_file, "a", encoding="utf-8") as f:
-            f.write(f"### [{timestamp}] VLI Transaction Update\n- **Session Status**: `SYNTHESIZING`\n- **Action**: Generating final intelligence report...\n\n---\n")
-    except Exception as e:
-        logger.error(f"Failed to log synthesis start: {e}")
-
+async def reporter_node(state: State, config: RunnableConfig):
     # 2. Dynamic Synthesis
     if state.get("final_report"):
         return {}
@@ -31,47 +22,54 @@ async def reporter_node(state: State):
     try:
         # Load synthesis LLMs
         llm = get_llm_by_type(AGENT_LLM_MAP.get("reporter", "basic"))
+        
+        # [NEW] Extract configuration for template rendering
+        from src.config.configuration import Configuration
+        configurable = Configuration.from_runnable_config(config)
 
-        # [RESILIENCE] History Compaction:
-        # If we have a massive history (e.g. from macro fetch), prune tool noise.
         raw_messages = state.get("messages", [])
+        
+        # [RELIABILITY] Truncate context to prevent LLM payload rejection (Safety/Context blocks)
+        MAX_HISTORY = 10
+        if len(raw_messages) > MAX_HISTORY:
+            target_idx = len(raw_messages) - MAX_HISTORY
+            while target_idx > 0 and not isinstance(raw_messages[target_idx], HumanMessage):
+                target_idx -= 1
+            raw_messages = raw_messages[target_idx:]
+
         start_time = datetime.now()
 
-        if len(raw_messages) > 10:
-            logger.info(f"Reporter: Compacting history ({len(raw_messages)} messages) for synthesis.")
-            compacted = []
+        logger.info(f"Reporter: Compacting and sanitizing history ({len(raw_messages)} messages) for synthesis.")
+        compacted = []
 
-            # Identify the last tool result (the research finding)
-            last_tool_msg = None
-            for m in reversed(raw_messages):
-                if isinstance(m, ToolMessage):
-                    last_tool_msg = m
-                    break
+        for m in raw_messages:
+            if isinstance(m, HumanMessage):
+                compacted.append(HumanMessage(content=m.content))
+            elif isinstance(m, AIMessage):
+                if isinstance(m.content, list):
+                    content = " ".join([item.get("text", "") if isinstance(item, dict) else str(item) for item in m.content])
+                else:
+                    content = str(m.content)
+                
+                if not content.strip() and hasattr(m, "tool_calls") and m.tool_calls:
+                    content = f"[Agent invoked tool(s): {', '.join(tc.get('name', 'unknown') for tc in m.tool_calls)}]"
+                
+                logger.debug(f"[VLI_REPORTER] Compacting AIMessage of len {len(content)}: {content[:100]}...")
+                if len(content) > 10000:
+                    content = content[:10000] + "\n... [Content Truncated]"
+                
+                if content.strip():
+                    compacted.append(AIMessage(content=content))
+            elif isinstance(m, ToolMessage):
+                content = str(m.content)
+                if len(content) > 10000:
+                    content = content[:10000] + "\n... [Large Dataset Pruned]"
+                compacted.append(HumanMessage(content=f"[System: Tool '{m.name}' Returned]:\n{content}"))
 
-            for m in raw_messages:
-                if isinstance(m, HumanMessage):
-                    compacted.append(m)
-                elif isinstance(m, AIMessage):
-                    name = getattr(m, "name", "") or ""
-                    # Keep coordinator plans, analyst outputs, and the very last results
-                    if name in ["coordinator", "vli_coordinator"] or "analyst" in name.lower() or m == raw_messages[-2] or m == raw_messages[-1]:
-                        # Ensure large message content is summarized, not just deleted
-                        if m.content and len(str(m.content)) > 10000:
-                            m.content = str(m.content)[:10000] + "\n... [Content Truncated for Efficiency]"
-                        compacted.append(m)
-                elif isinstance(m, ToolMessage):
-                    # ALWAYS keep the last tool message as it contains the results we are reporting on
-                    if m == last_tool_msg:
-                        if m.content and len(str(m.content)) > 10000:
-                            m.content = str(m.content)[:10000] + "\n... [Large Dataset Pruned]"
-                        compacted.append(m)
-
-            state_to_synthesize = {**state, "messages": compacted}
-        else:
-            state_to_synthesize = state
+        state_to_synthesize = {**state, "messages": compacted}
 
         # Invoke LLM for synthesis
-        messages = apply_prompt_template("reporter", state_to_synthesize)
+        messages = apply_prompt_template("reporter", state_to_synthesize, configurable=configurable)
         response = await llm.ainvoke(messages)
 
         # Log performance metrics
@@ -81,11 +79,10 @@ async def reporter_node(state: State):
 
         log_vli_metric("reporter", latency, True)
 
-        final_report_text = response.content
-    except Exception as e:
-        logger.error(f"Reporter Synthesis Error: {e}")
-        final_report_text = "Analysis completed. (Synthesis failed, check logs)"
-
+        final_report_text = str(response.content)
+        if not final_report_text.strip():
+            logger.error(f"[VLI_REPORTER] Empty string returned. Metadata: {getattr(response, 'response_metadata', 'None')}")
+            final_report_text = "Analysis completed. (Synthesis pipeline returned an empty payload. Possible context/safety block)."
     except Exception as e:
         logger.error(f"Reporter Synthesis Error: {e}")
         final_report_text = "Analysis completed. (Synthesis failed, check logs)"
