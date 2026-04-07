@@ -312,6 +312,9 @@ class VLIActionPlanRequest(BaseModel):
     image: str | None = None
     is_action_plan: bool = False
     direct_mode: bool = False
+    raw_data_mode: bool = False
+    reporter_llm_type: str = "reasoning"
+    vli_llm_type: str = "core"
 
 
 # --- VLI CONSOLIDATED STATE ENDPOINT ---
@@ -566,10 +569,19 @@ async def open_vli_inbox_file_editor(filename: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-async def _invoke_vli_agent(text: str, image: str | None = None, direct_mode: bool = False) -> str:
+async def _invoke_vli_agent(
+    text: str,
+    image: str | None = None,
+    direct_mode: bool = False,
+    raw_data_mode: bool = False,
+    reporter_llm_type: str = "reasoning",
+    vli_llm_type: str = "reasoning",
+    thread_id: str | None = None,
+) -> str:
     """Invoke the agent graph in a non-streaming way for the VLI dashboard."""
     global _vli_session_id
-    thread_id = _vli_session_id
+    if thread_id is None:
+        thread_id = _vli_session_id
 
     # [STABILITY] Clear any previous reset flags for the fresh directive
     global _vli_reset_requested, _vli_active_task, _vli_extracted_alerts, _vli_dynamic_panels
@@ -601,7 +613,7 @@ async def _invoke_vli_agent(text: str, image: str | None = None, direct_mode: bo
     is_analyze = ("ANALYZE" in text.upper() or "ANALYSIS" in text.upper()) and not (is_smc and is_fast_override)
     is_ticker_query = ("$" in text or "GET " in text.upper() or is_analyze or (is_smc and is_fast_override)) and len(text) < 65 and not is_analyze
 
-    is_fast_track = (is_macro or is_price_list or is_vix or is_ticker_query) and not is_technical and not is_analyze
+    is_fast_track = ((is_macro or is_price_list or is_vix or is_ticker_query) and not is_technical and not is_analyze) or raw_data_mode
 
     if is_fast_track:
         ticker = ""
@@ -613,7 +625,7 @@ async def _invoke_vli_agent(text: str, image: str | None = None, direct_mode: bo
             ticker = "VIX"
         else:
             # Fallback to general search but exclude stop-words
-            ticker_stop_words = ["GET", "STOCK", "PRICE", "LIST", "MARCO", "MARO", "VALUE", "PORT", "SYMBOL", "SMC", "FOR", "ANALYSIS", "REPORT", "ANALYZE", "FAST", "QUICK", "HIGH-LEVEL", "SHORTCUT", "RAPID", "HIGH", "LEVEL"]
+            ticker_stop_words = ["GET", "STOCK", "PRICE", "LIST", "MARCO", "MARO", "VALUE", "PORT", "SYMBOL", "SMC", "FOR", "ANALYSIS", "REPORT", "ANALYZE", "FAST", "QUICK", "HIGH-LEVEL", "SHORTCUT", "RAPID", "HIGH", "LEVEL", "RAW"]
             words = re.findall(r"\b([A-Z]{1,10})\b", text.upper())
             for word in words:
                 if word not in ticker_stop_words:
@@ -679,10 +691,14 @@ async def _invoke_vli_agent(text: str, image: str | None = None, direct_mode: bo
                 start_time = datetime.now()
                 # Call tool directly with Fast-Path enabled (Deterministic & Lock-Free)
                 # [NEW] SMC Fast Path Intercept
-                if is_smc:
-                    from src.tools.finance import run_smc_analysis
-                    r_func = getattr(run_smc_analysis, "coroutine", getattr(run_smc_analysis, "func", None))
-                    report = await asyncio.wait_for(r_func(ticker=ticker, interval="auto"), timeout=15.0)
+                if is_smc or raw_data_mode:
+                    if raw_data_mode:
+                        from src.tools.finance import get_raw_smc_tables
+                        report = await asyncio.wait_for(get_raw_smc_tables(ticker=ticker), timeout=25.0)
+                    else:
+                        from src.tools.finance import run_smc_analysis
+                        r_func = getattr(run_smc_analysis, "coroutine", getattr(run_smc_analysis, "func", None))
+                        report = await asyncio.wait_for(r_func(ticker=ticker, interval="auto"), timeout=15.0)
                     
                     duration = (datetime.now() - start_time).total_seconds()
                     log_vli_metric(f"fastpath_smc_{ticker.lower()}", duration, status="pass")
@@ -747,6 +763,7 @@ async def _invoke_vli_agent(text: str, image: str | None = None, direct_mode: bo
         "research_topic": text[:100],
         "verbosity": 1,
         "direct_mode": direct_mode,
+        "raw_data_mode": raw_data_mode,
     }
 
     # [RESONANCE FLOOR] Configuration for reliable execution
@@ -758,6 +775,8 @@ async def _invoke_vli_agent(text: str, image: str | None = None, direct_mode: bo
             "max_search_results": 2,
             "report_style": "concise",
             "direct_mode": direct_mode,
+            "reporter_llm_type": reporter_llm_type,
+            "vli_llm_type": vli_llm_type,
         },
         "recursion_limit": 50,
     }
@@ -770,12 +789,28 @@ async def _invoke_vli_agent(text: str, image: str | None = None, direct_mode: bo
             logger.warning("VLI Agent: Reset requested. Terminating jobs.")
             return "Session Reset Signal Received. Execution Terminated.", {}
 
+        # [DIAGNOSTIC] Starting Graph Execution
+        logger.info(f"VLI Agent: Launching Graph traversal for directive: '{text[:50]}'")
+        start_exec = time.time()
+        
         # Run the graph and get the final state with an aggressive timeout (115s to respect AsyncRetries safely)
         final_state = await asyncio.wait_for(graph.ainvoke(workflow_input, config=workflow_config), timeout=115.0)
         
+        exec_duration = time.time() - start_exec
+        logger.info(f"VLI Agent: Graph traversal completed in {exec_duration:.2f}s")
+        
+        # [NEW] Raw Data Headless Mode Bypass (API Engine Mode)
+        if final_state.get("raw_data_mode"):
+            import json
+            raw_payload = [str(getattr(m, "content", "")) for m in final_state.get("messages", [])]
+            return json.dumps(raw_payload), final_state
+
         # 1. Prioritize explicitly set 'final_report'
         if final_state.get("final_report"):
-            return final_state["final_report"], final_state
+            fr = final_state["final_report"]
+            if "[]" in fr or fr == "[]" or fr.strip() == "[]":
+                logger.error(f"[DIAGNOSTIC] Exact '[]' matched inside final_report key!! Reporter generated it.")
+            return fr, final_state
 
         # 2. Extract final textual output from history (Fallback)
         res = ""
@@ -789,6 +824,8 @@ async def _invoke_vli_agent(text: str, image: str | None = None, direct_mode: bo
                 break
                 
         if res:
+            if "[]" in res or res == "[]" or res.strip() == "[]":
+                logger.error(f"[DIAGNOSTIC] Exact '[]' matched inside router fallback extraction (res={res[:50]})")
             return res, final_state
 
         return "", final_state
@@ -832,7 +869,7 @@ async def post_vli_action_plan(request: VLIActionPlanRequest):
         _vli_extracted_alerts = unique
 
     # Check if this is an action-plan update
-    if request.is_action_plan or len(request.text) > 300:
+    if request.is_action_plan:
         with open(plan_file, "w", encoding="utf-8") as f:
             f.write(request.text)
         return {"response": "Plan captured. Vault updated. Session Monitor is analyzing directives...", "status": "OK", "error_details": None}
@@ -840,8 +877,22 @@ async def post_vli_action_plan(request: VLIActionPlanRequest):
     # Real Agent Routing for Chat/Directives
     logger.info(f"VLI: Routing directive to Gemini Agent: {request.text[:50]}...")
     final_vli_state = {} # Ensure initialization
+    
+    # [BUGFIX: STATE POLLUTION] Explicitly generate a fresh Thread ID for every action plan request to prevent cross-contamination
+    # between separate ticker queries (e.g. NVDA picking up AMZN history).
+    import uuid
+    transaction_id = f"vli_action_{uuid.uuid4().hex[:8]}"
+    
     try:
-        response_text, final_vli_state = await _invoke_vli_agent(request.text, request.image, request.direct_mode)
+        response_text, final_vli_state = await _invoke_vli_agent(
+            request.text, 
+            request.image, 
+            request.direct_mode, 
+            request.raw_data_mode, 
+            request.reporter_llm_type, 
+            request.vli_llm_type,
+            thread_id=transaction_id
+        )
         if not response_text:
             # [V10 AUDIT] Log structural completion (Empty Payload)
             try:

@@ -62,72 +62,8 @@ def _get_session():
     return session
 
 
-_eager_worker_task = None
-
-
-def _ensure_worker_started():
-    global _eager_worker_task
-    if _eager_worker_task is None:
-        try:
-            loop = asyncio.get_running_loop()
-            _eager_worker_task = loop.create_task(_eager_cache_worker())
-            logger.info("Eager Cache Background Worker started.")
-        except RuntimeError:
-            pass
-
-
-async def _eager_cache_worker():
-    from datetime import datetime, timedelta
-
-    from src.config.loader import get_int_env
-
-    while True:
-        try:
-            await asyncio.sleep(60)
-
-            expiry_minutes = get_int_env("CACHE_EXPIRY_MINUTES", 15)
-            eager_limit = get_int_env("EAGER_CACHE_LIMIT", 5)
-
-            ticker_metadata = _GLOBAL_RESOURCE_CONTEXT.get("ticker_metadata", {})
-            history_cache = _GLOBAL_RESOURCE_CONTEXT.get("history_cache", {})
-
-            if not ticker_metadata:
-                continue
-
-            sorted_by_heat = sorted(ticker_metadata.keys(), key=lambda sym: ticker_metadata[sym].get("heat", 0), reverse=True)
-            top_eager = sorted_by_heat[:eager_limit]
-
-            now = datetime.now()
-            refresh_threshold = timedelta(minutes=expiry_minutes * 0.8)  # Refresh at 80% to TTL
-
-            for sym in top_eager:
-                # Bypass mock data in background worker
-                if sym.startswith(("HIGH_", "MOD_", "INACT_")):
-                    continue
-
-                for cache_key, entry in list(history_cache.items()):
-                    if cache_key.startswith(f"{sym}_"):
-                        last_up = entry.get("last_updated")
-                        if last_up and (now - last_up) >= refresh_threshold:
-                            logger.info(f"[CACHE_SYNC] Eager background refresh triggered for hot ticker {sym}")
-                            p = entry["period"]
-                            i = entry["interval"]
-                            try:
-                                full_df = await asyncio.to_thread(_fetch_batch_history, [sym], p, i)
-                                ticker_df = full_df.dropna()
-                                if not ticker_df.empty:
-                                    last_row = ticker_df.iloc[-1]
-                                    data_str = f"### {sym}\n- **Period**: {p} | **Interval**: {i}\n- **Close**: {float(last_row['Close']):.2f}\n- **High**: {float(last_row['High']):.2f}\n- **Low**: {float(last_row['Low']):.2f}\n- **Volume**: {int(last_row['Volume']):,}\n"
-
-                                    entry["data"] = data_str
-                                    entry["last_updated"] = datetime.now()
-                            except Exception as e:
-                                logger.error(f"[CACHE_SYNC] Eager fetch failed for {sym}: {e}")
-
-        except asyncio.CancelledError:
-            break
-        except Exception as e:
-            logger.error(f"Eager worker error: {e}")
+from src.services.datastore import DatastoreManager
+DatastoreManager.register_fetcher(lambda tickers, period, interval: _fetch_batch_history(tickers, period, interval))
 
 
 def _normalize_ticker(ticker: str) -> str:
@@ -272,12 +208,12 @@ async def get_symbol_history_data(symbols: list[str], period: str = "1d", interv
     from src.config.loader import get_int_env
 
     expiry_minutes = get_int_env("CACHE_EXPIRY_MINUTES", 15)
-    _ensure_worker_started()
+    DatastoreManager.ensure_worker_started()
 
     logger.info(f"Scout fetching history for {symbols}")
 
-    # Scout isolated
-    history_cache = _GLOBAL_RESOURCE_CONTEXT.setdefault("history_cache", {})
+    # Datastore cache bridge
+    history_cache = DatastoreManager.get_history_cache()
     # Tracker removed
 
     now = datetime.now()
@@ -371,7 +307,7 @@ async def simulate_cache_volatility(num_high: int = 10, num_moderate: int = 30, 
     from datetime import datetime, timedelta
 
     ticker_metadata = _GLOBAL_RESOURCE_CONTEXT.setdefault("ticker_metadata", {})
-    history_cache = _GLOBAL_RESOURCE_CONTEXT.setdefault("history_cache", {})
+    history_cache = DatastoreManager.get_history_cache()
     cached_tickers_set = _GLOBAL_RESOURCE_CONTEXT.setdefault("cached_tickers", set())
 
     now = datetime.now()
@@ -523,38 +459,7 @@ async def clear_vli_diagnostic() -> str:
     return "VLI Cache Simulation state has been successfully cleared. Ready for fresh diagnostic run."
 
 
-async def _invalidate_market_cache(symbols: list[str] | None = None):
-    """Core logic for market cache invalidation."""
-    if not symbols:
-        history_cache.clear()
-        logger.info("[CACHE_ADMIN] Full market history cache invalidated.")
-        return "The entire market cache has been successfully invalidated. All future requests will fetch fresh data from the internet."
 
-    cleared = []
-    for sym in symbols:
-        norm = _normalize_ticker(sym)
-        keys_to_delete = [k for k in history_cache.keys() if k.startswith(f"{norm}_")]
-        for k in keys_to_delete:
-            del history_cache[k]
-
-        if keys_to_delete:
-            cleared.append(norm)
-
-    if not cleared:
-        return f"Cache invalidation requested, but no existing cache entries were found for {symbols}."
-
-    logger.info(f"[CACHE_ADMIN] Cache invalidated for symbols: {cleared}")
-    return f"Cache successfully invalidated for: {', '.join(cleared)}."
-
-
-@tool
-async def invalidate_market_cache(symbols: list[str] | None = None) -> str:
-    """
-    Clears the internal memory cache for specified stock symbols to force a fresh data fetch.
-    If 'symbols' is empty or None, it invalidates the ENTIRE market cache.
-    Use this when the user explicitly asks for 'fresh', 'latest', or 'refresh' prices.
-    """
-    return await _invalidate_market_cache(symbols)
 
 
 @tool
@@ -563,14 +468,14 @@ async def get_stock_quote(ticker: str, period: str = "1d", interval: str = "1m",
     If 'use_finviz_fallback' is True, it strictly bypasses Yahoo Finance and fetches directly via the Finviz scraper module.
     If 'force_refresh' is True, it invalidates any existing cache for this symbol before fetching."""
 
-    _ensure_worker_started()
+    DatastoreManager.ensure_worker_started()
     norm_ticker = _normalize_ticker(ticker)
 
     logger.info(f"[DIAGNOSTIC] get_stock_quote called for {ticker} | force_refresh={force_refresh} | use_fast_path={use_fast_path}")
 
     if force_refresh:
         logger.info(f"VLI_SYSTEM: Force refresh requested for {ticker}. Invalidating cache.")
-        await _invalidate_market_cache([norm_ticker])
+        DatastoreManager.invalidate_cache(norm_ticker)
 
     if use_finviz_fallback:
         logger.info(f"VLI_SYSTEM: User explicitly requested Finviz fallback for {ticker}.")
@@ -586,6 +491,7 @@ async def get_stock_quote(ticker: str, period: str = "1d", interval: str = "1m",
     try:
         # 1. Warm Cache Phase: Check global scope for recent data (< 2 mins)
         cache_key = f"{norm_ticker}_{period}_{interval}"
+        history_cache = DatastoreManager.get_history_cache()
         if cache_key in history_cache:
             entry = history_cache[cache_key]
             # [STABILITY] Accept data up to 120s old for immediate resonance
@@ -819,6 +725,9 @@ async def run_smc_analysis(ticker: str, interval: str = "auto") -> str:
             ob_count = len(ob[ob["OB"].fillna(0) != 0]) if "OB" in ob.columns else 0
 
             report = [f"## Custom Single-Pass SMC Analysis: {ticker} ({interval})", ""]
+            last = df.iloc[-1]
+            report.append(f"- **OHLC**: O: `{last['open']:.2f}` | H: `{last['high']:.2f}` | L: `{last['low']:.2f}` | C: `{last['close']:.2f}` | V: `{last['volume']}`")
+
             last_struct = structure.iloc[-1]
             if last_struct.get("CHOCH") or last_struct.get("choch"):
                 report.append("- **State**: ⚡ **Change of Character (ChoCh)** detected.")
@@ -895,6 +804,9 @@ async def run_smc_analysis(ticker: str, interval: str = "auto") -> str:
 
         report.append(f"### 1. Macro Map ({macro_tf})")
         report.append(f"- **Institutional Trend**: {macro_bias}{m_struct_detail}")
+        if not mDF.empty:
+            l = mDF.iloc[-1]
+            report.append(f"- **OHLC**: O: `{l['open']:.2f}` | H: `{l['high']:.2f}` | L: `{l['low']:.2f}` | C: `{l['close']:.2f}` | V: `{l['volume']}`")
     except Exception as e:
         report.append(f"### 1. Macro Map ({macro_tf})\n- [ERROR]: {e}")
         macro_bias = "Error"
@@ -917,6 +829,8 @@ async def run_smc_analysis(ticker: str, interval: str = "auto") -> str:
 
             report.append(f"### 2. Tactical Map ({tactical_tf})")
             report.append(f"- **Zones Mapped**: {ob_c} Order Blocks | {fvg_c} Fair Value Gaps.")
+            l = tDF.iloc[-1]
+            report.append(f"- **OHLC**: O: `{l['open']:.2f}` | H: `{l['high']:.2f}` | L: `{l['low']:.2f}` | C: `{l['close']:.2f}` | V: `{l['volume']}`")
             
             if ob_c > 0:
                 last_ob = tOB[tOB["OB"].fillna(0) != 0].iloc[-1]
@@ -955,9 +869,13 @@ async def run_smc_analysis(ticker: str, interval: str = "auto") -> str:
                 swept_price = liq_event["Level"].iloc[-1] if "Level" in liq_event.columns else 0
                 
                 report.append(f"### 3. Execution Trigger ({trigger_tf})")
+                l = trDF.iloc[-1]
+                report.append(f"- **OHLC**: O: `{l['open']:.2f}` | H: `{l['high']:.2f}` | L: `{l['low']:.2f}` | C: `{l['close']:.2f}` | V: `{l['volume']}`")
                 report.append(f"- **Liquidity Sweep**: YES ({sweep_dir}) at `{swept_price:.4f}`")
             else:
                 report.append(f"### 3. Execution Trigger ({trigger_tf})")
+                l = trDF.iloc[-1]
+                report.append(f"- **OHLC**: O: `{l['open']:.2f}` | H: `{l['high']:.2f}` | L: `{l['low']:.2f}` | C: `{l['close']:.2f}` | V: `{l['volume']}`")
                 report.append("- **Liquidity Sweep**: NO (Accumulating)")
     except Exception as e:
         report.append(f"### 3. Execution Trigger ({trigger_tf})\n- [ERROR]: {e}")
@@ -970,3 +888,52 @@ async def run_smc_analysis(ticker: str, interval: str = "auto") -> str:
         report.append("- **Status**: **[FAIL]** Trigger does not align with Macro trend, or missing tactical structural zones.")
 
     return "\n".join(report)
+
+async def get_raw_smc_tables(ticker: str) -> str:
+    """
+    Headless Data Engine - Raw Data Tables Override
+    Bypasses text synthesis and returns pure computational pandas structures as JSON.
+    """
+    import json
+    norm_ticker = ticker.upper()
+    try:
+        data = await asyncio.wait_for(asyncio.to_thread(_fetch_stock_history, norm_ticker, "1y", "1d"), timeout=15.0)
+        df = data.tail(100).copy()
+        if df.empty:
+            return json.dumps([{"error": f"No data retrieved for {norm_ticker}. Syntax hint: Use the '$' prefix (e.g. $AAPL) to bypass sentence tokenization errors."}])
+        
+        df.columns = [c.lower() for c in df.columns]
+        # Compute pure primitive arrays
+        from smartmoneyconcepts import smc
+        swings = smc.swing_highs_lows(df, swing_length=15)
+        structure = smc.bos_choch(df, swings)
+        fvg = smc.fvg(df)
+        ob = smc.ob(df, swings)
+        
+        # Timeline merge wrapper
+        df["swing"] = swings["HighLow"] if "HighLow" in swings else None
+        df["bos"] = structure["BOS"] if "BOS" in structure else None
+        df["choch"] = structure["CHOCH"] if "CHOCH" in structure else None
+        
+        # For memory constraints, only return the last 20 blocks
+        export_df = df.tail(20).copy()
+        
+        # Serialize datetime indexes safely
+        import pandas as pd
+        export_df.reset_index(inplace=True)
+        for col in export_df.columns:
+            if pd.api.types.is_datetime64_any_dtype(export_df[col]):
+                export_df[col] = export_df[col].dt.strftime('%Y-%m-%d %H:%M:%S')
+
+        # Drop NaN bounds
+        export_df = export_df.fillna("None")
+
+        return json.dumps({
+            "ticker": norm_ticker,
+            "type": "RAW_SMC_PRICE_ACTION_TABLE",
+            "timeframe": "1d",
+            "data": json.loads(export_df.to_json(orient="records"))
+        })
+    except Exception as e:
+        import traceback
+        return json.dumps([{"error": f"Raw Table Error: {str(e)}"}])

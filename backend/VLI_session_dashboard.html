@@ -716,12 +716,20 @@
             msgBox.scrollTop = msgBox.scrollHeight;
 
             try {
+                let requestText = text;
+                let rawDataMode = false;
+                if (text.toUpperCase().includes("--RAW")) {
+                    rawDataMode = true;
+                    requestText = text.replace(/--raw/ig, "").trim();
+                }
+
                 const res = await fetch('/api/vli/action-plan', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
-                        text,
-                        direct_mode: directMode
+                        text: requestText,
+                        direct_mode: directMode,
+                        raw_data_mode: rawDataMode
                     })
                 });
                 const data = await res.json();
@@ -731,8 +739,18 @@
                     aiMsg.className = 'msg msg-ai';
                     const responseText = data.response || "No response generated.";
                     
-                    // [NEW] Mirror long-form analysis to the persistent Report Card
-                    if (responseText.length > 50 || responseText.includes('###')) {
+                    if (rawDataMode) {
+                        function escapeHTML(str) {
+                            return str.replace(/[&<>'"]/g, 
+                                tag => ({
+                                    '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+                                }[tag] || tag)
+                            );
+                        }
+                        aiMsg.innerHTML = "<strong>[HEADLESS DATA ENGINE - RAW JSON]:</strong><br><pre style='white-space: pre-wrap; font-size: 0.85em; background: rgba(0,0,0,0.5); padding: 10px; border-radius: 5px; margin-top: 10px; border: 1px solid var(--emerald-green);'>" + escapeHTML(responseText) + "</pre>";
+                    } else {
+                        // [NEW] Mirror long-form analysis to the persistent Report Card
+                        if (responseText.length > 50 || responseText.includes('###')) {
                         const reportViewer = document.getElementById('analysis-report-viewer');
                         reportViewer.innerHTML = `<div class="analysis-report">${applyStatusFormatting(marked.parse(responseText))}</div>`;
                         reportViewer.scrollTop = 0;
@@ -748,12 +766,13 @@
                             });
                         } catch(e) { console.error("KaTeX Report Error:", e); }
                         
-                        // Keep Chat clean with a redirect message
-                        aiMsg.innerHTML = `Analysis posted to <strong style="color: var(--emerald-green); font-weight: 700;">Reports</strong> window`;
+                        // Keep Chat clean with a redirect message, but also supply the actual content so it's not lost
+                        aiMsg.innerHTML = `<strong>Analysis posted to Reports window:</strong><br><br>` + applyStatusFormatting(marked.parse(responseText));
                     } else {
                         aiMsg.innerHTML = applyStatusFormatting(marked.parse(responseText));
                     }
-                    
+                    } // close else
+
                     msgBox.appendChild(aiMsg);
                     
                     // Render Math for the AI message response
