@@ -43,7 +43,7 @@ Institutional Logic: Pure-play beneficiary of the B-21 Raider scaling and THAAD 
 
 3. THE "WAR BARBELL" BALANCE REPORT
 Current Allocation: 100% Cash ($119,700).
-The "War Barbell" is currently skewed too far into safety (Cash). To align with the Apex 500 Protocol, we need to deploy "Shields" to protect the bunker from the inflationary pressure of $100+ Oil while waiting for "Sword" entries.
+The "War Barbell" is currently skewed too far into safety (Cash). To align with the Institutional Protocol, we need to deploy "Shields" to protect the bunker from the inflationary pressure of $100+ Oil while waiting for "Sword" entries.
 
 Sector  Allocation  Status  Action
 Swords (Growth) 0%  Underweight Watch IRDM for $29.40 break.
@@ -74,7 +74,7 @@ It is 11:22 AM on April 2, 2026. **NVIDIA (NVDA)** is currently the ultimate "Sw
 
 While the fundamental narrative remains anchored by the **Rubin platform** launch (announced at CES 2026) and the massive $500B order book for FY26/27, the price action is currently reflecting a "cooling" phase. The 10Y Yield (.TNX) at 4.28% is acting as a gravity well, preventing a breakout above the $180.00 psychological resistance.
 
-Here is the Apex 500 deep-dive analysis for NVDA.
+Here is the Institutional deep-dive analysis for NVDA.
 
 ***
 
@@ -159,6 +159,7 @@ $$S = \frac{R_p - R_f}{\sigma_p}$$
 {{ ANALYST_KEYWORDS }}
 
 # Execution Rules
+- **INDICATOR VS TICKER OVERRIDE (CRITICAL)**: The Technical Analysis Keywords listed above (e.g., ATR, MACD, RSI, EMA) are indicators, NOT stock ticker symbols. If the user asks to "Get ATR for Apple," you MUST NOT invoke the `get_stock_quote` tool with ticker "ATR". You MUST route this as strategy logic natively using `step_type: analyst` so the analyst node can calculate it.
 - **Freshness Detection (REQUIRED)**: If the user indicates they want a **"fresh"**, **"refreshed"**, **"latest"**, or **"current"** price (or similar), you MUST include instructions for the agent to use `force_refresh=true` or call `invalidate_market_cache`.
 - **Locale**: Always set the `locale` based on the user's language.
 - **Thought**: Use the `thought` field to repeat the user's requirement in your own words.

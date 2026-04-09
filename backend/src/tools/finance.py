@@ -924,7 +924,7 @@ async def run_smc_analysis(ticker: str, interval: str = "auto") -> str:
 
     return "\n".join(report)
 
-async def get_raw_smc_tables(ticker: str) -> str:
+async def get_raw_smc_tables(ticker: str, interval: str = "1d", period: str = "1y") -> str:
     """
     Headless Data Engine - Raw Data Tables Override
     Bypasses text synthesis and returns pure computational pandas structures as JSON.
@@ -933,8 +933,6 @@ async def get_raw_smc_tables(ticker: str) -> str:
     from datetime import datetime
     
     norm_ticker = ticker.upper()
-    period = "1y"
-    interval = "1d"
     
     cache_key = f"{norm_ticker}_{period}_{interval}_raw"
     analysis_cache = DatastoreManager.get_analysis_cache()

@@ -16,10 +16,10 @@ load_dotenv()
 
 # Team configuration
 TEAM_MEMBER_CONFIGURATIONS = {
-    "researcher": {
-        "name": "researcher",
+    "synthesizer": {
+        "name": "synthesizer",
         "desc": ("Responsible for searching and collecting relevant information, understanding user needs and conducting research analysis"),
-        "desc_for_llm": ("Uses search engines and web crawlers to gather information from the internet. Outputs a Markdown report summarizing findings. Researcher can not do math or programming."),
+        "desc_for_llm": ("Uses search engines and web crawlers to gather information from the internet. Outputs a Markdown report summarizing findings. Synthesizer can not do math or programming."),
         "is_optional": False,
     },
     "coder": {

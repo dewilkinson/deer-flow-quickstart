@@ -26,7 +26,7 @@ _SHARED_RESOURCE_CONTEXT: dict[str, Any] = {}
 _GLOBAL_RESOURCE_CONTEXT = GLOBAL_CONTEXT
 
 
-def human_feedback_node(state: State) -> Command[Literal["parser", "reporter", "researcher", "coder", "scout", "journaler", "analyst", "imaging", "system", "__end__"]]:
+def human_feedback_node(state: State) -> Command[Literal["vli", "reporter", "synthesizer", "coder", "journaler", "analyst", "imaging", "system", "__end__"]]:
     """Human Feedback node implementation."""
     current_plan = state.get("current_plan")
     auto_accepted_plan = state.get("auto_accepted_plan", False)
@@ -50,7 +50,7 @@ def human_feedback_node(state: State) -> Command[Literal["parser", "reporter", "
     if not auto_accepted_plan:
         feedback = interrupt("Please Review the Plan.")
         if feedback and str(feedback).upper().startswith("[EDIT_PLAN]"):
-            return Command(update={"messages": [HumanMessage(content=feedback, name="vli_feedback")]}, goto="parser")
+            return Command(update={"messages": [HumanMessage(content=feedback, name="vli_feedback")]}, goto="vli")
         elif feedback and str(feedback).upper().startswith("[ACCEPTED]"):
             logger.info("Plan accepted.")
         else:
@@ -84,12 +84,10 @@ def human_feedback_node(state: State) -> Command[Literal["parser", "reporter", "
 
     logger.info(f"[ROUTING] Planning transition to Node: {st} (Step: {getattr(next_step, 'title', 'Untitled') if not isinstance(next_step, dict) else next_step.get('title')})")
 
-    if st == "research":
-        return Command(goto="researcher")
+    if st == "synthesizer":
+        return Command(goto="synthesizer")
     if st == "processing":
         return Command(goto="coder")
-    if st == "scout":
-        return Command(goto="scout")
     if st == "journaler":
         return Command(goto="journaler")
     if st == "analyst":

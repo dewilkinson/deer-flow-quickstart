@@ -13,6 +13,7 @@ from tenacity import AsyncRetrying, retry_if_exception, stop_after_attempt, wait
 from src.agents import create_agent_from_registry
 from src.config.configuration import Configuration
 from src.tools import crawl_tool, get_stock_quote, get_web_search_tool, invalidate_market_cache, snapper
+from src.tools.artifacts import read_session_artifact
 from src.utils.vli_metrics import log_vli_metric
 
 logger = logging.getLogger(__name__)
@@ -77,23 +78,23 @@ async def _setup_and_execute_agent_step(state, config, agent_type, tools, agent_
     new_messages = result.get("messages", []) if isinstance(result, dict) else []
     if not new_messages:
         # Fallback: create a sentinel message if the agent didn't return any
-        new_messages = [AIMessage(content=f"{agent_type.upper()} task completed successfully.", name=agent_type)]
+        new_messages = [AIMessage(content=f"{agent_type.upper()} task completed successfully.", name=f"{agent_type}_finalize")]
     else:
         # Sign the last message from the agent to mark the turn as complete
         last_msg = new_messages[-1]
 
         # LangChain messages are often immutable, so we replace with a named copy for identity tracking
         if isinstance(last_msg, AIMessage):
-            new_messages[-1] = AIMessage(content=last_msg.content, name=agent_type)
+            new_messages[-1] = AIMessage(content=last_msg.content, name=f"{agent_type}_finalize")
         elif hasattr(last_msg, "content"):
             content = last_msg.content
             if isinstance(content, list):
-                new_messages[-1] = AIMessage(content=content, name=agent_type)
+                new_messages[-1] = AIMessage(content=content, name=f"{agent_type}_finalize")
             else:
-                new_messages[-1] = AIMessage(content=str(content), name=agent_type)
+                new_messages[-1] = AIMessage(content=str(content), name=f"{agent_type}_finalize")
         else:
             # Absolute fallback: append a sentinel
-            new_messages.append(AIMessage(content="Step complete.", name=agent_type))
+            new_messages.append(AIMessage(content="Step complete.", name=f"{agent_type}_finalize"))
 
     # Hub-and-Spoke Routing Logic: Always return to the coordinator if a plan is in progress
     if current_plan:
@@ -107,5 +108,18 @@ async def _setup_and_execute_agent_step(state, config, agent_type, tools, agent_
 # Orchestrator Fast Bypass Tools
 def get_orchestrator_tools(config: RunnableConfig):
     """Returns a list of tools available to the Orchestrator for fast bypass."""
+    from src.tools import get_brokerage_accounts, get_brokerage_balance, get_brokerage_history, get_brokerage_statements, fetch_market_macros
     configurable = Configuration.from_runnable_config(config)
-    return [get_stock_quote, invalidate_market_cache, get_web_search_tool(configurable.max_search_results), crawl_tool, snapper]
+    return [
+        get_stock_quote, 
+        invalidate_market_cache, 
+        get_web_search_tool(configurable.max_search_results), 
+        crawl_tool, 
+        snapper,
+        get_brokerage_accounts,
+        get_brokerage_balance,
+        get_brokerage_history,
+        get_brokerage_statements,
+        fetch_market_macros,
+        read_session_artifact
+    ]

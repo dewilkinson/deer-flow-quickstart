@@ -6,15 +6,20 @@ from collections import defaultdict
 from typing import Literal
 
 # Define available LLM types
-LLMType = Literal["basic", "reasoning", "vision", "code"]
+LLMType = Literal["basic", "reasoning", "vision", "code", "core"]
 
 # 1. Base dictionary for explicit mappings
 _BASE_AGENT_LLM_MAP: dict[str, LLMType] = {
     "coordinator": "reasoning",
     "parser": "reasoning",
     "planner": "reasoning",
-    "researcher": "basic",
+    "synthesizer": "basic",
     "coder": "basic",
+    
+    # [BUGFIX: ANTI-ROT]
+    # The reporter was previously 'reasoning' to handle massive SMC payloads, but Gemini 3.1 Pro 
+    # frequently fails to export text outside of <think> blocks on complex state. As payloads
+    # are now aggressively pruned to 10k max length, 'basic' (Flash) handles synthesis flawlessly.
     "reporter": "basic",
     "podcast_script_writer": "basic",
     "ppt_composer": "basic",

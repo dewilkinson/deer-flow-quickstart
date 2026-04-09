@@ -181,6 +181,25 @@
             border-right: 2px solid rgba(255,255,255,0.1);
             font-size: 15px;
         }
+        
+        .analysis-report pre {
+            background: #0d1117;
+            padding: 15px;
+            border-radius: 8px;
+            overflow-x: auto;
+            border: 1px solid rgba(255,255,255,0.05);
+            font-family: var(--font-mono);
+            font-size: 13px;
+            color: #c9d1d9;
+            margin: 10px 0;
+            scrollbar-width: thin;
+        }
+        .analysis-report pre::-webkit-scrollbar { height: 6px; }
+        .analysis-report pre::-webkit-scrollbar-thumb { background: rgba(88, 166, 255, 0.5); border-radius: 3px; }
+        .analysis-report code {
+            font-family: var(--font-mono);
+            color: #79c0ff;
+        }
 
         /* INPUT PANEL */
         .input-area { padding: 20px; background: rgba(0,0,0,0.2); border-top: 1px solid var(--card-border); }
@@ -461,6 +480,10 @@
                     <span class="live-badge" id="conn-status" style="margin-left:5px; background: rgba(139, 148, 158, 0.1); color: var(--text-muted);">SYNCHRONIZING...</span>
                 </div>
                 <div style="display:flex; align-items:center; gap:12px;">
+                    <div id="async-mode-btn" class="direct-mode-toggle off" onclick="toggleAsyncMode()" title="Toggle Background Deep Synthesis">
+                        <div class="dot"></div>
+                        <span class="label">ASYNC REPORT: OFF</span>
+                    </div>
                     <div id="direct-mode-btn" class="direct-mode-toggle on" onclick="toggleDirectMode()">
                         <div class="dot"></div>
                         <span class="label">COBALT AI: ON</span>
@@ -532,6 +555,47 @@
             }
         }
         let directMode = false;
+        
+        const sessionArtifacts = {};
+        
+        function openNativeNotepad(filename) {
+            fetch('/api/vli/open-file', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ filename: filename })
+            }).catch(e => console.error("Could not open native file:", e));
+        }
+        
+        function renderArtifactToReport(event, artifactId) {
+            if (event) event.preventDefault();
+            const text = sessionArtifacts[artifactId];
+            if (!text) return;
+            const reportViewer = document.getElementById('analysis-report-viewer');
+            
+            let formattedText = text;
+            const t = text.trim();
+            if (t.startsWith('{') || t.startsWith('[')) {
+                try {
+                    const parsed = JSON.parse(t);
+                    formattedText = "```json\n" + JSON.stringify(parsed, null, 2) + "\n```";
+                } catch(e) {
+                    formattedText = "```json\n" + text + "\n```";
+                }
+            }
+            
+            reportViewer.innerHTML = `<div class="analysis-report">${applyStatusFormatting(marked.parse(formattedText))}</div>`;
+            reportViewer.scrollTop = 0;
+            try {
+                renderMathInElement(reportViewer, {
+                    delimiters: [
+                        {left: '$$', right: '$$', display: true},
+                        {left: '$', right: '$', display: false},
+                        {left: '\\(', right: '\\)', display: false},
+                        {left: '\\[', right: '\\]', display: true}
+                    ]
+                });
+            } catch(e) {}
+        }
 
         function toggleDirectMode() {
             directMode = !directMode;
@@ -545,6 +609,23 @@
                 btn.classList.remove('on');
                 btn.classList.add('off');
                 label.innerText = "COBALT AI: OFF";
+            }
+        }
+
+        let asyncMode = false;
+
+        function toggleAsyncMode() {
+            asyncMode = !asyncMode;
+            const btn = document.getElementById('async-mode-btn');
+            const label = btn.querySelector('.label');
+            if (asyncMode) {
+                btn.classList.remove('off');
+                btn.classList.add('on');
+                label.innerText = "ASYNC REPORT: ON";
+            } else {
+                btn.classList.remove('on');
+                btn.classList.add('off');
+                label.innerText = "ASYNC REPORT: OFF";
             }
         }
 
@@ -607,6 +688,26 @@
                     
                     if (wasAtBottom) {
                         logContainer.scrollTo({ top: logContainer.scrollHeight, behavior: 'smooth' });
+                    }
+                }
+
+                // 4. Background Async Report Injection
+                if (data.async_report && data.async_report.length > 50) {
+                    const reportViewer = document.getElementById('analysis-report-viewer');
+                    if (reportViewer.dataset.lastReport !== data.async_report) {
+                        reportViewer.innerHTML = `<div class="analysis-report">${applyStatusFormatting(marked.parse(data.async_report))}</div>`;
+                        reportViewer.dataset.lastReport = data.async_report;
+                        reportViewer.scrollTop = 0;
+                        try {
+                            renderMathInElement(reportViewer, {
+                                delimiters: [
+                                    {left: '$$', right: '$$', display: true},
+                                    {left: '$', right: '$', display: false},
+                                    {left: '\\(', right: '\\)', display: false},
+                                    {left: '\\[', right: '\\]', display: true}
+                                ]
+                            });
+                        } catch(e) {}
                     }
                 }
 
@@ -718,7 +819,7 @@
             try {
                 let requestText = text;
                 let rawDataMode = false;
-                if (text.toUpperCase().includes("--RAW")) {
+                if (text.toUpperCase().includes("--RAW") || (text.toUpperCase().includes("RAW") && (text.toUpperCase().includes("SMC") || text.toUpperCase().includes("DATA")))) {
                     rawDataMode = true;
                     requestText = text.replace(/--raw/ig, "").trim();
                 }
@@ -729,7 +830,8 @@
                     body: JSON.stringify({
                         text: requestText,
                         direct_mode: directMode,
-                        raw_data_mode: rawDataMode
+                        raw_data_mode: rawDataMode,
+                        background_synthesis: asyncMode
                     })
                 });
                 const data = await res.json();
@@ -740,37 +842,60 @@
                     const responseText = data.response || "No response generated.";
                     
                     if (rawDataMode) {
-                        function escapeHTML(str) {
-                            return str.replace(/[&<>'"]/g, 
-                                tag => ({
-                                    '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
-                                }[tag] || tag)
-                            );
+                        try {
+                            const blob = new Blob([responseText], {type: 'application/json'});
+                            const url = URL.createObjectURL(blob);
+                            const artifactId = 'artifact_' + Date.now() + Math.floor(Math.random()*1000);
+                            sessionArtifacts[artifactId] = responseText;
+                            aiMsg.innerHTML = `<strong>[HEADLESS DATA ENGINE - RAW JSON]:</strong><br>Returned <a href="${url}" download="vli_raw_payload.json" onclick="renderArtifactToReport(event, '${artifactId}')" ondblclick="openNativeNotepad('vli_raw_payload.json')" style="color: #e5e7eb; font-weight: 700; text-decoration: underline; background: rgba(128, 128, 128, 0.25); padding: 4px 8px; border-radius: 4px; display: inline-block; margin-top: 10px; cursor: pointer;">vli_raw_payload.json</a>`;
+                        } catch (e) {
+                            aiMsg.innerHTML = `<strong>[HEADLESS DATA ENGINE - RAW JSON]:</strong> Data array returned successfully.`;
                         }
-                        aiMsg.innerHTML = "<strong>[HEADLESS DATA ENGINE - RAW JSON]:</strong><br><pre style='white-space: pre-wrap; font-size: 0.85em; background: rgba(0,0,0,0.5); padding: 10px; border-radius: 5px; margin-top: 10px; border: 1px solid var(--emerald-green);'>" + escapeHTML(responseText) + "</pre>";
                     } else {
                         // [NEW] Mirror long-form analysis to the persistent Report Card
                         if (responseText.length > 50 || responseText.includes('###')) {
-                        const reportViewer = document.getElementById('analysis-report-viewer');
-                        reportViewer.innerHTML = `<div class="analysis-report">${applyStatusFormatting(marked.parse(responseText))}</div>`;
-                        reportViewer.scrollTop = 0;
-                        
-                        try {
-                            renderMathInElement(reportViewer, {
-                                delimiters: [
-                                    {left: '$$', right: '$$', display: true},
-                                    {left: '$', right: '$', display: false},
-                                    {left: '\\(', right: '\\)', display: false},
-                                    {left: '\\[', right: '\\]', display: true}
-                                ]
-                            });
-                        } catch(e) { console.error("KaTeX Report Error:", e); }
-                        
-                        // Keep Chat clean with a redirect message, but also supply the actual content so it's not lost
-                        aiMsg.innerHTML = `<strong>Analysis posted to Reports window:</strong><br><br>` + applyStatusFormatting(marked.parse(responseText));
-                    } else {
-                        aiMsg.innerHTML = applyStatusFormatting(marked.parse(responseText));
-                    }
+                            const reportViewer = document.getElementById('analysis-report-viewer');
+                            reportViewer.innerHTML = `<div class="analysis-report">${applyStatusFormatting(marked.parse(responseText))}</div>`;
+                            reportViewer.scrollTop = 0;
+                            
+                            try {
+                                renderMathInElement(reportViewer, {
+                                    delimiters: [
+                                        {left: '$$', right: '$$', display: true},
+                                        {left: '$', right: '$', display: false},
+                                        {left: '\\(', right: '\\)', display: false},
+                                        {left: '\\[', right: '\\]', display: true}
+                                    ]
+                                });
+                            } catch(e) { console.error("KaTeX Report Error:", e); }
+                            
+                            // Determine file suffix
+                            let suffix = "md";
+                            const txtTrim = responseText.trim();
+                            if (txtTrim.startsWith('{') || txtTrim.startsWith('[')) { suffix = "json"; }
+                            else if (txtTrim.toLowerCase().includes('<html') || txtTrim.toLowerCase().includes('<div')) { suffix = "html"; }
+                            
+                            // Generate safe filename from request text
+                            let baseName = "vli_report";
+                            if (requestText) {
+                                baseName = requestText.trim().replace(/[^a-zA-Z0-9\s]/g, '').trim().replace(/\s+/g, '_').substring(0, 25).toLowerCase();
+                                if (!baseName) baseName = "vli_report";
+                            }
+                            const filename = `${baseName}.${suffix}`;
+                            
+                            // Generate Blob for download link
+                            const mimeType = suffix === 'json' ? 'application/json' : suffix === 'html' ? 'text/html' : 'text/markdown';
+                            const blob = new Blob([responseText], {type: mimeType});
+                            const url = URL.createObjectURL(blob);
+                            
+                            const artifactId = 'artifact_' + Date.now() + Math.floor(Math.random()*1000);
+                            sessionArtifacts[artifactId] = responseText;
+                            
+                            // Keep Chat completely clean with just the file link redirect
+                            aiMsg.innerHTML = `<strong>Analysis posted to Reports window.</strong><br>Returned: <a href="${url}" download="${filename}" onclick="renderArtifactToReport(event, '${artifactId}')" ondblclick="openNativeNotepad('${filename}')" style="color: #e5e7eb; font-weight: 700; text-decoration: underline; background: rgba(128, 128, 128, 0.25); padding: 4px 8px; border-radius: 4px; display: inline-block; margin-top: 10px; cursor: pointer;">${filename}</a>`;
+                        } else {
+                            aiMsg.innerHTML = applyStatusFormatting(marked.parse(responseText));
+                        }
                     } // close else
 
                     msgBox.appendChild(aiMsg);

@@ -35,14 +35,23 @@ class DatastoreManager:
 
     @classmethod
     def get_history_cache(cls) -> dict[str, Any]:
+        from src.config.loader import get_bool_env
+        if get_bool_env("VLI_CACHE_DISABLED", False):
+            return {}
         return history_cache
         
     @classmethod
     def get_df_cache(cls) -> dict[str, Any]:
+        from src.config.loader import get_bool_env
+        if get_bool_env("VLI_CACHE_DISABLED", False):
+            return {}
         return df_cache
         
     @classmethod
     def get_analysis_cache(cls) -> dict[str, Any]:
+        from src.config.loader import get_bool_env
+        if get_bool_env("VLI_CACHE_DISABLED", False):
+            return {}
         return analysis_cache
 
     @classmethod

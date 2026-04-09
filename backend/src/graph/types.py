@@ -39,3 +39,4 @@ class State(MessagesState):
     test_mode: bool = False
     is_test_mode: bool = False
     direct_mode: bool = False
+    raw_data_mode: bool = False

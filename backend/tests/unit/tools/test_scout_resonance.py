@@ -8,7 +8,7 @@ from src.tools.finance import _extract_ticker_data, _normalize_ticker
 async def test_scout_ticker_normalization():
     """Verify that VIX and other indices are correctly mapped to their yfinance equivalents."""
     assert _normalize_ticker("VIX") == "^VIX"
-    assert _normalize_ticker("SPX") == "^SPX"
+    assert _normalize_ticker("SPX") == "^GSPC"
     assert _normalize_ticker("AAPL") == "AAPL"
 
 

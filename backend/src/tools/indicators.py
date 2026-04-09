@@ -12,6 +12,7 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+import pandas_ta as ta
 from langchain_core.tools import tool
 
 from .finance import _fetch_stock_history
@@ -32,32 +33,29 @@ _GLOBAL_RESOURCE_CONTEXT = GLOBAL_CONTEXT
 
 def calculate_rsi(df: pd.DataFrame, period: int = 14):
     """Calculates Relative Strength Index (RSI)."""
-    delta = df["close"].diff()
-    gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
-    rs = gain / loss
-    df["rsi"] = 100 - (100 / (1 + rs))
+    df.ta.rsi(length=period, append=True)
+    # pandas_ta auto-names columns, typically 'RSI_14'
+    rsi_col = [col for col in df.columns if col.startswith('RSI')][0]
+    df["rsi"] = df[rsi_col]
     return df
 
 
 def calculate_macd(df: pd.DataFrame, fast: int = 12, slow: int = 26, signal: int = 9):
     """Calculates Moving Average Convergence Divergence (MACD)."""
-    df["ema_fast"] = df["close"].ewm(span=fast, adjust=False).mean()
-    df["ema_slow"] = df["close"].ewm(span=slow, adjust=False).mean()
-    df["macd"] = df["ema_fast"] - df["ema_slow"]
-    df["macd_signal"] = df["macd"].ewm(span=signal, adjust=False).mean()
-    df["macd_hist"] = df["macd"] - df["macd_signal"]
+    df.ta.macd(fast=fast, slow=slow, signal=signal, append=True)
+    # pandas_ta names them MACD_12_26_9, MACDh_12_26_9, MACDs_12_26_9
+    macd_col = [col for col in df.columns if col.startswith('MACD_')][0]
+    macds_col = [col for col in df.columns if col.startswith('MACDs_')][0]
+    df["macd"] = df[macd_col]
+    df["macd_signal"] = df[macds_col]
     return df
 
 
 def calculate_atr(df: pd.DataFrame, period: int = 14):
     """Calculates Average True Range (ATR)."""
-    high_low = df["high"] - df["low"]
-    high_close = (df["high"] - df["close"].shift()).abs()
-    low_close = (df["low"] - df["close"].shift()).abs()
-    ranges = pd.concat([high_low, high_close, low_close], axis=1)
-    true_range = ranges.max(axis=1)
-    df["atr"] = true_range.rolling(window=period).mean()
+    df.ta.atr(length=period, append=True)
+    atr_col = [col for col in df.columns if col.startswith('ATRr_')][0]
+    df["atr"] = df[atr_col]
     return df
 
 

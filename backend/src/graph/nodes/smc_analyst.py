@@ -8,7 +8,8 @@ from typing import Any
 
 from langchain_core.runnables import RunnableConfig
 
-from src.tools.finance import get_stock_quote, run_smc_analysis
+from src.tools.finance import get_raw_smc_tables, get_stock_quote, run_smc_analysis
+from src.tools.artifacts import read_session_artifact
 from src.tools.indicators import get_sharpe_ratio, get_sortino_ratio, get_volatility_atr, get_volume_profile
 from src.tools.shared_storage import ANALYST_CONTEXT, GLOBAL_CONTEXT
 
@@ -35,13 +36,14 @@ async def smc_analyst_node(state: State, config: RunnableConfig):
     cached_list = ", ".join(sorted(list(GLOBAL_CONTEXT.get("cached_tickers", set()))))
     logger.info(f"SMC Analyst Node: Executing ICT Structural Analysis. GLOBAL_CACHE_VISIBILITY=[{cached_list}]")
 
-    tools = [run_smc_analysis, get_stock_quote, get_volume_profile, get_volatility_atr, get_sortino_ratio, get_sharpe_ratio]
+    tools = [run_smc_analysis, get_raw_smc_tables, get_stock_quote, get_volume_profile, get_volatility_atr, get_sortino_ratio, get_sharpe_ratio, read_session_artifact]
 
     instructions = (
         "You are a specialized SMC (Smart Money Concepts) and ICT Analyst. "
         "Your goal is to identify institutional market structure. "
         "Always use the 'run_smc_analysis' tool for deep structural data (BOS, ChoCh, FVG, OB). "
-        "Explain these concepts to the user in a high-fidelity, institutional tone. "
+        "If 'raw_data_mode' is True or explicitly requested in the prompt, prioritize 'get_raw_smc_tables' and return its JSON output exactly as received without synthesis. "
+        "Explain these concepts to the user in a high-fidelity, institutional tone unless raw data is requested. "
         "Focus on 'Change of Character' (ChoCh) as a trend-reversal signal and 'Break of Structure' (BOS) as continuation. "
         "Report all identified FVG and Order Blocks as zones of interest. "
         "NOTE: Sortino ratio is the preferred ratio unless Sharpe is explicitly requested. "

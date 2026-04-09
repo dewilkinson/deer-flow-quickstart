@@ -16,6 +16,7 @@ const DEFAULT_SETTINGS: SettingsState = {
     maxStepNum: 3,
     maxSearchResults: 3,
     reportStyle: "academic",
+    forceUseVli: false,
   },
   mcp: {
     servers: [],
@@ -31,6 +32,7 @@ export type SettingsState = {
     maxStepNum: number;
     maxSearchResults: number;
     reportStyle: "academic" | "popular_science" | "news" | "social_media";
+    forceUseVli: boolean;
   };
   mcp: {
     servers: MCPServerMetadata[];
@@ -160,4 +162,15 @@ export function setEnableBackgroundInvestigation(value: boolean) {
   }));
   saveSettings();
 }
+
+export function setForceUseVli(value: boolean) {
+  useSettingsStore.setState((state) => ({
+    general: {
+      ...state.general,
+      forceUseVli: value,
+    },
+  }));
+  saveSettings();
+}
+
 loadSettings();

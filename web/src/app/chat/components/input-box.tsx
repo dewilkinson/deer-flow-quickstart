@@ -3,7 +3,7 @@
 
 import { MagicWandIcon } from "@radix-ui/react-icons";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowUp, Lightbulb, X } from "lucide-react";
+import { ArrowUp, Lightbulb, X, Zap } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useCallback, useRef, useState } from "react";
 
@@ -18,9 +18,9 @@ import { Button } from "~/components/ui/button";
 import { enhancePrompt } from "~/core/api";
 import { useConfig } from "~/core/api/hooks";
 import type { Option, Resource } from "~/core/messages";
-import {
   setEnableDeepThinking,
   setEnableBackgroundInvestigation,
+  setForceUseVli,
   useSettingsStore,
 } from "~/core/store";
 import { cn } from "~/lib/utils";
@@ -55,6 +55,7 @@ export function InputBox({
   const backgroundInvestigation = useSettingsStore(
     (state) => state.general.enableBackgroundInvestigation,
   );
+  const forceUseVli = useSettingsStore((state) => state.general.forceUseVli);
   const { config, loading } = useConfig();
   const reportStyle = useSettingsStore((state) => state.general.reportStyle);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -93,8 +94,14 @@ export function InputBox({
             return;
           }
         }
+
+        let finalMessage = message;
+        if (forceUseVli && !trimmed.toLowerCase().startsWith("/vli")) {
+          finalMessage = `/vli ${message}`;
+        }
+
         if (onSend) {
-          onSend(message, {
+          onSend(finalMessage, {
             interruptFeedback: feedback?.option.value,
             resources,
           });
@@ -290,6 +297,32 @@ export function InputBox({
               }
             >
               <Detective /> {t("investigation")}
+            </Button>
+          </Tooltip>
+
+          <Tooltip
+            className="max-w-60"
+            title={
+              <div>
+                <h3 className="mb-2 font-bold">
+                  {t("vliTooltip.title", {
+                    status: forceUseVli ? t("on") : t("off"),
+                  })}
+                </h3>
+                <p>{t("vliTooltip.description")}</p>
+              </div>
+            }
+          >
+            <Button
+              className={cn(
+                "rounded-2xl",
+                forceUseVli && "!border-brand !text-brand",
+              )}
+              variant="outline"
+              onClick={() => setForceUseVli(!forceUseVli)}
+            >
+              <Zap size={16} className={cn(forceUseVli && "fill-brand")} />{" "}
+              {t("forceVli")}
             </Button>
           </Tooltip>
           <ReportStyleDialog />

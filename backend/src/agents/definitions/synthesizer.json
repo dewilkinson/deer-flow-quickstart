@@ -1,7 +1,7 @@
 {
-    "type": "researcher",
-    "name": "The Researcher",
-    "prompt_file": "researcher",
+    "type": "synthesizer",
+    "name": "The Synthesizer",
+    "prompt_file": "synthesizer",
     "tools": [
         "web_search", 
         "crawl_tool", 

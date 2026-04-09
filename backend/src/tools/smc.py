@@ -82,43 +82,62 @@ async def get_smc_analysis(ticker: str, period: str = "60d", interval: str = "1d
     """
 
     def compute_smc(symbol: str, p: str, i: str):
-        logger.info(f"Computing custom SMC analysis for {symbol} (p={p}, i={i})")
+        logger.info(f"Computing SMC using smartmoneyconcepts library for {symbol}")
+        try:
+            from smartmoneyconcepts import smc
+        except ImportError:
+            return "[ERROR]: The 'smartmoneyconcepts' library is required."
+            
         df = _fetch_stock_history(symbol, p, i)
 
         if df.empty:
             return f"Error: No data found for ticker '{symbol}' with period '{p}' and interval '{i}'."
 
-        # Handle yf.download MultiIndex (happens with the new batch fetcher)
         if isinstance(df.columns, pd.MultiIndex):
-            # If we requested one ticker but got MultiIndex structure, flatten it
-            # Usually level 0 is ticker, level 1 is attribute (Open, High, etc.)
             df.columns = [c[1] if isinstance(c, tuple) else c for c in df.columns]
 
+        # SMC requires lowercase OHLCV
         df.columns = [str(c).lower() for c in df.columns]
 
-        fvgs = detect_fvg(df)
-        breaks = detect_structure(df)
+        # Compute all SMC data points
+        swings = smc.swing_highs_lows(df, swing_length=5)
+        structure = smc.bos_choch(df, swings)
+        ob = smc.ob(df, swings)
+        fvg = smc.fvg(df)
+        liq = smc.liquidity(df, swings)
 
-        report = f"### SMC Technical Scan: {symbol.upper()} (Timeframe: {i})\n\n"
+        # Concatenate outputs with the original dataframe (resetting index to guarantee row alignment)
+        combined_df = pd.concat([
+            df.reset_index(drop=True), 
+            swings.reset_index(drop=True), 
+            structure.reset_index(drop=True), 
+            ob.reset_index(drop=True), 
+            fvg.reset_index(drop=True), 
+            liq.reset_index(drop=True)
+        ], axis=1)
+        
+        # Deduplicate identical column names caused by merging different SMC indicator outputs
+        combined_df = combined_df.loc[:, ~combined_df.columns.duplicated(keep='last')]
+        
+        # Drop columns that are completely NA across all rows to save space
+        combined_df.dropna(axis=1, how='all', inplace=True)
 
-        # Structure
-        if breaks:
-            latest_bos = breaks[-1]
-            report += f"✅ **Market Structure:** {latest_bos['type']} detected on {latest_bos['date']}.\n"
+        # Keep only the rows where a structural event occurred (to prevent the LLM from getting lost in nulls)
+        event_columns = [col for col in ['BOS', 'bos', 'CHOCH', 'choch', 'OB', 'ob', 'FVG', 'fvg', 'Liquidity', 'liquidity', 'Level'] if col in combined_df.columns]
+        
+        # Rows with any event
+        if event_columns:
+            events_mask = combined_df[event_columns].notna().any(axis=1)
         else:
-            report += f"⚪ **Market Structure:** Ranging. No significant structure breaks detected in the last {p}.\n"
+            events_mask = pd.Series(False, index=combined_df.index)
+            
+        # Plus the last 5 candles unconditionally for context
+        recent_mask = combined_df.index >= len(combined_df) - 5
+        
+        final_df = combined_df[events_mask | recent_mask]
 
-        # Gaps
-        recent_fvgs = fvgs[-3:] if fvgs else []
-        if recent_fvgs:
-            report += f"📊 **Fair Value Gaps (FVG):** Found {len(fvgs)} total imbalances. Recent gaps:\n"
-            for f in recent_fvgs:
-                report += f"  - {f['type']} FVG on {f['date']} between {f['bottom']:.2f} and {f['top']:.2f}\n"
-        else:
-            report += "⚪ **Fair Value Gaps:** No significant open gaps found in recent price action.\n"
-
-        report += f"\n*Current Price: {df['close'].iloc[-1]:.2f}*"
-        return report
+        # Return compressed payload as JSON string
+        return final_df.to_json(orient="records", date_format="iso")
 
     try:
         return await asyncio.wait_for(asyncio.to_thread(compute_smc, ticker, period, interval), timeout=25.0)

@@ -49,8 +49,16 @@ class PlaywrightCapturer:
                 screenshot_bytes = await page.screenshot(type="png", full_page=False)
                 await context.close()
 
+                # [ANTI-ROT] Vision Token Governance
+                from PIL import Image
+                import io
+                img = Image.open(io.BytesIO(screenshot_bytes))
+                img.thumbnail((512, 512), Image.Resampling.LANCZOS)
+                buf = io.BytesIO()
+                img.save(buf, format="PNG")
+                
                 # Return as data URI
-                b64 = base64.b64encode(screenshot_bytes).decode("utf-8")
+                b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
                 return f"data:image/png;base64,{b64}"
 
             except Exception as e:

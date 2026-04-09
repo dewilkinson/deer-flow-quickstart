@@ -55,9 +55,16 @@ def _snapper_worker(url: str) -> str:
                     with open(temp_file, "rb") as f:
                         screenshot_bytes = f.read()
                     os.remove(temp_file)  # Cleanup
-
-                    b64 = base64.b64encode(screenshot_bytes).decode("utf-8")
-                    return json.dumps({"images": [f"data:image/png;base64,{b64}"], "source": f"Headless Snapshot of {url}"})
+                    # [ANTI-ROT] Vision Token Governance (Geometrical Slicing/Thumbnailing)
+                    from PIL import Image
+                    import io
+                    img = Image.open(io.BytesIO(screenshot_bytes))
+                    # Clamp the resolution to 512x512 max to prevent Gemini 3 Pro Context Bloat
+                    img.thumbnail((512, 512), Image.Resampling.LANCZOS)
+                    buf = io.BytesIO()
+                    img.save(buf, format="PNG")
+                    b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
+                    return json.dumps({"images": [f"data:image/png;base64,{b64}"], "source": f"Headless Snapshot of {url} (Resized 512x512)"})
                 else:
                     raise FileNotFoundError("Edge failed to generate screenshot file.")
             except Exception as e:
@@ -68,6 +75,10 @@ def _snapper_worker(url: str) -> str:
         logger.info(f"Taking a snapshot of the local screen in place of {url}...")
         screenshot = ImageGrab.grab()
 
+        # [ANTI-ROT] Vision Token Governance 
+        # Clamp massive 4K/1080p desktop dumps into 512x512 contextual vectors
+        screenshot.thumbnail((512, 512), Image.Resampling.LANCZOS)
+
         # Save to bytes buffer
         buffer = io.BytesIO()
         screenshot.save(buffer, format="PNG")
@@ -75,7 +86,7 @@ def _snapper_worker(url: str) -> str:
 
         # Encode to base64
         b64 = base64.b64encode(screenshot_bytes).decode("utf-8")
-        return json.dumps({"images": [f"data:image/png;base64,{b64}"], "source": "Local Desktop Screen Capture"})
+        return json.dumps({"images": [f"data:image/png;base64,{b64}"], "source": "Local Desktop Screen Capture (Resized 512x512)"})
 
     except Exception as e:
         error_msg = f"Failed to take snapshot. Error: {repr(e)}"

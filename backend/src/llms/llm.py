@@ -39,6 +39,7 @@ def _get_llm_type_config_keys() -> dict[str, str]:
         "basic": "BASIC_MODEL",
         "vision": "VISION_MODEL",
         "code": "CODE_MODEL",
+        "core": "CORE_MODEL",
     }
 
 
@@ -105,6 +106,18 @@ def _create_llm_use_conf(llm_type: LLMType, conf: dict[str, Any]) -> BaseChatMod
     # Check if it's Google AI Studio platform based on configuration
     platform = merged_conf.get("platform", "").lower()
     is_google_aistudio = platform == "google_aistudio" or platform == "google-aistudio"
+    is_ollama = platform == "ollama"
+
+    if is_ollama:
+        # Standard Ollama OpenAI-compatible endpoint
+        ollama_conf = merged_conf.copy()
+        ollama_conf["base_url"] = ollama_conf.get("base_url", "http://localhost:11434/v1")
+        # Ollama doesn't need an API key for local use, but the client expects one
+        ollama_conf["api_key"] = ollama_conf.get("api_key", "ollama")
+        ollama_conf.pop("platform", None)
+        
+        logger.info(f"LLM Tool: Initializing Ollama model '{ollama_conf.get('model')}' (Type: {llm_type})")
+        return ChatOpenAI(**ollama_conf)
 
     if is_google_aistudio:
         # Handle Google AI Studio specific configuration
@@ -149,6 +162,7 @@ def _create_llm_use_conf(llm_type: LLMType, conf: dict[str, Any]) -> BaseChatMod
             HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
             HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
             HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
+            HarmCategory.HARM_CATEGORY_CIVIC_INTEGRITY: HarmBlockThreshold.BLOCK_NONE,
         }
 
         try:

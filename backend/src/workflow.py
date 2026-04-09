@@ -72,7 +72,7 @@ async def run_agent_workflow_async(
                         "command": "uvx",
                         "args": ["mcp-github-trending"],
                         "enabled_tools": ["get_github_trending_repositories"],
-                        "add_to_agents": ["researcher"],
+                        "add_to_agents": ["synthesizer"],
                     }
                 }
             },

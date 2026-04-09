@@ -11,7 +11,7 @@ ARCHIVE_DIR = "archives"
 JOURNALS_DIR = "CMA journals"
 ACTION_PLAN_ARCHIVE_DIR = "archives/action_plans"
 GUI_VIBE_FILE = "gui_vibe.json"
-PREFERRED_EDITOR = os.environ.get("VLI_PREFERRED_EDITOR", "wordpad.exe")
+PREFERRED_EDITOR = os.environ.get("VLI_PREFERRED_EDITOR", "notepad.exe")
 
 # --- Filenames ---
 ACTION_PLAN_DIR = "action_plans"

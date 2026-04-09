@@ -1,4 +1,4 @@
-# Agent: Researcher - Node definition for high-level data synthesis.
+# Agent: Synthesizer - Node definition for high-level data synthesis.
 # Cobalt Multiagent - High-fidelity financial analysis platform
 # Copyright (c) 2026 Dave Wilkinson <dwilkins@bluesec.ai>
 # License: PolyForm Noncommercial 1.0.0
@@ -44,18 +44,18 @@ _SHARED_RESOURCE_CONTEXT = ANALYST_CONTEXT
 _GLOBAL_RESOURCE_CONTEXT = GLOBAL_CONTEXT
 
 
-async def researcher_node(state: State, config: RunnableConfig):
-    """Researcher node implementation."""
-    logger.info("Researcher Node: Initializing.")
+async def synthesizer_node(state: State, config: RunnableConfig):
+    """Synthesizer node implementation."""
+    logger.info("Synthesizer Node: Initializing.")
 
     # Example usage of private context (mimicking existing logic)
     if not _NODE_RESOURCE_CONTEXT.get("macro_history"):
-        logger.info("Research Node: Initializing private macro history storage.")
+        logger.info("Synthesizer Node: Initializing private macro history storage.")
         try:
             macro_data = await get_symbol_history_data.ainvoke({"symbols": RESEARCH_RULES["MACRO_SET"], "period": RESEARCH_RULES["DEFAULT_LOOKBACK"], "interval": RESEARCH_RULES["DEFAULT_INTERVAL"]})
             _NODE_RESOURCE_CONTEXT["macro_history"] = macro_data
         except Exception as e:
-            logger.error(f"Failed to initialize Research macro history: {e}")
+            logger.error(f"Failed to initialize Synthesizer macro history: {e}")
 
     configurable = Configuration.from_runnable_config(config)
     tools = [
@@ -76,4 +76,4 @@ async def researcher_node(state: State, config: RunnableConfig):
         simulate_cache_volatility,
     ]
 
-    return await _setup_and_execute_agent_step(state, config, "researcher", tools)
+    return await _setup_and_execute_agent_step(state, config, "synthesizer", tools)

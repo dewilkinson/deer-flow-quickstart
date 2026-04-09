@@ -11,9 +11,8 @@ from pydantic import BaseModel, Field
 
 
 class StepType(str, Enum):
-    RESEARCHER = "researcher"
+    SYNTHESIZER = "synthesizer"
     CODER = "coder"
-    SCOUT = "scout"
     JOURNALER = "journaler"
 
     ANALYST = "analyst"
@@ -31,7 +30,7 @@ class Step(BaseModel):
     need_search: bool = Field(..., description="Must be explicitly set for each step")
     title: str
     description: str = Field(..., description="Specify exactly what data to collect")
-    step_type: StepType = Field(..., description="Indicates the nature of the step")
+    step_type: StepType = Field(..., description="Must be one of: synthesizer, analyst, smc_analyst, risk_manager, coder, journaler, imaging, system, session_monitor, vision_specialist, terminal_specialist")
     execution_res: str | None = Field(default=None, description="The Step execution result")
 
 
@@ -58,7 +57,7 @@ class Plan(BaseModel):
         seen_types = set()
         deduped = []
         for s in steps:
-            # We allow multiple 'scout' steps if they have different targets, but usually we deduplicate specialist nodes
+            # We allow multiple steps if they have different targets, but usually we deduplicate specialist nodes
             if s.step_type in [StepType.SMC_ANALYST, StepType.ANALYST, StepType.VISION_SPECIALIST, StepType.SYSTEM]:
                 if s.step_type in seen_types:
                     continue
@@ -80,7 +79,7 @@ class Plan(BaseModel):
                             "need_search": True,
                             "title": "Current AI Market Analysis",
                             "description": ("Collect data on market size, growth rates, major players, and investment trends in AI sector."),
-                            "step_type": "researcher",
+                            "step_type": "synthesizer",
                         }
                     ],
                 },
@@ -94,6 +93,19 @@ class Plan(BaseModel):
                             "title": "Execute Autonomic Cache Simulation",
                             "description": ("Execute the VLI cache logic, maintaining state and timers as instructed."),
                             "step_type": "system",
+                        }
+                    ],
+                },
+                {
+                    "has_enough_context": False,
+                    "thought": ("The user wants an institutional grade SMC analysis. I need to use the smc_analyst for high-fidelity extraction."),
+                    "title": "Institutional SMC Extraction",
+                    "steps": [
+                        {
+                            "need_search": False,
+                            "title": "SMC Structural Analysis",
+                            "description": ("Extract BOS, CHoCH, and FVG markers for the target symbol."),
+                            "step_type": "smc_analyst",
                         }
                     ],
                 },

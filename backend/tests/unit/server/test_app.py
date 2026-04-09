@@ -17,7 +17,17 @@ from src.server.app import _astream_workflow_generator, _make_event, app
 
 @pytest.fixture
 def client():
-    return TestClient(app)
+    from src.server.app import research_db, verify_api_key
+    
+    # Mock research_db methods
+    research_db.create_research_project = MagicMock(return_value=MagicMock(id="test_project_id"))
+    research_db.create_research_session = MagicMock(return_value=MagicMock(id="test_session_id"))
+    research_db.save_session_message = MagicMock()
+    
+    async def mock_verify(): return "test_key"
+    app.dependency_overrides[verify_api_key] = mock_verify
+    yield TestClient(app)
+    app.dependency_overrides.clear()
 
 
 class TestMakeEvent:

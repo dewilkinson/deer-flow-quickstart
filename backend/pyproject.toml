@@ -59,6 +59,7 @@ dependencies = [
     "pillow>=12.1.1",
     "redis>=5.0.1",
     "smartmoneyconcepts>=0.0.27",
+    "pandas-ta>=0.4.71b0",
 ]
 
 [project.optional-dependencies]

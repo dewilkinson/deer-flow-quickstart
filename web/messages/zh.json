@@ -102,6 +102,11 @@
         "description": "启用后，Cobalt Multiagent 将在规划前进行快速搜索。这对于与时事和新闻相关的研究很有用。"
       },
       "enhancePrompt": "用 AI 增强提示",
+      "forceVli": "直连 VLI",
+      "vliTooltip": {
+        "title": "直连 VLI 模式：{status}",
+        "description": "开启后，所有消息都将通过 /vli 命令直接发送到本地 VLI 后端。"
+      },
       "on": "开启",
       "off": "关闭"
     },

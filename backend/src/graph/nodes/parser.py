@@ -38,7 +38,8 @@ async def parser_node(state: State, config: RunnableConfig) -> Command[Literal["
 
     tools = get_orchestrator_tools(config)
     llm = get_llm_by_type(AGENT_LLM_MAP.get("parser", "basic"))
-    llm_with_tools = llm.bind_tools(tools)
+    # Ensure Strict Schema configuration explicitly (if natively supported by library bindings)
+    llm_with_tools = llm.bind_tools(tools, strict=True) if hasattr(llm, "bind_tools") else llm.bind_tools(tools)
 
     # 0. Context Horizon Management (TPM Mitigation) with Turn-Aware Slicing
     # Prevent 1M TPM quota hits by truncating history, but ensure we start at a HumanMessage boundary.
@@ -59,6 +60,25 @@ async def parser_node(state: State, config: RunnableConfig) -> Command[Literal["
     else:
         messages = apply_prompt_template("parser", state)
 
+    # [ANTI-ROT] Heuristic Swap Mechanism 
+    # Intercept parsing and inject top 3 rules from Obsidian CORE_LOGIC.md if applicable
+    import os
+    core_logic_path = os.path.join(os.path.dirname(__file__), "..", "..", "..", "CORE_LOGIC.md")
+    if os.path.exists(core_logic_path):
+        try:
+            with open(core_logic_path, "r", encoding="utf-8") as f:
+                lines = f.readlines()
+                rules = [l.strip() for l in lines if l.strip().startswith("-") or l.strip().startswith("*")]
+                if rules and raw_messages:
+                    # Very simple regex/keyword heuristic extraction
+                    query = str(raw_messages[-1].content).lower()
+                    relevant_rules = [r for r in rules if any(word in r.lower() for word in query.split())]
+                    if not relevant_rules:
+                        relevant_rules = rules[:3] # Fallback
+                    messages.append(HumanMessage(content=f"[SYSTEM OVERRIDE]: Relevant Heuristics Injected:\n" + "\n".join(relevant_rules[:3])))
+        except Exception as e:
+            logger.warning(f"Failed to inject heuristic swap: {e}")
+
     # 1. First Pass: Check for direct tool-call shortcuts (Fast-Path)
     # We use a standard invoke first to see if it wants to use tools immediately
     response = await llm_with_tools.ainvoke(messages)
@@ -73,22 +93,23 @@ async def parser_node(state: State, config: RunnableConfig) -> Command[Literal["
 
         # 1. Execute the tools in parallel (Bypass redundant Scout LLM loops)
         name_to_tool = {t.name: t for t in tools}
+        import asyncio
+        concurrency_limiter = asyncio.Semaphore(3)
 
         async def invoke_tool(tc):
-            t_name = tc["name"]
-            t_args = tc["args"]
-            if t_name in name_to_tool:
-                try:
-                    logger.info(f"[VLI_PARSER] Directly invoking tool (Parallel): {t_name}")
-                    res = await name_to_tool[t_name].ainvoke(t_args, config)
-                    return ToolMessage(content=str(res), tool_call_id=tc["id"], name=t_name)
-                except Exception as e:
-                    logger.error(f"[VLI_PARSER] Tool execution failed: {e}")
-                    return ToolMessage(content=f"Error executing tool: {e}", tool_call_id=tc["id"], name=t_name)
-            else:
-                return ToolMessage(content=f"Error: Tool {t_name} not found.", tool_call_id=tc["id"], name=t_name)
-
-        import asyncio
+            async with concurrency_limiter:
+                t_name = tc["name"]
+                t_args = tc["args"]
+                if t_name in name_to_tool:
+                    try:
+                        logger.info(f"[VLI_PARSER] Directly invoking tool (Parallel) with limits: {t_name}")
+                        res = await name_to_tool[t_name].ainvoke(t_args, config)
+                        return ToolMessage(content=str(res), tool_call_id=tc["id"], name=t_name)
+                    except Exception as e:
+                        logger.error(f"[VLI_PARSER] Tool execution failed: {e}")
+                        return ToolMessage(content=f"Error executing tool: {e}", tool_call_id=tc["id"], name=t_name)
+                else:
+                    return ToolMessage(content=f"Error: Tool {t_name} not found.", tool_call_id=tc["id"], name=t_name)
 
         tool_results_msgs = list(await asyncio.gather(*[invoke_tool(tc) for tc in response.tool_calls]))
 
@@ -106,7 +127,7 @@ async def parser_node(state: State, config: RunnableConfig) -> Command[Literal["
         # STREAM FIX: Include all intermediate messages from the fast-path
         return Command(
             update={"final_report": response_text, "messages": [response] + tool_results_msgs + [AIMessage(content=response_text, name="vli_parser")]},
-            goto="reporter",
+            goto="__end__",
         )
 
     # 2. Regular Path: If no immediate tool call, generate a structured plan
@@ -170,7 +191,7 @@ async def parser_node(state: State, config: RunnableConfig) -> Command[Literal["
 
         return Command(
             update=update_data,
-            goto="reporter",
+            goto="__end__",
         )
 
     return Command(

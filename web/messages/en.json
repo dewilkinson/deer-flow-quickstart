@@ -102,6 +102,11 @@
         "description": "When enabled, Cobalt Multiagent will perform a quick search before planning. This is useful for researches related to ongoing events and news."
       },
       "enhancePrompt": "Enhance prompt with AI",
+      "forceVli": "Direct VLI",
+      "vliTooltip": {
+        "title": "Direct VLI Mode: {status}",
+        "description": "When enabled, every message will be sent directly to the local VLI backend using the /vli command."
+      },
       "on": "On",
       "off": "Off"
     },
