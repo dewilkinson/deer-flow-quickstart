@@ -24,3 +24,9 @@ GENERAL_CONTEXT = GLOBAL_CONTEXT  # Alias for compatibility
 
 # Persisted Market Data Cache (Used by Hybrid Resolver)
 history_cache: dict[str, Any] = {}
+
+# DataFrame Raw Price Caches
+df_cache: dict[str, Any] = {}
+
+# Computed SMC Pre-Calculated Results
+analysis_cache: dict[str, Any] = {}

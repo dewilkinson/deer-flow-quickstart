@@ -176,24 +176,45 @@ def _extract_ticker_data(df: pd.DataFrame, ticker: str) -> pd.DataFrame:
     return df.dropna(how="all")
 
 
-_DF_CACHE = {}
+def _get_ttl_seconds(interval: str) -> int:
+    """Helper to determine cache TTL in seconds based on interval granularity."""
+    i = interval.lower()
+    if i in ["1m"]: return 60
+    if i in ["2m"]: return 120
+    if i in ["5m"]: return 300
+    if i in ["15m"]: return 900
+    if i in ["30m"]: return 1800
+    if i in ["1h", "60m"]: return 3600
+    if i in ["2h", "4h"]: return 3600 * 2
+    if i in ["1d", "1wk", "1mo"]: return 86400  # EOD cache for macro bounds
+    return 300 # default 5m
 
 def _fetch_stock_history(ticker: str, period: str = "5d", interval: str = "1d") -> pd.DataFrame:
     """
     Standard single-ticker fetcher. Automatically flattens MultiIndex for the requested ticker.
     Used by all analysis nodes (Analyst, SMC, EMA, etc.). Heavily cached to prevent LangGraph sequential redundant fetching.
     """
+    from datetime import datetime
     norm_ticker = _normalize_ticker(ticker)
     cache_key = f"{norm_ticker}_{period}_{interval}"
     
-    if cache_key in _DF_CACHE:
-        logger.info(f"[_DF_CACHE HIT] Reusing data for {cache_key}")
-        return _DF_CACHE[cache_key].copy()
+    df_cache = DatastoreManager.get_df_cache()
+    
+    if cache_key in df_cache:
+        entry = df_cache[cache_key]
+        if "last_updated" in entry and "df" in entry:
+            age_sec = (datetime.now() - entry["last_updated"]).total_seconds()
+            ttl = _get_ttl_seconds(interval)
+            if age_sec < ttl:
+                logger.info(f"[DF_CACHE HIT] Reusing {norm_ticker} data (Age: {age_sec:.1f}s / TTL: {ttl}s)")
+                return entry["df"].copy()
+            else:
+                logger.info(f"[DF_CACHE EXPIRED] Ticker {norm_ticker} data is {age_sec:.1f}s old (TTL: {ttl}s)")
         
     data = _fetch_batch_history([ticker], period, interval)
     df = _extract_ticker_data(data, ticker)
     
-    _DF_CACHE[cache_key] = df
+    df_cache[cache_key] = {"df": df.copy(), "last_updated": datetime.now()}
     return df.copy()
 
 
@@ -668,6 +689,20 @@ async def run_smc_analysis(ticker: str, interval: str = "auto") -> str:
     by default (interval='auto'). If a specific interval is provided (e.g. '1h'), it will execute a
     single-pass isolated scanner.
     """
+    from datetime import datetime
+    
+    norm_ticker = _normalize_ticker(ticker)
+    cache_key = f"{norm_ticker}_auto_{interval}_analysis"
+    analysis_cache = DatastoreManager.get_analysis_cache()
+    
+    if cache_key in analysis_cache:
+        entry = analysis_cache[cache_key]
+        if "last_updated" in entry and "data" in entry:
+            age_sec = (datetime.now() - entry["last_updated"]).total_seconds()
+            ttl = _get_ttl_seconds(interval if interval != "auto" else "1d")
+            if age_sec < ttl:
+                logger.info(f"[ANALYSIS_CACHE HIT] Reusing cached SMC analyst report for {norm_ticker} (Age: {age_sec:.1f}s)")
+                return entry["data"]
     import os
     import sys
 
@@ -783,6 +818,7 @@ async def run_smc_analysis(ticker: str, interval: str = "auto") -> str:
         if isinstance(mData_res, Exception):
             raise mData_res
         mDF = mData_res.tail(macro_lookback).copy()
+        m_struct_detail = ""
         if not mDF.empty:
             mDF.columns = [c.lower() for c in mDF.columns]
             mSwings = smc.swing_highs_lows(mDF, swing_length=15)
@@ -792,7 +828,6 @@ async def run_smc_analysis(ticker: str, interval: str = "auto") -> str:
             latest_choch = mStruct[mStruct["CHOCH"].fillna(0) != 0].tail(1)
 
             # Simple bias heuristic based on the latest structural event
-            m_struct_detail = ""
             if not latest_choch.empty:
                 macro_bias = "Bullish" if latest_choch["CHOCH"].iloc[-1] == 1 else "Bearish"
                 m_level = latest_choch["Level"].iloc[-1] if "Level" in latest_choch.columns else 0
@@ -895,12 +930,29 @@ async def get_raw_smc_tables(ticker: str) -> str:
     Bypasses text synthesis and returns pure computational pandas structures as JSON.
     """
     import json
+    from datetime import datetime
+    
     norm_ticker = ticker.upper()
+    period = "1y"
+    interval = "1d"
+    
+    cache_key = f"{norm_ticker}_{period}_{interval}_raw"
+    analysis_cache = DatastoreManager.get_analysis_cache()
+    
+    if cache_key in analysis_cache:
+        entry = analysis_cache[cache_key]
+        if "last_updated" in entry and "data" in entry:
+            age_sec = (datetime.now() - entry["last_updated"]).total_seconds()
+            ttl = _get_ttl_seconds(interval)
+            if age_sec < ttl:
+                logger.info(f"[ANALYSIS_CACHE HIT] Reusing fast headless SMC data for {norm_ticker} (Age: {age_sec:.1f}s)")
+                return entry["data"]
+                
     try:
-        data = await asyncio.wait_for(asyncio.to_thread(_fetch_stock_history, norm_ticker, "1y", "1d"), timeout=15.0)
+        data = await asyncio.wait_for(asyncio.to_thread(_fetch_stock_history, norm_ticker, period, interval), timeout=15.0)
         df = data.tail(100).copy()
         if df.empty:
-            return json.dumps([{"error": f"No data retrieved for {norm_ticker}. Syntax hint: Use the '$' prefix (e.g. $AAPL) to bypass sentence tokenization errors."}])
+            return json.dumps([{"error": f"No historical market data retrieved for {norm_ticker}. Ensure the ticker symbol is valid and active. (Syntax hint: Use the '$' prefix like $AAPL to bypass sentence tokenization errors)."}])
         
         df.columns = [c.lower() for c in df.columns]
         # Compute pure primitive arrays
@@ -928,12 +980,15 @@ async def get_raw_smc_tables(ticker: str) -> str:
         # Drop NaN bounds
         export_df = export_df.fillna("None")
 
-        return json.dumps({
+        final_json = json.dumps({
             "ticker": norm_ticker,
             "type": "RAW_SMC_PRICE_ACTION_TABLE",
-            "timeframe": "1d",
+            "timeframe": interval,
             "data": json.loads(export_df.to_json(orient="records"))
         })
+        
+        analysis_cache[cache_key] = {"data": final_json, "last_updated": datetime.now()}
+        return final_json
     except Exception as e:
         import traceback
         return json.dumps([{"error": f"Raw Table Error: {str(e)}"}])
