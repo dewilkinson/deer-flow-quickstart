@@ -1,0 +1,6 @@
+- [x] Implement Delta tracking logic (Initial position calculation)
+- [x] Add historical backfill engine (Search `daily_groups` backwards)
+- [x] Implement Symbol Pruning for unresolvable orphans
+- [x] Add `--reconcile` CLI flag
+- [x] Update Audit Dashboard to label resolved trades
+- [x] E2E Verification with 03/30-04/09 range cross-check

@@ -1,0 +1,5 @@
+Date&Time,Date,Time,Symbol,Buy/Sell,Quantity,Price,Spread,Expiration,Strike,Call/Put,Commission,Fees
+,10/27/22,12:45:27,AAPL,Buy,250,140.34,Stock,,,,,
+10/27/22 14:23:34,,,AAPL,Sell,250,144.80,Stock,,,,,
+,10/26/22,09:23:10,NFLX,Buy,2,2.10,Single,28 Oct 22,300,Call,,
+10/26/22 09:45:34,10/26/22,09:45:34,NFLX,Sell,2,2.40,Single,28 Oct 22,300,Call,,

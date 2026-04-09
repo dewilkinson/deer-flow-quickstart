@@ -1,0 +1,537 @@
+import argparse
+import csv
+import glob
+import io
+import os
+from collections import defaultdict
+from datetime import datetime
+
+def generate_tradezella_csv(input_filename, output_filename, target_month=None, intraday_only=False, week_only=False, today_only=False, date_range=None, reconcile=False, args_ytd=False):
+    """
+    Converts a full-year Fidelity Account History to a TradeZella Generic CSV.
+    Fixes chronological errors by reversing Fidelity's newest-to-oldest order 
+    and assigning incremental morning-to-afternoon timestamps.
+    """
+    if not os.path.exists(input_filename):
+        print(f"Error: {input_filename} not found. Ensure the file is in the same folder.")
+        return
+
+    # TradeZella Generic Format Headers
+    tz_headers = ["Date&Time", "Date", "Time", "Symbol", "Buy/Sell", "Quantity", "Price", "Spread", "Expiration", "Strike", "Call/Put", "Commission", "Fees"]
+
+    # 1. Load the raw data
+    with open(input_filename, 'r', encoding='utf-8') as f:
+        lines = f.readlines()
+
+    # Find the header row (skipping leading Fidelity metadata)
+    header_row_index = -1
+    
+    # Fiercely strict header mapping targeting Fidelity 'Accounts_History' exports specifically
+    expected_header_fragments = ["Run Date", "Account", "Account Number", "Action", "Symbol", "Description", "Type", "Price ($)", "Quantity"]
+    
+    for i, line in enumerate(lines):
+        # We explicitly enforce all fragments to decisively reject 'Orders' or 'Positions' CSV payloads
+        if all(fragment in line for fragment in expected_header_fragments):
+            header_row_index = i
+            break
+
+    if header_row_index == -1:
+        print("Error: Could not find valid Fidelity Accounts_History header row. Ensure this is a History export, not an Orders or Transfers export.")
+        return
+
+    # Parse the CSV data
+    csv_data = "".join(lines[header_row_index:])
+    reader = csv.DictReader(io.StringIO(csv_data))
+    
+    # 2. Extract actual trades
+    all_trades_by_date = defaultdict(list)
+    for row in reader:
+        action = (row.get('Action') or '').upper()
+        if "YOU BOUGHT" in action or "YOU SOLD" in action:
+            date_key = row.get('Run Date', '').strip()
+            if date_key:
+                all_trades_by_date[date_key].append(row)
+
+    # 3. Filter for requested range
+    daily_groups = defaultdict(list)
+    current_year, current_week, _ = datetime.now().isocalendar()
+    current_date = datetime.now().date()
+    
+    # Helper to parse Fidelity dates consistently
+    def to_date_obj(d_str):
+        try:
+            m, d, y = d_str.split('/')
+            return datetime(int(y), int(m), int(d)).date()
+        except: return None
+
+    # Group valid dates
+    valid_dates = sorted(all_trades_by_date.keys(), key=lambda x: (int(x.split('/')[2]), int(x.split('/')[0]), int(x.split('/')[1])))
+
+    for date_key in valid_dates:
+        trade_date = to_date_obj(date_key)
+        if not trade_date: continue
+        
+        # Apply Filters
+        if target_month and trade_date.month != target_month: continue
+        if today_only and trade_date != current_date: continue
+        if week_only:
+            t_year, t_week, _ = trade_date.isocalendar()
+            if t_year != current_year or t_week != current_week: continue
+        
+        if date_range:
+            start_str, end_str = date_range
+            start_date = datetime.strptime(start_str, "%Y-%m-%d").date()
+            end_date = datetime.strptime(end_str, "%Y-%m-%d").date()
+            if not (start_date <= trade_date <= end_date):
+                continue
+                
+        if args_ytd:
+            if trade_date.year != current_year: continue
+                
+        daily_groups[date_key] = list(all_trades_by_date[date_key])
+    
+    # 4. Handle Trade Reconciliation (Lookback for orphans)
+    effective_start_date = None
+    if date_range:
+        effective_start_date = datetime.strptime(date_range[0], "%Y-%m-%d").date()
+    elif week_only:
+        # Calculate start of current week (Monday)
+        iso_yr, iso_wk, _ = datetime.now().isocalendar()
+        effective_start_date = datetime.fromisocalendar(iso_yr, iso_wk, 1).date()
+    elif today_only:
+        effective_start_date = current_date
+    elif target_month:
+        effective_start_date = datetime(current_year, target_month, 1).date()
+    elif args_ytd:
+        effective_start_date = datetime(current_year, 1, 1).date()
+
+    if reconcile and effective_start_date:
+        start_date = effective_start_date
+        
+        # Identify symbols that have trades in the requested range
+        symbols_in_range = set()
+        for d_key, trades in daily_groups.items():
+            for t in trades:
+                symbols_in_range.add(t['Symbol'].strip())
+            
+        for sym in list(symbols_in_range):
+            # Calculate net for sym in the requested range
+            net_in_range = 0
+            for d_key, trades in daily_groups.items():
+                for t in trades:
+                    if t['Symbol'].strip() == sym:
+                        q = abs(float(t.get('Quantity', '0').replace(',', '')))
+                        if "BOUGHT" in t['Action'].upper(): net_in_range += q
+                        else: net_in_range -= q
+            
+            # If net is negative, we need to find entries BEFORE start_date
+            if net_in_range < -0.001:
+                needed = abs(net_in_range)
+                
+                # Scan backwards from all_trades_by_date
+                pre_dates = [dk for dk in valid_dates if to_date_obj(dk) < start_date][::-1]
+                
+                for dk in pre_dates:
+                    if needed <= 0.001: break
+                    # Scan rows in dk from newest to oldest
+                    for t in all_trades_by_date[dk][::-1]:
+                        if t['Symbol'].strip() == sym and "BOUGHT" in t['Action'].upper():
+                            q = abs(float(t.get('Quantity', '0').replace(',', '')))
+                            take = min(q, needed)
+                            
+                            # Create a partial execution to EXACTLY fulfill the lookback deficit
+                            partial_t = dict(t)
+                            partial_t['Quantity'] = str(take)
+                            partial_t['_reconciled'] = True # Mark for dashboard
+                            
+                            daily_groups[dk].append(partial_t)
+                            needed -= take
+                            if needed <= 0.001: break
+                
+                if needed > 0.001:
+                    # Could not resolve. Prune all trades for this symbol in the range.
+                    print(f"Warning: Could not reconcile {sym} (Missing {needed} shares). Removing from export.")
+                    for dk in list(daily_groups.keys()):
+                        daily_groups[dk] = [t for t in daily_groups[dk] if t['Symbol'].strip() != sym]
+    
+    # 5. Sort dates chronologically (Oldest first)
+    def parse_date(d_str):
+        m, d, y = d_str.split('/')
+        return (int(y), int(m), int(d))
+
+    sorted_dates = sorted(daily_groups.keys(), key=parse_date)
+    
+    final_rows = []
+    
+    for date_str in sorted_dates:
+        # --- INTELLIGENT IRA-SAFE SEQUENCING ---
+        # Fidelity exports are inconsistent (sometimes nearest-first, sometimes oldest-first).
+        # Since this is an IRA (no shorts), we use a per-symbol heuristic:
+        # If the original order makes the position go negative (selling before buying), 
+        # but the reversed order stays positive, we use the reversed order.
+        
+        symbol_trades = defaultdict(list)
+        for t in daily_groups[date_str]:
+            symbol_trades[t['Symbol'].strip()].append(t)
+            
+        final_daily_trades = []
+        
+        for sym, trades in symbol_trades.items():
+            def calculate_min_net(trade_list):
+                net = 0
+                min_net = 0
+                for t in trade_list:
+                    q = abs(float(t.get('Quantity', '0').replace(',', '')))
+                    if "BOUGHT" in t['Action'].upper(): net += q
+                    else: net -= q
+                    min_net = min(min_net, net)
+                return min_net
+
+            # Check original vs reversed
+            orig_min = calculate_min_net(trades)
+            rev_min = calculate_min_net(trades[::-1])
+            
+            # If original goes negative but reversed doesn't, or reversed is 'less negative' 
+            # (handles cases with opening swing positions), we favor the one that starts positive.
+            if orig_min < -0.01 and rev_min >= orig_min:
+                trades = trades[::-1]
+            
+            final_daily_trades.extend(trades)
+
+        # 4. Generate TradeZella Rows
+        # (We no longer filter intraday at the loop level, but we still assign timestamps)
+        
+        # Sort symbols for deterministic output if desired
+        final_daily_trades.sort(key=lambda x: x['Symbol'])
+
+        for i, trade in enumerate(final_daily_trades):
+
+            # Assign sequential timestamps starting at market open (09:30:xx)
+            # This forces TradeZella to recognize entries before exits for day trades.
+            seconds = i + 1
+            minutes = seconds // 60
+            remaining_secs = seconds % 60
+            timestamp = f"09:{30 + minutes:02d}:{remaining_secs:02d}"
+            
+            action = trade['Action'].upper()
+            is_buy = "BOUGHT" in action
+            
+            # Numeric sanitization
+            qty_raw = trade.get('Quantity', '0').replace(',', '')
+            qty = abs(float(qty_raw))
+            price = trade['Price ($)'].replace('$', '').replace(',', '').strip()
+            comm = trade.get('Commission ($)', '0').replace('$', '').strip() or '0'
+            fees = trade.get('Fees ($)', '0').replace('$', '').strip() or '0'
+            
+            # Format date down to MM/DD/YYYY for TradeZella bounds (IRA Long-only context)
+            m, d, y = date_str.split('/')
+            tz_date = f"{m}/{d}/{y}"
+            tz_datetime = f"{tz_date} {timestamp}"
+            
+            final_rows.append({
+                "Date&Time": tz_datetime,
+                "Date": tz_date,
+                "Time": timestamp,
+                "Symbol": trade['Symbol'].strip(),
+                "Buy/Sell": "Buy" if is_buy else "Sell",
+                "Quantity": int(qty) if qty.is_integer() else qty,
+                "Price": price,
+                "Spread": "Stock",
+                "Expiration": "",
+                "Strike": "",
+                "Call/Put": "",
+                "Commission": comm,
+                "Fees": fees,
+                "_reconciled": trade.get('_reconciled', False)
+            })
+
+    # 4. Save the full TradeZella-ready file
+    with open(output_filename, 'w', newline='', encoding='utf-8') as f:
+        writer = csv.DictWriter(f, fieldnames=tz_headers, extrasaction='ignore')
+        writer.writeheader()
+        writer.writerows(final_rows)
+    
+    print(f"Success! {len(final_rows)} trades processed into {output_filename}.")
+    return final_rows
+
+def launch_audit_dashboard(rows):
+    """
+    Generates a premium, dark-themed HTML dashboard to audit the processed trades.
+    Calculates P&L, ROI, and status based on Long-only logic.
+    """
+    import tempfile
+    import webbrowser
+    
+    # 1. Summarize Executions into Trades
+    trades_by_key = defaultdict(list)
+    for r in rows:
+        key = (r['Date'], r['Symbol'])
+        trades_by_key[key].append(r)
+        
+    audit_data = []
+    # Sort by date descending for the dashboard
+    sorted_keys = sorted(trades_by_key.keys(), key=lambda x: datetime.strptime(x[0], "%m/%d/%Y"), reverse=True)
+    
+    for date, symbol in sorted_keys:
+        group = sorted(trades_by_key[(date, symbol)], key=lambda x: x['Time'])
+        
+        # Calculate Aggregates
+        total_buy_qty = sum(float(t['Quantity']) for t in group if t['Buy/Sell'] == 'Buy')
+        total_sell_qty = sum(float(t['Quantity']) for t in group if t['Buy/Sell'] == 'Sell')
+        
+        avg_buy_price = 0
+        if total_buy_qty > 0:
+            avg_buy_price = sum(float(t['Price']) * float(t['Quantity']) for t in group if t['Buy/Sell'] == 'Buy') / total_buy_qty
+            
+        avg_sell_price = 0
+        if total_sell_qty > 0:
+            avg_sell_price = sum(float(t['Price']) * float(t['Quantity']) for t in group if t['Buy/Sell'] == 'Sell') / total_sell_qty
+            
+        entry_time = group[0]['Time']
+        exit_time = group[-1]['Time'] if len(group) > 1 else "-"
+        
+        # P&L Calculation (Long-only)
+        pnl = 0
+        roi = 0
+        status = "OPEN"
+        status_class = "status-open"
+        
+        if total_buy_qty > 0 and total_sell_qty > 0:
+            # We match the minimum of the two for the closed P&L
+            closed_qty = min(total_buy_qty, total_sell_qty)
+            pnl = (avg_sell_price - avg_buy_price) * closed_qty
+            roi = ((avg_sell_price - avg_buy_price) / avg_buy_price) * 100 if avg_buy_price > 0 else 0
+            status = "WIN" if pnl > 0 else "LOSS"
+            status_class = "status-win" if pnl > 0 else "status-loss"
+        elif total_sell_qty > 0:
+            status = "CLOSE"
+            status_class = "status-close"
+        
+        audit_data.append({
+            "date": date,
+            "entry": entry_time,
+            "exit": exit_time,
+            "symbol": symbol,
+            "qty": total_buy_qty if total_buy_qty > 0 else total_sell_qty,
+            "pnl": f"${pnl:,.2f}",
+            "pnl_val": pnl,
+            "entry_p": f"${avg_buy_price:,.2f}" if avg_buy_price > 0 else "-",
+            "exit_p": f"${avg_sell_price:,.2f}" if avg_sell_price > 0 else "-",
+            "status": status,
+            "status_class": status_class,
+            "roi": f"{roi:.2f}%" if roi != 0 else "-",
+            "is_reconciled": any(t.get('_reconciled', False) for t in group)
+        })
+
+    # Extract Date Range for Title
+    date_range_str = "All Time"
+    if sorted_keys:
+        oldest_date = sorted_keys[-1][0]
+        newest_date = sorted_keys[0][0]
+        if oldest_date == newest_date:
+            date_range_str = oldest_date
+        else:
+            date_range_str = f"{oldest_date} to {newest_date}"
+            
+    # 2. Build HTML
+    html_template = f"""
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <title>TradeZella Audit Dashboard ({date_range_str})</title>
+        <style>
+            :root {{
+                --bg: #0d1117;
+                --card-bg: rgba(22, 27, 34, 0.8);
+                --text: #c9d1d9;
+                --text-dim: #8b949e;
+                --accent: #58a6ff;
+                --success: #238636;
+                --danger: #da3633;
+                --border: #30363d;
+            }}
+            body {{
+                background-color: var(--bg);
+                color: var(--text);
+                font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+                margin: 0;
+                padding: 20px;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                height: 100vh;
+                overflow: hidden;
+            }}
+            .container {{
+                background: var(--card-bg);
+                backdrop-filter: blur(10px);
+                border: 1px solid var(--border);
+                border-radius: 12px;
+                width: 95%;
+                max-width: 1200px;
+                display: flex;
+                flex-direction: column;
+                max-height: 90vh;
+                box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+            }}
+            .header {{
+                padding: 20px;
+                border-bottom: 1px solid var(--border);
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }}
+            .header-text {{
+                display: flex;
+                flex-direction: column;
+            }}
+            h2 {{ margin: 0; font-weight: 600; color: #fff; }}
+            .subtitle {{ color: #8b949e; font-size: 14px; margin-top: 4px; }}
+            .close-btn {{
+                background: var(--border);
+                color: var(--text);
+                border: none;
+                padding: 8px 16px;
+                border-radius: 6px;
+                cursor: pointer;
+                transition: 0.2s;
+            }}
+            .close-btn:hover {{ background: #484f58; }}
+            .table-wrapper {{
+                overflow-y: auto;
+                flex-grow: 1;
+                padding: 0 20px;
+            }}
+            table {{
+                width: 100%;
+                border-collapse: collapse;
+                margin-top: 10px;
+            }}
+            th {{
+                text-align: left;
+                padding: 12px;
+                color: var(--text-dim);
+                font-size: 13px;
+                text-transform: uppercase;
+                border-bottom: 1px solid var(--border);
+                position: sticky;
+                top: 0;
+                background: #161b22;
+                z-index: 10;
+            }}
+            td {{
+                padding: 14px 12px;
+                border-bottom: 1px solid #21262d;
+                font-size: 14px;
+            }}
+            tr:hover td {{ background: rgba(88, 166, 255, 0.05); }}
+            .symbol {{ font-weight: bold; color: #fff; }}
+            .status-pill {{
+                padding: 4px 10px;
+                border-radius: 20px;
+                font-size: 12px;
+                font-weight: bold;
+                display: inline-block;
+            }}
+            .status-win {{ background: rgba(35, 134, 54, 0.15); color: #3fb950; border: 1px solid rgba(63, 185, 80, 0.3); }}
+            .status-loss {{ background: rgba(218, 54, 51, 0.15); color: #f85149; border: 1px solid rgba(248, 81, 73, 0.3); }}
+            .status-open {{ background: rgba(139, 148, 158, 0.15); color: #8b949e; border: 1px solid rgba(139, 148, 158, 0.3); }}
+            .status-close {{ background: rgba(88, 166, 255, 0.15); color: #58a6ff; border: 1px solid rgba(88, 166, 255, 0.3); }}
+            .status-reconciled {{ background: rgba(255, 191, 0, 0.1); color: #ffbf00; border: 1px solid rgba(255, 191, 0, 0.3); font-size: 10px; vertical-align: middle; margin-left: 8px; }}
+            .pnl-pos {{ color: #3fb950; }}
+            .pnl-neg {{ color: #f85149; }}
+            /* Custom Scrollbar */
+            .table-wrapper::-webkit-scrollbar {{ width: 8px; }}
+            .table-wrapper::-webkit-scrollbar-track {{ background: transparent; }}
+            .table-wrapper::-webkit-scrollbar-thumb {{ background: var(--border); border-radius: 4px; }}
+            .table-wrapper::-webkit-scrollbar-thumb:hover {{ background: #484f58; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <div class="header-text">
+                    <h2>📊 Final Audit Dashboard</h2>
+                    <div class="subtitle">Range: {date_range_str}</div>
+                </div>
+                <button class="close-btn" onclick="window.close()">Close Window</button>
+            </div>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Entry</th>
+                            <th>Exit</th>
+                            <th>Symbol</th>
+                            <th>Quantity</th>
+                            <th>Entry Price</th>
+                            <th>Exit Price</th>
+                            <th>Status</th>
+                            <th>P&L</th>
+                            <th>ROI</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {"".join([f"<tr><td>{row['date']}</td><td>{row['entry']}</td><td>{row['exit']}</td><td class='symbol'>{row['symbol']}{' <span class=\"status-pill status-reconciled\">RECONCILED</span>' if row['is_reconciled'] else ''}</td><td>{row['qty']}</td><td>{row['entry_p']}</td><td>{row['exit_p']}</td><td><span class='status-pill {row['status_class']}'>{row['status']}</span></td><td class='{'pnl-pos' if row['pnl_val'] > 0 else 'pnl-neg' if row['pnl_val'] < 0 else ''}'>{row['pnl']}</td><td class='{'pnl-pos' if row['pnl_val'] > 0 else 'pnl-neg' if row['pnl_val'] < 0 else ''}'>{row['roi']}</td></tr>" for row in audit_data])}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    
+    with tempfile.NamedTemporaryFile('w', delete=False, suffix='.html', encoding='utf-8') as f:
+        f.write(html_template)
+        temp_path = f.name
+        
+    webbrowser.open(f"file://{os.path.abspath(temp_path)}")
+    print(f"Interactive Audit Dashboard launched in your browser.")
+
+def get_todays_csv():
+    today = datetime.now().date()
+    csv_files = glob.glob("logs/*.csv")
+    for filepath in csv_files:
+        if "tradezella" in filepath.lower():
+            continue
+        try:
+            file_date = datetime.fromtimestamp(os.path.getctime(filepath)).date()
+            if file_date == today:
+                return filepath
+        except OSError:
+            continue
+    return None
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Convert Fidelity CSV to TradeZella generic format.")
+    parser.add_argument("-i", "--input", help="Explicit path to the source CSV file", default=None)
+    parser.add_argument("-o", "--output", help="Explicit path for the generated output CSV", default="logs/tradezella-import.txt")
+    parser.add_argument("-m", "--month", help="Filter trades for a specific calendar month (1-12)", type=int, default=None)
+    parser.add_argument("-w", "--week", help="Filter trades to include only the current calendar week", action="store_true")
+    parser.add_argument("-d", "--day", help="Filter trades to include only today's executions", action="store_true")
+    parser.add_argument("--ytd", help="Filter trades to include only Year-To-Date executions", action="store_true")
+    parser.add_argument("--range", help="Filter trades for a custom range, e.g. --range 2026-03-30 2026-04-09", nargs=2, metavar=('START', 'END'))
+    parser.add_argument("--reconcile", help="Automatically look back into history to resolve orphaned trades in a date range", action="store_true")
+    parser.add_argument("--intraday-only", help="Filter out any interday trades (symbols that do not flatline to 0 locally on a given date)", action="store_true")
+    parser.add_argument("--no-audit", help="Disable the automatic HTML audit dashboard launch", action="store_false", dest="audit", default=True)
+    args = parser.parse_args()
+
+    input_csv = args.input
+    if not input_csv:
+        input_csv = get_todays_csv()
+        if not input_csv:
+            print("Error: No input file specified and no CSV created today was found automatically.")
+            print("Please specify a file using --input <filename>")
+            exit(1)
+        print(f"Auto-detected today's CSV: {input_csv}")
+
+    output_csv = args.output
+    # If the user requested output explicitly as log/tradezella-import.csv, ensure the folder exists
+    os.makedirs(os.path.dirname(output_csv) if os.path.dirname(output_csv) else '.', exist_ok=True)
+    
+    processed_rows = generate_tradezella_csv(input_csv, output_csv, target_month=args.month, intraday_only=args.intraday_only, week_only=args.week, today_only=args.day, date_range=args.range, reconcile=args.reconcile, args_ytd=args.ytd)
+    
+    if args.audit and processed_rows:
+        launch_audit_dashboard(processed_rows)
