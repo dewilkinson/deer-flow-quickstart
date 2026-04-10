@@ -8,7 +8,7 @@ from typing import Any
 
 from langchain_core.runnables import RunnableConfig
 
-from src.tools import fetch_market_macros, get_journal_folder, get_smc_analysis, get_sortino_ratio, get_volatility_atr, get_volume_profile, python_repl_tool, read_journal_entry, write_daily_journal
+from src.tools import fetch_market_macros, get_journal_folder, get_smc_analysis, get_sortino_ratio, get_volatility_atr, get_volume_profile, python_repl_tool, read_journal_entry, write_daily_journal, get_personal_risk_metrics
 from src.tools.shared_storage import GLOBAL_CONTEXT, RISK_MANAGER_CONTEXT
 
 from ..types import State
@@ -38,9 +38,9 @@ async def risk_manager_node(state: State, config: RunnableConfig):
         read_journal_entry,
         get_journal_folder,
         get_sortino_ratio,
-        get_volatility_atr,
         get_smc_analysis,
         get_volume_profile,
+        get_personal_risk_metrics,
     ]
 
     # Enforce strict reporting rules

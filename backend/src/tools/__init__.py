@@ -6,7 +6,7 @@
 # SPDX-License-Identifier: MIT
 
 from .bash_shell import bash_shell_tool
-from .broker import get_brokerage_accounts, get_brokerage_balance, get_brokerage_history, get_brokerage_statements
+from .broker import get_brokerage_accounts, get_brokerage_balance, get_brokerage_statements, get_attribution_summary, get_personal_risk_metrics, get_daily_blotter
 from .crawl import crawl_tool
 from .ema import get_ema_analysis
 from .finance import clear_vli_diagnostic, get_cache_heat_map, get_stock_quote, get_symbol_history_data, vli_cache_tick
@@ -35,7 +35,9 @@ __all__ = [
     "invalidate_market_cache",
     "simulate_cache_volatility",
     "get_brokerage_accounts",
-    "get_brokerage_history",
+    "get_attribution_summary",
+    "get_personal_risk_metrics",
+    "get_daily_blotter",
     "get_brokerage_balance",
     "get_brokerage_statements",
     "write_daily_journal",
