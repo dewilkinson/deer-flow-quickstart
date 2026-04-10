@@ -6,7 +6,7 @@ from collections import defaultdict
 from typing import Literal
 
 # Define available LLM types
-LLMType = Literal["basic", "reasoning", "vision", "code", "core"]
+LLMType = Literal["basic", "reasoning", "vision", "code", "core", "legacy"]
 
 # 1. Base dictionary for explicit mappings
 _BASE_AGENT_LLM_MAP: dict[str, LLMType] = {

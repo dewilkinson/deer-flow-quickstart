@@ -40,6 +40,7 @@ def _get_llm_type_config_keys() -> dict[str, str]:
         "vision": "VISION_MODEL",
         "code": "CODE_MODEL",
         "core": "CORE_MODEL",
+        "legacy": "LEGACY_MODEL",
     }
 
 
@@ -123,14 +124,11 @@ def _create_llm_use_conf(llm_type: LLMType, conf: dict[str, Any]) -> BaseChatMod
         # Handle Google AI Studio specific configuration
         gemini_conf = merged_conf.copy()
 
-        # [RELIABILITY] Google AI Studio (Gemini) often hits 429s during stress tests.
-        # Increase max_retries to handle transient quota limits.
-        try:
-            current_retries = int(gemini_conf.get("max_retries", 3))
-            if current_retries < 5:
-                gemini_conf["max_retries"] = 5
-        except (ValueError, TypeError):
-            gemini_conf["max_retries"] = 5
+        # [RELIABILITY] Fast-Fail for all tiers to trigger tiered fallback immediately.
+        # Otherwise, the SDK sits for 60s+ retrying while the user waits.
+        # [HARDENING] timeout=30 prevents internal SDK hangs on 429
+        gemini_conf["max_retries"] = 0
+        gemini_conf["timeout"] = 30
 
         # Map common keys to Google AI Studio specific keys
         if "api_key" in gemini_conf:
@@ -197,8 +195,9 @@ def _create_llm_use_conf(llm_type: LLMType, conf: dict[str, Any]) -> BaseChatMod
 
 def get_llm_by_type(llm_type: LLMType) -> BaseChatModel:
     """
-    Get LLM instance by type. Returns cached instance if available.
+    Get LLM instance by type.
     """
+    global _llm_cache
     if llm_type in _llm_cache:
         return _llm_cache[llm_type]
 

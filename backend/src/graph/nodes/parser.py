@@ -81,30 +81,15 @@ async def parser_node(state: State, config: RunnableConfig) -> Command[Literal["
             logger.warning(f"Failed to inject heuristic swap: {e}")
 
     # 1. First Pass: Check for direct tool-call shortcuts (Fast-Path)
-    # We use a standard invoke first to see if it wants to use tools immediately
-    from src.graph.nodes.common_vli import AsyncRetrying, stop_after_attempt, wait_exponential, retry_if_exception
+    # First Invoke to check for immediate tool calls
+    from src.graph.nodes.common_vli import _run_node_with_tiered_fallback
 
     try:
-        async for attempt in AsyncRetrying(
-            wait=wait_exponential(multiplier=2, min=4, max=60), stop=stop_after_attempt(3), retry=retry_if_exception(lambda e: "RESOURCE_EXHAUSTED" in str(e) or "429" in str(e)), reraise=True
-        ):
-            with attempt:
-                response = await llm_with_tools.ainvoke(messages)
+         response, fb_msgs_1 = await _run_node_with_tiered_fallback("parser", state, config, tools=tools, messages=messages)
     except Exception as e:
-        if ("RESOURCE_EXHAUSTED" in str(e) or "429" in str(e)) and AGENT_LLM_MAP.get("parser") != "basic":
-            logger.warning(f"\n\n**QUOTA EXHAUSTED**: PARSER hit Gemini 3.1 Pro limits.")
-            logger.warning(f"**FALLING BACK TO GEMINI 3 FLASH** for the PARSER for the remainder of this session.\n\n")
+         raise e
 
-            # Update global map
-            AGENT_LLM_MAP["parser"] = "basic"
-
-            # Re-initialize with basic tier
-            llm = get_llm_by_type("basic")
-            llm_with_tools = llm.bind_tools(tools, strict=True) if hasattr(llm, "bind_tools") else llm.bind_tools(tools)
-            response = await llm_with_tools.ainvoke(messages)
-        else:
-            raise e
-
+    # Fast-Path Check
     tech_keywords = ["analyze", "analysis", "smc", "sortino", "sharpe", "report"]
     user_query_content = str(raw_messages[-1].content).lower() if raw_messages else ""
     is_technical = any(kw in user_query_content for kw in tech_keywords) and not state.get("direct_mode", False)
@@ -144,38 +129,37 @@ async def parser_node(state: State, config: RunnableConfig) -> Command[Literal["
             )
         )
 
-        final_polish = await llm.ainvoke(all_msgs)
+        try:
+            final_polish, fb_msgs_2 = await _run_node_with_tiered_fallback("parser", state, config, messages=all_msgs)
+        except Exception:
+             # Safety fallback
+             from src.llms.llm import get_llm_by_type
+             llm = get_llm_by_type("basic")
+             final_polish = await llm.ainvoke(all_msgs)
+             fb_msgs_2 = []
+
         response_text = str(final_polish.content)
 
         # STREAM FIX: Include all intermediate messages from the fast-path
         return Command(
-            update={"final_report": response_text, "messages": [response] + tool_results_msgs + [AIMessage(content=response_text, name="vli_parser")]},
+            update={"final_report": response_text, "messages": fb_msgs_1 + [response] + tool_results_msgs + fb_msgs_2 + [AIMessage(content=response_text, name="vli_parser")]},
             goto="__end__",
         )
 
     # 2. Regular Path: If no immediate tool call, generate a structured plan
-    structured_llm = llm_with_tools.with_structured_output(Plan)
-    
     try:
-        async for attempt in AsyncRetrying(
-            wait=wait_exponential(multiplier=2, min=4, max=60), stop=stop_after_attempt(3), retry=retry_if_exception(lambda e: "RESOURCE_EXHAUSTED" in str(e) or "429" in str(e)), reraise=True
-        ):
-            with attempt:
-                plan_obj = structured_llm.invoke(messages)
+         plan_obj, fb_msgs_3 = await _run_node_with_tiered_fallback("parser", state, config, tools=tools, is_structured=True, structured_schema=Plan, messages=messages)
     except Exception as e:
-        if ("RESOURCE_EXHAUSTED" in str(e) or "429" in str(e)) and AGENT_LLM_MAP.get("parser") != "basic":
-            logger.warning(f"\n\n**QUOTA EXHAUSTED**: PARSER hit Gemini 3.1 Pro limits during plan generation.")
-            logger.warning(f"**FALLING BACK TO GEMINI 3 FLASH** for the PARSER plans.\n\n")
-
-            # Update global map
-            AGENT_LLM_MAP["parser"] = "basic"
-
-            # Re-initialize with basic tier
-            llm = get_llm_by_type("basic")
-            fallback_structured = llm.bind_tools(tools).with_structured_output(Plan)
-            plan_obj = fallback_structured.invoke(messages)
-        else:
-            raise e
+         logger.error(f"[VLI_PARSER] Structural Parsing Failure via fallback: {e}.")
+         fb_msgs_3 = []
+         # Force recovery plan
+         plan_obj = Plan(
+             locale="en-US",
+             has_enough_context=False,
+             thought=f"Structural Failure Recovery: {str(e)[:100]}",
+             title="Institutional Audit (Recovery)",
+             steps=[Step(need_search=False, title="Technical Recovery Analysis", description="Perform core analysis", step_type=StepType.ANALYST)],
+         )
 
     if plan_obj.has_enough_context or plan_obj.direct_response:
         # [CONTEXT POISONING GUARDRAIL]

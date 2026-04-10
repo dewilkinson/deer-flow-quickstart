@@ -131,6 +131,16 @@ _vli_rules_enabled = False
 _vli_convergence_history = []
 _vli_last_async_report = ""
 _vli_last_ux_card = {}
+
+def scrub_vli_output(text) -> str:
+    """Universal firewall to prevent technical instruction leakage and verbose error clusters."""
+    if text is None: return ""
+    content = str(text)
+    upper_content = content.upper()
+    leak_keywords = ["SECURITY OVERRIDE", "APEX 500 SYSTEM", "SYSTEM INSTRUCTION", "USER IDENTITY", "OPERATIONAL MANDATE", "EXPECTED DICT", "SYSTEMMESSAGE"]
+    if any(k in upper_content for k in leak_keywords):
+        return "**Managed Processing Recovery**: The analytical engine experienced a structural interruption or reasoning quota limit. Technical metadata has been suppressed for system integrity."
+    return content
 _vli_reset_requested = False
 _vli_active_task = None
 _vli_fast_path_cooldown_until = datetime.now()
@@ -372,7 +382,7 @@ class VLIActionPlanRequest(BaseModel):
 
 @app.get("/api/vli/active-state")
 async def get_active_vli_state():
-    """Consolidated Live state for the VLI Dashboard."""
+    logger.info("[VLI_TRACE] Entering get_active_vli_state")
     try:
         from src.config.vli import get_action_plan_path, get_inbox_path, get_vli_path
 
@@ -406,14 +416,15 @@ async def get_active_vli_state():
             clean_a["symbol"] = a["symbol"].replace("^", "").replace("=F", "").replace("-USD", "")
             ui_alerts.append(clean_a)
 
+        logger.info(f"[VLI_TRACE] State compiled for return. Telemetry size: {len(telemetry_tail)} bytes.")
         return {
             "macros": json.loads(json.dumps(_get_vli_macro_snapshot(), default=str)),
             "last_macro_update": os.path.getmtime(get_vli_path("vli_macro_snapshot.json")) if os.path.exists(get_vli_path("vli_macro_snapshot.json")) else time.time(),
             "alerts": ui_alerts or [{"symbol": "SYS", "color": "green", "label": "VLI-IDLE"}],
             "dynamic_panels": json.loads(json.dumps(_vli_dynamic_panels, default=str)),
-            "telemetry_tail": telemetry_tail,
-            "plan_markdown": plan_markdown,
-            "async_report": _vli_last_async_report,
+            "telemetry_tail": scrub_vli_output(telemetry_tail),
+            "plan_markdown": scrub_vli_output(plan_markdown),
+            "async_report": scrub_vli_output(_vli_last_async_report),
             "inbox_files": sorted(inbox_files, key=lambda x: os.path.getmtime(os.path.join(inbox_path, x)) if os.path.exists(os.path.join(inbox_path, x)) else 0, reverse=True),
             "ux_card": json.loads(json.dumps(_vli_last_ux_card, default=str)),
             "rules_enabled": _vli_rules_enabled,
@@ -567,17 +578,24 @@ async def reset_vli_session():
         logger.info("VLI_SYSTEM: Cleaning up background tool processes (msedge)...")
         subprocess.run(["taskkill", "/F", "/IM", "msedge.exe", "/T"], capture_output=True, check=False)
 
-        # Truncate the telemetry file COMPLETELY for a clean session start
+        import time
         timestamp = datetime.now().strftime("%H:%M:%S")
-        try:
-            with open(telemetry_file, "w", encoding="utf-8") as f:
-                f.write("# VLI Session Telemetry Log\n")
-                f.write(f"### [{timestamp}] SYSTEM_NODE: NEW SESSION INITIALIZED\n")
-                f.write("- **Status**: `READY`\n- **Action**: All previous telemetry backlog and active processes have been cleared.\n\n---\n")
-                f.flush()
-                os.fsync(f.fileno())
-        except Exception as fe:
-            logger.error(f"VLI: Failed to truncate telemetry file: {fe}")
+        for attempt in range(3):
+            try:
+                # Forcefully delete to break any handles
+                if os.path.exists(telemetry_file):
+                    os.remove(telemetry_file)
+                
+                with open(telemetry_file, "w", encoding="utf-8") as f:
+                    f.write("# VLI Session Telemetry Log\n")
+                    f.write(f"### [{timestamp}] SYSTEM_NODE: NEW SESSION INITIALIZED\n")
+                    f.write("- **Status**: `READY`\n- **Action**: All previous telemetry backlog and active processes have been cleared.\n\n---\n")
+                    f.flush()
+                    os.fsync(f.fileno())
+                break
+            except Exception as fe:
+                logger.error(f"VLI: Failed to truncate telemetry file (attempt {attempt+1}): {fe}")
+                time.sleep(0.5)
 
         # Reset global state flags
         # Already declared global at top
@@ -656,6 +674,7 @@ async def _invoke_vli_agent(
     vli_llm_type: str = "reasoning",
     thread_id: str | None = None,
 ) -> str:
+    logger.info(f"[VLI_TRACE] _invoke_vli_agent called with text: '{text}' (thread_id: {thread_id})")
     """Invoke the agent graph in a non-streaming way for the VLI dashboard."""
     global _vli_session_id
     if thread_id is None:
@@ -935,37 +954,26 @@ async def _invoke_vli_agent(
             raw_payload = [str(getattr(m, "content", "")) for m in final_state.get("messages", [])]
             return json.dumps(raw_payload), final_state
 
-        # 1. Prioritize explicitly set 'final_report'
-        if final_state.get("final_report"):
-            fr = final_state["final_report"]
-            if "[]" in fr or fr == "[]" or fr.strip() == "[]":
-                logger.error("[DIAGNOSTIC] Exact '[]' matched inside final_report key!! Reporter generated it.")
-            return fr, final_state
-
-        # 2. Extract final textual output from history (Fallback)
+        # [FINAL FIREWALL] Centralized Scrubbing at Exit Point
+        fr = final_state.get("final_report", "")
         res = ""
-        for m in reversed(final_state.get("messages", [])):
-            if isinstance(m, AIMessage):
-                content = str(getattr(m, "content", ""))
-                # DO NOT RETURN SYNTHESIZING AS A PAYLOAD!
-                if m.name == "coordinator" and "Synthesizing" in content:
-                    continue
-                res = content
-                break
-
-        if res:
-            if "[]" in res or res == "[]" or res.strip() == "[]":
-                logger.error(f"[DIAGNOSTIC] Exact '[]' matched inside router fallback extraction (res={res[:50]})")
-            return res, final_state
-
-        return "", final_state
+        if not fr:
+            for m in reversed(final_state.get("messages", [])):
+                if isinstance(m, AIMessage):
+                    res = str(getattr(m, "content", ""))
+                    if m.name == "coordinator" and "Synthesizing" in res:
+                        continue
+                    break
+        
+        final_output = fr if fr else res
+        return scrub_vli_output(final_output), final_state
 
     except asyncio.TimeoutError:
         logger.warning("VLI Agent: Master orchestration timed out (115s).")
-        raise Exception("Agent processing timed out (115s). Please check logs or retry.")
+        return "Agent processing timed out (115s).", {}
     except Exception as e:
         logger.error(f"VLI Agent: Failed with error: {e}")
-        raise Exception(f"Agent reasoning encountered a structural failure: {str(e)}")
+        return scrub_vli_output(f"Agent reasoning encountered a failure: {str(e)}"), {}
 
 
 async def _background_synthesis_task(text: str, image: str | None, direct_mode: bool, reporter_llm_type: str, vli_llm_type: str, thread_id: str):

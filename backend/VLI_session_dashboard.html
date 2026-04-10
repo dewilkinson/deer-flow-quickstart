@@ -380,10 +380,10 @@
         .direct-mode-toggle.off .label { color: var(--ruby-red); }
 
         /* --- ANALYSIS DOCUMENT VIEWER --- */
-        .analysis-report { flex: 1; font-family: 'Inter', sans-serif; font-size: 15px; color: var(--text-primary); line-height: 2.0; padding: 10px; font-weight: 400; }
-        .analysis-report p { margin-bottom: 22px; }
-        .analysis-report ul, .analysis-report ol { margin-bottom: 22px; margin-left: 20px; }
-        .analysis-report li { margin-bottom: 12px; }
+        .analysis-report { flex: 1; font-family: 'Inter', sans-serif; font-size: 15px; color: var(--text-primary); line-height: 1.35; padding: 18px; font-weight: 400; text-rendering: optimizeLegibility; }
+        .analysis-report p { margin-bottom: 16px; text-align: justify; hyphens: auto; }
+        .analysis-report ul, .analysis-report ol { margin-bottom: 20px; margin-left: 20px; }
+        .analysis-report li { margin-bottom: 10px; text-align: justify; }
         .analysis-report h1, .analysis-report h2, .analysis-report h3 { 
             color: var(--emerald-green); 
             font-family: 'Outfit', sans-serif; 
@@ -480,7 +480,7 @@
                     <span class="live-badge" id="conn-status" style="margin-left:5px; background: rgba(139, 148, 158, 0.1); color: var(--text-muted);">SYNCHRONIZING...</span>
                 </div>
                 <div style="display:flex; align-items:center; gap:12px;">
-                    <div id="async-mode-btn" class="direct-mode-toggle off" onclick="toggleAsyncMode()" title="Toggle Background Deep Synthesis">
+                    <div id="async-mode-btn" class="direct-mode-toggle off" onclick="toggleAsyncMode()" title="Toggle Background Deep Synthesis" style="display: none;">
                         <div class="dot"></div>
                         <span class="label">ASYNC REPORT: OFF</span>
                     </div>
@@ -527,12 +527,7 @@
 
     <script>
         let refreshCountdown = 60;
-        let isProcessing = false;
-        let directModeStatus = true;
-
         async function resetVLI() {
-            if (!confirm("Are you sure you want to HARD RESET the VLI session? This will terminate all active agent jobs.")) return;
-            
             const rtBtn = document.getElementById('rt-btn');
             rtBtn.style.color = 'var(--ruby-red)';
             rtBtn.innerText = '--';
@@ -541,9 +536,11 @@
                 const response = await fetch('/api/vli/reset', { method: 'POST' });
                 if (response.ok) {
                     document.getElementById('telemetry-body').innerHTML = '<div class="log-entry">SYSTEM_NODE: RESET SIGNAL SENT SUCCESSFULLY.</div>';
-                    document.getElementById('chat-messages').innerHTML = '<div class="msg msg-ai"><strong>VLI</strong> session reset. Auditor context cleared.</div>';
-                    // Trigger an immediate poll to show the "NEW SESSION INITIALIZED" entry
-                    fetchTelemetry();
+                    document.getElementById('telemetry-body').dataset.lastContent = ""; // Reset cache
+                    document.getElementById('chat-messages').innerHTML = '';
+                    document.getElementById('analysis-report-viewer').innerHTML = '<div style="display: flex; height: 100%; align-items: center; justify-content: center; color: var(--text-muted); font-family: Outfit; font-weight: 200; letter-spacing: 2px;">VLI_REPORT_STANDBY</div>';
+                    document.getElementById('analysis-report-viewer').dataset.lastReport = ""; 
+                    poll();
                 }
             } catch (err) {
                 console.error("VLI Reset Error:", err);
@@ -554,6 +551,7 @@
                 }, 1000);
             }
         }
+
         let directMode = false;
         
         const sessionArtifacts = {};
@@ -629,6 +627,14 @@
             }
         }
 
+        // [INTEGRITY] Backend firewall handles scrubbing. Client observer deactivated for performance.
+        /*
+        const integrityObserver = new MutationObserver((mutations) => {
+            ...
+        });
+        integrityObserver.observe(document.body, { childList: true, subtree: true });
+        */
+
         function updateCountdown() {
             refreshCountdown--;
             if (refreshCountdown < 0) refreshCountdown = 0;
@@ -637,12 +643,15 @@
         setInterval(updateCountdown, 1000);
 
         let isPolling = false;
+        let isProcessing = false;
         async function poll() {
             if (isPolling) return;
+            console.log("[VLI_TRACE] " + new Date().toLocaleTimeString() + " - Starting poll check...");
             isPolling = true;
             try {
                 const res = await fetch('/api/vli/active-state');
                 const data = await res.json();
+                if (window.VLI_DEBUG) console.log("[VLI_TRACE] " + new Date().toLocaleTimeString() + " - Poll data received successfully.");
                 if (data.error) throw new Error(data.error);
 
                 document.getElementById('conn-status').innerText = "VLI ONLINE";
@@ -683,19 +692,31 @@
                 // Optimized Update: Only parse and update if content changed
                 const newTelemetry = data.telemetry_tail || "";
                 if (tBody.dataset.lastContent !== newTelemetry) {
-                    tBody.innerHTML = marked.parse(newTelemetry);
-                    tBody.dataset.lastContent = newTelemetry;
+                    // [SECURITY] Client-Side Integrity Filter
+                    let safeTelemetry = newTelemetry;
+                    const leakKeywords = ["# SECURITY OVERRIDE", "APEX 500 SYSTEM", "USER IDENTITY: DAVE", "OPERATIONAL MANDATE"];
+                    if (leakKeywords.some(k => safeTelemetry.toUpperCase().includes(k))) {
+                         safeTelemetry = "**⚠️ [VLI_MONITOR]: TECHNICAL STATE LEAKAGE SUPPRESSED.**";
+                    }
+                    tBody.innerHTML = marked.parse(safeTelemetry);
+                    tBody.dataset.lastContent = safeTelemetry;
                     
                     if (wasAtBottom) {
                         logContainer.scrollTo({ top: logContainer.scrollHeight, behavior: 'smooth' });
                     }
                 }
-
-                // 4. Background Async Report Injection
-                if (data.async_report && data.async_report.length > 50) {
-                    const reportViewer = document.getElementById('analysis-report-viewer');
-                    if (reportViewer.dataset.lastReport !== data.async_report) {
-                        reportViewer.innerHTML = `<div class="analysis-report">${applyStatusFormatting(marked.parse(data.async_report))}</div>`;
+                // 3. Reports
+                const reportViewer = document.getElementById('analysis-report-viewer');
+                if (data.async_report && reportViewer.dataset.lastReport !== data.async_report) {
+                    if (window.VLI_DEBUG) console.log("[VLI_TRACE] " + new Date().toLocaleTimeString() + " - Updating async report window...");
+                    // [SECURITY] Client-Side Integrity Filter for Reports
+                    let safeReport = data.async_report;
+                    const leakKeywords = ["# SECURITY OVERRIDE", "APEX 500 SYSTEM", "USER IDENTITY: DAVE", "OPERATIONAL MANDATE"];
+                    if (leakKeywords.some(k => safeReport.toUpperCase().includes(k))) {
+                        // Skip updating the persistent report window for short fallback notices
+                        reportViewer.dataset.lastReport = data.async_report;
+                    } else {
+                        reportViewer.innerHTML = `<div class="analysis-report">${applyStatusFormatting(marked.parse(safeReport))}</div>`;
                         reportViewer.dataset.lastReport = data.async_report;
                         reportViewer.scrollTop = 0;
                         try {
@@ -707,11 +728,11 @@
                                     {left: '\\[', right: '\\]', display: true}
                                 ]
                             });
-                        } catch(e) {}
+                        } catch(e) { console.error("KaTeX Report Error:", e); }
                     }
                 }
 
-                // 3. Connectivity Status
+                // 4. Connectivity Status
                 const statusBadge = document.getElementById('conn-status');
                 statusBadge.innerText = "ONLINE";
                 statusBadge.style.color = "var(--emerald-green)";
@@ -824,6 +845,7 @@
                     requestText = text.replace(/--raw/ig, "").trim();
                 }
 
+                console.log("[VLI_TRACE] " + new Date().toLocaleTimeString() + " - Submitting command to backend: " + requestText);
                 const res = await fetch('/api/vli/action-plan', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
@@ -835,6 +857,7 @@
                     })
                 });
                 const data = await res.json();
+                console.log("[VLI_TRACE] " + new Date().toLocaleTimeString() + " - Command response received.");
                 
                 if (isProcessing) {
                     const aiMsg = document.createElement('div');
@@ -852,10 +875,48 @@
                             aiMsg.innerHTML = `<strong>[HEADLESS DATA ENGINE - RAW JSON]:</strong> Data array returned successfully.`;
                         }
                     } else {
-                        // [NEW] Mirror long-form analysis to the persistent Report Card
-                        if (responseText.length > 50 || responseText.includes('###')) {
+                        const leakKeywords = ["# SECURITY OVERRIDE", "APEX 500 SYSTEM", "USER IDENTITY: DAVE", "OPERATIONAL MANDATE", "QUOTA LIMIT", "RESOURCE_EXHAUSTED", "RATE_LIMIT"];
+                        let cleanText = responseText;
+                        const isFallback = leakKeywords.some(k => cleanText.toUpperCase().includes(k)) || cleanText.toUpperCase().includes("INSTITUTIONAL PROCESSING RECOVERY") || cleanText.includes("Integrity check failed");
+                        
+                        // [SECURITY] Catch Fallback Message
+                        if (isFallback) {
+                            const warnMsg = document.createElement('div');
+                            warnMsg.className = 'msg msg-ai';
+                            warnMsg.style.borderLeftColor = '#ff9d00';
+                            let matchedModel = "Gemini 3 Pro";
+                            const match = cleanText.match(/Quota limit reached for ([^.]+)/i);
+                            if (match) {
+                                matchedModel = match[1].replace(/[()]/g, '').trim();
+                            } else if (cleanText.includes("basic") || cleanText.includes("flash")) {
+                                matchedModel = "Gemini Flash";
+                            }
+                            warnMsg.innerHTML = `<span style="color: #ff9d00; font-weight: normal;">⚠️ You have reached your quota limit for <span style="color: white; font-family: 'Courier New', Courier, monospace; font-weight: bold;">${matchedModel}</span>. Please add more credits to continue.</span>`;
+                            msgBox.appendChild(warnMsg);
+                            
+                            // Strip internal fallback wrapper from the response if present 
+                            const preIdx = cleanText.lastIndexOf("Falling back to");
+                            if (preIdx !== -1) {
+                                let startAnalysis = cleanText.indexOf("\n", preIdx);
+                                if (startAnalysis !== -1) {
+                                    cleanText = cleanText.substring(startAnalysis).trim();
+                                }
+                            }
+                            
+                            // Stop if it was an unrecoverable leak
+                            if (leakKeywords.some(k => cleanText.toUpperCase().includes(k)) || cleanText.length < 10) {
+                                msgBox.scrollTop = msgBox.scrollHeight;
+                                return;
+                            }
+                            
+                            // [NEW] Inject persistent warning at the top of the generated report
+                            cleanText = `<div style="border-left: 4px solid var(--amber-gold); padding: 12px 16px; margin-bottom: 20px; background: rgba(210, 153, 34, 0.08); border-radius: 4px;"><span style="color: var(--amber-gold); font-weight: normal;">⚠️ <strong>Fallback Mode Active:</strong> Due to quota limits, this analysis was generated by a lower-tier model. The accuracy and depth of results may be compromised.</span></div>\n\n` + cleanText;
+                        }
+
+                        if (cleanText.length > 50 || cleanText.includes('###')) {
+                            // [NEW] Mirror long-form analysis to the persistent Report Card
                             const reportViewer = document.getElementById('analysis-report-viewer');
-                            reportViewer.innerHTML = `<div class="analysis-report">${applyStatusFormatting(marked.parse(responseText))}</div>`;
+                            reportViewer.innerHTML = `<div class="analysis-report">${applyStatusFormatting(marked.parse(cleanText))}</div>`;
                             reportViewer.scrollTop = 0;
                             
                             try {
@@ -871,7 +932,7 @@
                             
                             // Determine file suffix
                             let suffix = "md";
-                            const txtTrim = responseText.trim();
+                            const txtTrim = cleanText.trim();
                             if (txtTrim.startsWith('{') || txtTrim.startsWith('[')) { suffix = "json"; }
                             else if (txtTrim.toLowerCase().includes('<html') || txtTrim.toLowerCase().includes('<div')) { suffix = "html"; }
                             
@@ -885,11 +946,11 @@
                             
                             // Generate Blob for download link
                             const mimeType = suffix === 'json' ? 'application/json' : suffix === 'html' ? 'text/html' : 'text/markdown';
-                            const blob = new Blob([responseText], {type: mimeType});
+                            const blob = new Blob([cleanText], {type: mimeType});
                             const url = URL.createObjectURL(blob);
                             
                             const artifactId = 'artifact_' + Date.now() + Math.floor(Math.random()*1000);
-                            sessionArtifacts[artifactId] = responseText;
+                            sessionArtifacts[artifactId] = cleanText;
                             
                             // Keep Chat completely clean with just the file link redirect
                             aiMsg.innerHTML = `<strong>Analysis posted to Reports window.</strong><br>Returned: <a href="${url}" download="${filename}" onclick="renderArtifactToReport(event, '${artifactId}')" ondblclick="openNativeNotepad('${filename}')" style="color: #e5e7eb; font-weight: 700; text-decoration: underline; background: rgba(128, 128, 128, 0.25); padding: 4px 8px; border-radius: 4px; display: inline-block; margin-top: 10px; cursor: pointer;">${filename}</a>`;

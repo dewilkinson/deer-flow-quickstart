@@ -5,6 +5,7 @@
 
 import logging
 from typing import Any
+import os
 
 from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableConfig
@@ -29,10 +30,8 @@ _SHARED_RESOURCE_CONTEXT = ORCHESTRATOR_CONTEXT
 # 3. Global context: Shared across all agent types
 _GLOBAL_RESOURCE_CONTEXT = GLOBAL_CONTEXT
 
-import os
 
-
-def coordinator_node(state: State, config: RunnableConfig) -> dict[str, Any]:
+async def coordinator_node(state: State, config: RunnableConfig) -> dict[str, Any]:
     """Coordinator node - Detailed multi-step planning."""
     logger.info("VLI Coordinator is planning execution.")
     analyst_keywords = ", ".join(get_analyst_keywords())
@@ -46,19 +45,15 @@ def coordinator_node(state: State, config: RunnableConfig) -> dict[str, Any]:
                 GLOBAL_CONTEXT["daily_action_plan"] = f.read()
 
     # 1. Setup LLM and Tools
-    llm = get_llm_by_type(AGENT_LLM_MAP.get("coordinator", "reasoning"))
-    from .common_vli import get_orchestrator_tools
+    from .common_vli import get_orchestrator_tools, _run_node_with_tiered_fallback
 
     tools = get_orchestrator_tools(config)
-    llm_with_tools = llm.bind_tools(tools)
-    structured_llm = llm_with_tools.with_structured_output(Plan)
 
     # 2. Check if we are returning from an agent (Turn Detection)
     current_plan = state.get("current_plan")
     steps_completed = state.get("steps_completed", 0)
 
     # NEW: More robust check for agent turn completion.
-    # If the most recent message is an AIMessage with a name that isn't coordinator/parser, a step was likely finished.
     last_msgs = state["messages"][-3:] if state.get("messages") else []
     from_agent = False
     last_agent_name = None
@@ -67,7 +62,6 @@ def coordinator_node(state: State, config: RunnableConfig) -> dict[str, Any]:
         last_msg = last_msgs[-1]
         msg_name = getattr(last_msg, "name", None)
 
-        # If the message is explicitly named by one of our nodes
         if msg_name and msg_name not in ["coordinator", "vli_coordinator", "vli_parser", "assistant", "Assistant"]:
             from_agent = True
             last_agent_name = msg_name
@@ -89,65 +83,37 @@ def coordinator_node(state: State, config: RunnableConfig) -> dict[str, Any]:
     except Exception as e:
         logger.debug(f"Could not read global ticker cache for coordinator: {e}")
 
-    from src.config.configuration import Configuration
-
-    configurable = Configuration.from_runnable_config(config)
-    dev_mode = getattr(configurable, "developer_mode", False)
-
-    from src.services.macro_registry import macro_registry
-
-    macro_labels = ", ".join(list(macro_registry.get_macros().keys()))
-
-    state_for_prompt = {
-        **state,
-        "DEVELOPER_MODE": str(dev_mode).lower(),
+    state_for_prompt = state.copy()
+    state_for_prompt.update({
         "ANALYST_KEYWORDS": analyst_keywords,
-        "MACRO_INDICATORS": macro_labels,
+        "MACRO_INDICATORS": ", ".join(list(GLOBAL_CONTEXT.keys())),
         "CACHED_TICKERS": ", ".join(sorted(list(cached_tickers_set))) if cached_tickers_set else "None (Data Store Empty)",
         "DAILY_ACTION_PLAN": GLOBAL_CONTEXT.get("daily_action_plan", "No daily instructions provided."),
-    }
-
+        "metadata": {
+            "analyst_keywords": analyst_keywords,
+            "cached_tickers": list(cached_tickers_set),
+            "macro_labels": ", ".join(list(GLOBAL_CONTEXT.keys())),
+        }
+    })
+    
     messages = apply_prompt_template("coordinator", state_for_prompt)
     
-    # [RELIABILITY: FALLBACK] Execute with retry and fallback
-    from src.config.agents import AGENT_LLM_MAP
-    from src.graph.nodes.common_vli import AsyncRetrying, wait_exponential, stop_after_attempt, retry_if_exception
-    import asyncio
-
-    async def _invoke_coordinator():
-        try:
-            # First attempt with configured tier
-            async for attempt in AsyncRetrying(
-                wait=wait_exponential(multiplier=2, min=4, max=60), stop=stop_after_attempt(3), retry=retry_if_exception(lambda e: "RESOURCE_EXHAUSTED" in str(e) or "429" in str(e)), reraise=True
-            ):
-                with attempt:
-                    return structured_llm.invoke(messages)
-        except Exception as e:
-            if ("RESOURCE_EXHAUSTED" in str(e) or "429" in str(e)) and AGENT_LLM_MAP.get("coordinator") != "basic":
-                logger.warning(f"\n\n**QUOTA EXHAUSTED**: COORDINATOR hit Gemini 3.1 Pro limits.")
-                logger.warning(f"**FALLING BACK TO GEMINI 3 FLASH** for the COORDINATOR for the remainder of this session.\n\n")
-                
-                # Update global map
-                AGENT_LLM_MAP["coordinator"] = "basic"
-                
-                # Re-initialize with basic tier
-                fallback_llm = get_llm_by_type("basic")
-                fallback_structured = fallback_llm.bind_tools(tools).with_structured_output(Plan)
-                return fallback_structured.invoke(messages)
-            raise e
-
-    # Coordinator node is currently sync, but we want to support async retries if possible
-    # For now, we use a helper to run the async block if we are in an async context, or run it sync
+    # [RELIABILITY: FALLBACK] Execute with tiered fallback
     try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            # Since coordinator_node is called as sync from langgraph (usually), but the graph might be async
-            # We use a future to get the result
-            plan_obj = asyncio.run_coroutine_threadsafe(_invoke_coordinator(), loop).result()
-        else:
-            plan_obj = loop.run_until_complete(_invoke_coordinator())
-    except RuntimeError:
-        plan_obj = asyncio.run(_invoke_coordinator())
+        plan_obj, fb_msgs = await _run_node_with_tiered_fallback("coordinator", state, config, tools=tools, is_structured=True, structured_schema=Plan, messages=messages)
+        if getattr(plan_obj, "name", None) == "system_fallback_error":
+             return {"final_report": str(plan_obj.content), "messages": fb_msgs + [plan_obj], "steps_completed": 999}
+    except Exception as e:
+        logger.error(f"[COORD] Structural Parsing Failure: {e}. Falling back to default analyst plan.")
+        fb_msgs = []
+        from src.prompts.planner_model import Step, StepType
+        plan_obj = Plan(
+            locale="en-US",
+            has_enough_context=False,
+            thought=f"Structural Failure Recovery: {str(e)[:100]}",
+            title="Institutional Audit (Recovery)",
+            steps=[Step(need_search=False, title="Technical Recovery Analysis", description="Perform core analysis", step_type=StepType.ANALYST)],
+        )
 
     # [CONTEXT POISONING GUARDRAIL]
     if (not plan_obj.steps or plan_obj.has_enough_context) and not state.get("direct_mode", False):
@@ -160,7 +126,7 @@ def coordinator_node(state: State, config: RunnableConfig) -> dict[str, Any]:
             from src.prompts.planner_model import Step, StepType
 
             user_context = state.get("messages", [])[-1].content if state.get("messages") else "the target ticker"
-            plan_obj.steps = [Step(need_search=False, title="Forced Technical Execution", description=f"Run deep structural analysis to gather empirical data for user request: {user_context}", step_type=StepType.SMC_ANALYST)]
+            plan_obj.steps = [Step(need_search=False, title="Forced Technical Execution", description=f"Run deep structural analysis for: {user_context}", step_type=StepType.SMC_ANALYST)]
 
     logger.info(f"[COORD] Plan formulated: {plan_obj.title}. Ready to execute {len(plan_obj.steps)} steps.")
-    return {"current_plan": plan_obj, "steps_completed": steps_completed}
+    return {"current_plan": plan_obj, "steps_completed": steps_completed, "messages": fb_msgs}

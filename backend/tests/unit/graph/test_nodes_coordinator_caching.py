@@ -14,21 +14,23 @@ def clean_global_context():
     GLOBAL_CONTEXT.clear()
 
 
-def test_coordinator_cache_injection_empty():
+@pytest.mark.asyncio
+async def test_coordinator_cache_injection_empty():
     """Verify coordinator injects 'None (Data Store Empty)' when cache is empty."""
     mock_state = {"messages": []}
     mock_config = MagicMock()
 
     with patch("src.graph.nodes.coordinator.apply_prompt_template") as mock_apply:
         mock_apply.return_value = "Mocked output"
-        coordinator_node(mock_state, mock_config)
+        await coordinator_node(mock_state, mock_config)
 
         args, _ = mock_apply.call_args
         state_passed = args[1]
         assert state_passed["CACHED_TICKERS"] == "None (Data Store Empty)"
 
 
-def test_coordinator_cache_injection_populated():
+@pytest.mark.asyncio
+async def test_coordinator_cache_injection_populated():
     """Verify coordinator injects sorted, comma-separated tickers when cache is populated."""
     GLOBAL_CONTEXT["cached_tickers"] = {"NVDA", "AMD"}
 
@@ -37,7 +39,7 @@ def test_coordinator_cache_injection_populated():
 
     with patch("src.graph.nodes.coordinator.apply_prompt_template") as mock_apply:
         mock_apply.return_value = "Mocked output"
-        coordinator_node(mock_state, mock_config)
+        await coordinator_node(mock_state, mock_config)
 
         args, _ = mock_apply.call_args
         state_passed = args[1]

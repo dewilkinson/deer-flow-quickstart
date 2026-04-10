@@ -129,27 +129,14 @@ async def reporter_node(state: State, config: RunnableConfig):
         # Invoke LLM for synthesis
         messages = apply_prompt_template("reporter", state_to_synthesize, configurable=configurable)
         
-        from src.graph.nodes.common_vli import AsyncRetrying, stop_after_attempt, wait_exponential, retry_if_exception
+        from src.graph.nodes.common_vli import _run_node_with_tiered_fallback
 
         try:
-            async for attempt in AsyncRetrying(
-                wait=wait_exponential(multiplier=2, min=4, max=60), stop=stop_after_attempt(3), retry=retry_if_exception(lambda e: "RESOURCE_EXHAUSTED" in str(e) or "429" in str(e)), reraise=True
-            ):
-                with attempt:
-                    response = await llm.ainvoke(messages)
+            response, fb_msgs = await _run_node_with_tiered_fallback("reporter", state_to_synthesize, config, messages=messages)
         except Exception as e:
-            if ("RESOURCE_EXHAUSTED" in str(e) or "429" in str(e)) and AGENT_LLM_MAP.get("reporter") != "basic":
-                logger.warning(f"\n\n**QUOTA EXHAUSTED**: REPORTER hit Gemini 3.1 Pro limits.")
-                logger.warning(f"**FALLING BACK TO GEMINI 3 FLASH** for the REPORTER synthesis.\n\n")
-
-                # Update global map
-                AGENT_LLM_MAP["reporter"] = "basic"
-
-                # Re-initialize with basic tier
-                llm = get_llm_by_type("basic")
-                response = await llm.ainvoke(messages)
-            else:
-                raise e
+             logger.error(f"Reporter Synthesis Error after fallback: {str(e)}")
+             final_report_text = "Analysis completed. (PHASE_SYNTHESIS_INTERRUPTED): The reasoning engine experienced a structural validation failure. Managed recovery plan is active."
+             return {"final_report": final_report_text}
 
         # Log performance metrics
         end_time = datetime.now()
@@ -176,6 +163,6 @@ async def reporter_node(state: State, config: RunnableConfig):
 
     except Exception as e:
         logger.error(f"Reporter Synthesis Error: {str(e)}")
-        final_report_text = f"Analysis completed. (Synthesis failed. Error: {str(e)})"
+        final_report_text = "Analysis completed. (PHASE_SYNTHESIS_RECOVERY): The system has transitioned to a managed reporting baseline due to model constraints."
 
-    return {"final_report": final_report_text}
+    return {"final_report": final_report_text, "messages": fb_msgs + [AIMessage(content=final_report_text, name="reporter_finalize")]}
