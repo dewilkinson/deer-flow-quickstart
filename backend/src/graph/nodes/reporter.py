@@ -128,7 +128,28 @@ async def reporter_node(state: State, config: RunnableConfig):
 
         # Invoke LLM for synthesis
         messages = apply_prompt_template("reporter", state_to_synthesize, configurable=configurable)
-        response = await llm.ainvoke(messages)
+        
+        from src.graph.nodes.common_vli import AsyncRetrying, stop_after_attempt, wait_exponential, retry_if_exception
+
+        try:
+            async for attempt in AsyncRetrying(
+                wait=wait_exponential(multiplier=2, min=4, max=60), stop=stop_after_attempt(3), retry=retry_if_exception(lambda e: "RESOURCE_EXHAUSTED" in str(e) or "429" in str(e)), reraise=True
+            ):
+                with attempt:
+                    response = await llm.ainvoke(messages)
+        except Exception as e:
+            if ("RESOURCE_EXHAUSTED" in str(e) or "429" in str(e)) and AGENT_LLM_MAP.get("reporter") != "basic":
+                logger.warning(f"\n\n**QUOTA EXHAUSTED**: REPORTER hit Gemini 3.1 Pro limits.")
+                logger.warning(f"**FALLING BACK TO GEMINI 3 FLASH** for the REPORTER synthesis.\n\n")
+
+                # Update global map
+                AGENT_LLM_MAP["reporter"] = "basic"
+
+                # Re-initialize with basic tier
+                llm = get_llm_by_type("basic")
+                response = await llm.ainvoke(messages)
+            else:
+                raise e
 
         # Log performance metrics
         end_time = datetime.now()

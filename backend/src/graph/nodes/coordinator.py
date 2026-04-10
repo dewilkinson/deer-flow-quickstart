@@ -108,7 +108,46 @@ def coordinator_node(state: State, config: RunnableConfig) -> dict[str, Any]:
     }
 
     messages = apply_prompt_template("coordinator", state_for_prompt)
-    plan_obj = structured_llm.invoke(messages)
+    
+    # [RELIABILITY: FALLBACK] Execute with retry and fallback
+    from src.config.agents import AGENT_LLM_MAP
+    from src.graph.nodes.common_vli import AsyncRetrying, wait_exponential, stop_after_attempt, retry_if_exception
+    import asyncio
+
+    async def _invoke_coordinator():
+        try:
+            # First attempt with configured tier
+            async for attempt in AsyncRetrying(
+                wait=wait_exponential(multiplier=2, min=4, max=60), stop=stop_after_attempt(3), retry=retry_if_exception(lambda e: "RESOURCE_EXHAUSTED" in str(e) or "429" in str(e)), reraise=True
+            ):
+                with attempt:
+                    return structured_llm.invoke(messages)
+        except Exception as e:
+            if ("RESOURCE_EXHAUSTED" in str(e) or "429" in str(e)) and AGENT_LLM_MAP.get("coordinator") != "basic":
+                logger.warning(f"\n\n**QUOTA EXHAUSTED**: COORDINATOR hit Gemini 3.1 Pro limits.")
+                logger.warning(f"**FALLING BACK TO GEMINI 3 FLASH** for the COORDINATOR for the remainder of this session.\n\n")
+                
+                # Update global map
+                AGENT_LLM_MAP["coordinator"] = "basic"
+                
+                # Re-initialize with basic tier
+                fallback_llm = get_llm_by_type("basic")
+                fallback_structured = fallback_llm.bind_tools(tools).with_structured_output(Plan)
+                return fallback_structured.invoke(messages)
+            raise e
+
+    # Coordinator node is currently sync, but we want to support async retries if possible
+    # For now, we use a helper to run the async block if we are in an async context, or run it sync
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            # Since coordinator_node is called as sync from langgraph (usually), but the graph might be async
+            # We use a future to get the result
+            plan_obj = asyncio.run_coroutine_threadsafe(_invoke_coordinator(), loop).result()
+        else:
+            plan_obj = loop.run_until_complete(_invoke_coordinator())
+    except RuntimeError:
+        plan_obj = asyncio.run(_invoke_coordinator())
 
     # [CONTEXT POISONING GUARDRAIL]
     if (not plan_obj.steps or plan_obj.has_enough_context) and not state.get("direct_mode", False):

@@ -154,7 +154,28 @@ async def vli_node(
             pass
 
     # First Invoke to check for immediate tool calls
-    response = await llm_with_tools.ainvoke(messages)
+    from src.graph.nodes.common_vli import AsyncRetrying, stop_after_attempt, wait_exponential, retry_if_exception
+
+    try:
+        async for attempt in AsyncRetrying(
+            wait=wait_exponential(multiplier=2, min=4, max=60), stop=stop_after_attempt(3), retry=retry_if_exception(lambda e: "RESOURCE_EXHAUSTED" in str(e) or "429" in str(e)), reraise=True
+        ):
+            with attempt:
+                response = await llm_with_tools.ainvoke(messages)
+    except Exception as e:
+        if ("RESOURCE_EXHAUSTED" in str(e) or "429" in str(e)) and AGENT_LLM_MAP.get("coordinator") != "basic":
+            logger.warning(f"\n\n**QUOTA EXHAUSTED**: VLI SPINE hit Gemini 3.1 Pro limits.")
+            logger.warning(f"**FALLING BACK TO GEMINI 3 FLASH** for the VLI SPINE for the remainder of this session.\n\n")
+
+            # Update global map
+            AGENT_LLM_MAP["coordinator"] = "basic"
+
+            # Re-initialize with basic tier
+            llm = get_llm_by_type("basic")
+            llm_with_tools = llm.bind_tools(tools)
+            response = await llm_with_tools.ainvoke(messages)
+        else:
+            raise e
 
     # Fast-Path Check
     tech_keywords = ["analyze", "analysis", "smc", "sortino", "sharpe", "report"]
@@ -181,7 +202,16 @@ async def vli_node(
             + t_msgs
             + [HumanMessage(content="Synthesize these results. If this is a system command (like cache invalidation/reset), respond ONLY with a 1-sentence execution status, warning, or error. No conversational filler or persona.")]
         )
-        final_synth = await llm.ainvoke(synth_messages)
+        
+        try:
+            async for attempt in AsyncRetrying(
+                wait=wait_exponential(multiplier=2, min=4, max=60), stop=stop_after_attempt(3), retry=retry_if_exception(lambda e: "RESOURCE_EXHAUSTED" in str(e) or "429" in str(e)), reraise=True
+            ):
+                with attempt:
+                    final_synth = await llm.ainvoke(synth_messages)
+        except Exception:
+            # If synthesis fails even after fallback logic applied to 'llm' above, try one last check
+            final_synth = await llm.ainvoke(synth_messages)
 
         return Command(update={"final_report": str(final_synth.content), "messages": [response] + t_msgs + [AIMessage(content=str(final_synth.content), name="vli")]}, goto="__end__")
 
@@ -191,17 +221,33 @@ async def vli_node(
     messages_coord = apply_prompt_template("coordinator", state_for_prompt)
 
     try:
-        plan_obj = await structured_llm.ainvoke(messages_coord)
+        async for attempt in AsyncRetrying(
+            wait=wait_exponential(multiplier=2, min=4, max=60), stop=stop_after_attempt(3), retry=retry_if_exception(lambda e: "RESOURCE_EXHAUSTED" in str(e) or "429" in str(e)), reraise=True
+        ):
+            with attempt:
+                plan_obj = await structured_llm.ainvoke(messages_coord)
     except Exception as e:
-        logger.error(f"[VLI_SPINE] Structural Parsing Failure: {e}. Falling back to default analyst plan.")
-        # [RECOVERY] If JSON schema fails, force a safe default technical plan
-        plan_obj = Plan(
-            locale="en-US",
-            has_enough_context=False,
-            thought=f"Structural Failure Recovery: {str(e)[:100]}",
-            title="Institutional Audit (Recovery)",
-            steps=[Step(need_search=False, title="Technical Recovery Analysis", description=f"Perform core analysis for: {user_query}", step_type=StepType.ANALYST)],
-        )
+        if ("RESOURCE_EXHAUSTED" in str(e) or "429" in str(e)) and AGENT_LLM_MAP.get("coordinator") != "basic":
+            logger.warning(f"\n\n**QUOTA EXHAUSTED**: VLI SPINE hit Gemini 3.1 Pro limits during plan generation.")
+            logger.warning(f"**FALLING BACK TO GEMINI 3 FLASH** for the VLI SPINE planning.\n\n")
+
+            # Update global map
+            AGENT_LLM_MAP["coordinator"] = "basic"
+
+            # Re-initialize with basic tier
+            llm = get_llm_by_type("basic")
+            fallback_structured = llm.with_structured_output(Plan)
+            plan_obj = await fallback_structured.ainvoke(messages_coord)
+        else:
+            logger.error(f"[VLI_SPINE] Structural Parsing Failure: {e}. Falling back to default analyst plan.")
+            # [RECOVERY] If JSON schema fails, force a safe default technical plan
+            plan_obj = Plan(
+                locale="en-US",
+                has_enough_context=False,
+                thought=f"Structural Failure Recovery: {str(e)[:100]}",
+                title="Institutional Audit (Recovery)",
+                steps=[Step(need_search=False, title="Technical Recovery Analysis", description=f"Perform core analysis for: {user_query}", step_type=StepType.ANALYST)],
+            )
 
     # Guardrail: Force technical nodes if the model tries to answer deep questions directly
     if (not plan_obj.steps or plan_obj.has_enough_context) and is_technical:

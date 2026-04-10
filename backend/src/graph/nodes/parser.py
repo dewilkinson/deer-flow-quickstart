@@ -82,7 +82,28 @@ async def parser_node(state: State, config: RunnableConfig) -> Command[Literal["
 
     # 1. First Pass: Check for direct tool-call shortcuts (Fast-Path)
     # We use a standard invoke first to see if it wants to use tools immediately
-    response = await llm_with_tools.ainvoke(messages)
+    from src.graph.nodes.common_vli import AsyncRetrying, stop_after_attempt, wait_exponential, retry_if_exception
+
+    try:
+        async for attempt in AsyncRetrying(
+            wait=wait_exponential(multiplier=2, min=4, max=60), stop=stop_after_attempt(3), retry=retry_if_exception(lambda e: "RESOURCE_EXHAUSTED" in str(e) or "429" in str(e)), reraise=True
+        ):
+            with attempt:
+                response = await llm_with_tools.ainvoke(messages)
+    except Exception as e:
+        if ("RESOURCE_EXHAUSTED" in str(e) or "429" in str(e)) and AGENT_LLM_MAP.get("parser") != "basic":
+            logger.warning(f"\n\n**QUOTA EXHAUSTED**: PARSER hit Gemini 3.1 Pro limits.")
+            logger.warning(f"**FALLING BACK TO GEMINI 3 FLASH** for the PARSER for the remainder of this session.\n\n")
+
+            # Update global map
+            AGENT_LLM_MAP["parser"] = "basic"
+
+            # Re-initialize with basic tier
+            llm = get_llm_by_type("basic")
+            llm_with_tools = llm.bind_tools(tools, strict=True) if hasattr(llm, "bind_tools") else llm.bind_tools(tools)
+            response = await llm_with_tools.ainvoke(messages)
+        else:
+            raise e
 
     tech_keywords = ["analyze", "analysis", "smc", "sortino", "sharpe", "report"]
     user_query_content = str(raw_messages[-1].content).lower() if raw_messages else ""
@@ -134,7 +155,27 @@ async def parser_node(state: State, config: RunnableConfig) -> Command[Literal["
 
     # 2. Regular Path: If no immediate tool call, generate a structured plan
     structured_llm = llm_with_tools.with_structured_output(Plan)
-    plan_obj = structured_llm.invoke(messages)
+    
+    try:
+        async for attempt in AsyncRetrying(
+            wait=wait_exponential(multiplier=2, min=4, max=60), stop=stop_after_attempt(3), retry=retry_if_exception(lambda e: "RESOURCE_EXHAUSTED" in str(e) or "429" in str(e)), reraise=True
+        ):
+            with attempt:
+                plan_obj = structured_llm.invoke(messages)
+    except Exception as e:
+        if ("RESOURCE_EXHAUSTED" in str(e) or "429" in str(e)) and AGENT_LLM_MAP.get("parser") != "basic":
+            logger.warning(f"\n\n**QUOTA EXHAUSTED**: PARSER hit Gemini 3.1 Pro limits during plan generation.")
+            logger.warning(f"**FALLING BACK TO GEMINI 3 FLASH** for the PARSER plans.\n\n")
+
+            # Update global map
+            AGENT_LLM_MAP["parser"] = "basic"
+
+            # Re-initialize with basic tier
+            llm = get_llm_by_type("basic")
+            fallback_structured = llm.bind_tools(tools).with_structured_output(Plan)
+            plan_obj = fallback_structured.invoke(messages)
+        else:
+            raise e
 
     if plan_obj.has_enough_context or plan_obj.direct_response:
         # [CONTEXT POISONING GUARDRAIL]

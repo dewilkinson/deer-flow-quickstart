@@ -25,6 +25,9 @@ async def _setup_and_execute_agent_step(state, config, agent_type, tools, agent_
     # 1. Diagnostic Trace: Emit a lifecycle log for the terminal (but keep progress out of persistent history)
     logger.info(f"🚀 Specialist `{agent_type.upper()}` is now executing `{agent_instructions[:50]}...` (Fast-Path bypass enabled for efficiency).")
 
+    # [RELIABILITY: FALLBACK] Check if this agent has already fallen back to Flash in this session
+    from src.config.agents import AGENT_LLM_MAP
+
     agent = create_agent_from_registry(agent_type, tools)
 
     # [PERFORMANCE AUDIT] Track execution latency for the persistent store
@@ -32,16 +35,33 @@ async def _setup_and_execute_agent_step(state, config, agent_type, tools, agent_
     try:
         # [RELIABILITY] Exponential Backoff for 429 Resource Exhausted errors
         # Gemini quotas can be tight; we wait between 4s and 60s for recovery.
-        async for attempt in AsyncRetrying(wait=wait_exponential(multiplier=2, min=4, max=60), stop=stop_after_attempt(3), retry=retry_if_exception(lambda e: "RESOURCE_EXHAUSTED" in str(e) or "429" in str(e)), reraise=True):
-            with attempt:
+        try:
+            async for attempt in AsyncRetrying(
+                wait=wait_exponential(multiplier=2, min=4, max=60), stop=stop_after_attempt(3), retry=retry_if_exception(lambda e: "RESOURCE_EXHAUSTED" in str(e) or "429" in str(e)), reraise=True
+            ):
+                with attempt:
+                    result = await agent.ainvoke(state, config)
+        except Exception as e:
+            if ("RESOURCE_EXHAUSTED" in str(e) or "429" in str(e)) and AGENT_LLM_MAP[agent_type] != "basic":
+                # [CRITICAL FALLBACK] Quota exhausted on Pro tier. Drop to Flash.
+                logger.warning(f"\n\n**QUOTA EXHAUSTED**: Agent `{agent_type.upper()}` hit Gemini 3.1 Pro limits.")
+                logger.warning(f"**FALLING BACK TO GEMINI 3 FLASH** for `{agent_type}` for the remainder of this session.\n\n")
+
+                # Update the global map so subsequent turns for this agent use Flash
+                AGENT_LLM_MAP[agent_type] = "basic"
+
+                # Re-create the agent with the new model tier
+                agent = create_agent_from_registry(agent_type, tools)
                 result = await agent.ainvoke(state, config)
+            else:
+                raise e
 
         latency = (datetime.now() - audit_start).total_seconds()
         log_vli_metric(agent_type, latency, status="pass")
     except Exception as e:
         latency = (datetime.now() - audit_start).total_seconds()
         log_vli_metric(agent_type, latency, status="fail", metadata={"error": str(e)})
-        logger.error(f"Agent `{agent_type}` failed after retries: {e}")
+        logger.error(f"Agent `{agent_type}` failed after retries and fallback attempts: {e}")
         raise e
 
     # Extract observations for the dashboard
