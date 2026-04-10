@@ -58,6 +58,7 @@ def _snapper_worker(url: str) -> str:
                     # [ANTI-ROT] Vision Token Governance (Geometrical Slicing/Thumbnailing)
                     from PIL import Image
                     import io
+
                     img = Image.open(io.BytesIO(screenshot_bytes))
                     # Clamp the resolution to 512x512 max to prevent Gemini 3 Pro Context Bloat
                     img.thumbnail((512, 512), Image.Resampling.LANCZOS)
@@ -75,7 +76,7 @@ def _snapper_worker(url: str) -> str:
         logger.info(f"Taking a snapshot of the local screen in place of {url}...")
         screenshot = ImageGrab.grab()
 
-        # [ANTI-ROT] Vision Token Governance 
+        # [ANTI-ROT] Vision Token Governance
         # Clamp massive 4K/1080p desktop dumps into 512x512 contextual vectors
         screenshot.thumbnail((512, 512), Image.Resampling.LANCZOS)
 

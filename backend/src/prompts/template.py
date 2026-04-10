@@ -101,6 +101,7 @@ def apply_prompt_template(prompt_name: str, state: AgentState, configurable: Con
                 pass
 
         from langchain_core.messages import SystemMessage
+
         full_system_prompt = f"{trader_context}{system_prompt}"
         return [SystemMessage(content=full_system_prompt)] + state["messages"]
     except Exception as e:

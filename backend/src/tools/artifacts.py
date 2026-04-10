@@ -6,6 +6,7 @@ logger = logging.getLogger(__name__)
 
 ARTIFACTS_DIR = os.path.join(os.getcwd(), "data", "artifacts")
 
+
 @tool
 async def read_session_artifact(symbol: str) -> str:
     """
@@ -13,17 +14,17 @@ async def read_session_artifact(symbol: str) -> str:
     Use this tool to reuse context instead of refetching remote data.
     """
     if not os.path.exists(ARTIFACTS_DIR):
-        return f"[ERROR] Artifacts directory does not exist yet."
+        return "[ERROR] Artifacts directory does not exist yet."
 
     symbol = symbol.upper().strip()
-    
+
     # Check JSON first
     json_path = os.path.join(ARTIFACTS_DIR, f"{symbol}.json")
     if os.path.exists(json_path):
         with open(json_path, "r", encoding="utf-8") as f:
             logger.info(f"VLI_ARTIFACT: Injecting cached JSON context for {symbol}")
             return f.read()
-            
+
     # Check MD
     md_path = os.path.join(ARTIFACTS_DIR, f"{symbol}.md")
     if os.path.exists(md_path):

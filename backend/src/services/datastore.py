@@ -13,16 +13,19 @@ from src.tools.shared_storage import history_cache, df_cache, analysis_cache, GL
 
 logger = logging.getLogger(__name__)
 
+
 @tool
 def invalidate_market_cache(ticker: str = "") -> str:
     """Invalidate the cache for a specific ticker or clear all cache if none provided."""
     return DatastoreManager.invalidate_cache(ticker)
+
 
 @tool
 def simulate_cache_volatility(force_invalid: bool = False) -> str:
     """Simulate market volatility by tweaking cache freshness or invalidating it."""
     DatastoreManager.simulate_volatility(force_invalid)
     return "Simulated cache volatility applied."
+
 
 class DatastoreManager:
     _eager_worker_task = None
@@ -36,20 +39,23 @@ class DatastoreManager:
     @classmethod
     def get_history_cache(cls) -> dict[str, Any]:
         from src.config.loader import get_bool_env
+
         if get_bool_env("VLI_CACHE_DISABLED", False):
             return {}
         return history_cache
-        
+
     @classmethod
     def get_df_cache(cls) -> dict[str, Any]:
         from src.config.loader import get_bool_env
+
         if get_bool_env("VLI_CACHE_DISABLED", False):
             return {}
         return df_cache
-        
+
     @classmethod
     def get_analysis_cache(cls) -> dict[str, Any]:
         from src.config.loader import get_bool_env
+
         if get_bool_env("VLI_CACHE_DISABLED", False):
             return {}
         return analysis_cache
@@ -58,26 +64,26 @@ class DatastoreManager:
     def invalidate_cache(cls, ticker: str = "") -> str:
         """Invalidate the cache for a specific ticker or clear all."""
         caches = [history_cache, df_cache, analysis_cache]
-        
+
         if not ticker:
             for c in caches:
                 c.clear()
             return "Datastore cache completely flushed."
-            
+
         t = ticker.upper()
-        
+
         for cache in caches:
             keys_to_delete = [k for k in list(cache.keys()) if k.startswith(f"{t}_")]
             for k in keys_to_delete:
                 del cache[k]
-        
+
         return f"Cache invalidated for {t}."
 
     @classmethod
     def simulate_volatility(cls, force_invalid: bool = False):
         """Simulate market volatility by tweaking cache freshness or invalidating it."""
         caches = [history_cache, df_cache, analysis_cache]
-        
+
         for cache in caches:
             for key in cache:
                 # Shift age back to trigger re-fetch under tests

@@ -63,6 +63,7 @@ def _get_session():
 
 
 from src.services.datastore import DatastoreManager
+
 DatastoreManager.register_fetcher(lambda tickers, period, interval: _fetch_batch_history(tickers, period, interval))
 
 
@@ -179,15 +180,24 @@ def _extract_ticker_data(df: pd.DataFrame, ticker: str) -> pd.DataFrame:
 def _get_ttl_seconds(interval: str) -> int:
     """Helper to determine cache TTL in seconds based on interval granularity."""
     i = interval.lower()
-    if i in ["1m"]: return 60
-    if i in ["2m"]: return 120
-    if i in ["5m"]: return 300
-    if i in ["15m"]: return 900
-    if i in ["30m"]: return 1800
-    if i in ["1h", "60m"]: return 3600
-    if i in ["2h", "4h"]: return 3600 * 2
-    if i in ["1d", "1wk", "1mo"]: return 86400  # EOD cache for macro bounds
-    return 300 # default 5m
+    if i in ["1m"]:
+        return 60
+    if i in ["2m"]:
+        return 120
+    if i in ["5m"]:
+        return 300
+    if i in ["15m"]:
+        return 900
+    if i in ["30m"]:
+        return 1800
+    if i in ["1h", "60m"]:
+        return 3600
+    if i in ["2h", "4h"]:
+        return 3600 * 2
+    if i in ["1d", "1wk", "1mo"]:
+        return 86400  # EOD cache for macro bounds
+    return 300  # default 5m
+
 
 def _fetch_stock_history(ticker: str, period: str = "5d", interval: str = "1d") -> pd.DataFrame:
     """
@@ -195,11 +205,12 @@ def _fetch_stock_history(ticker: str, period: str = "5d", interval: str = "1d") 
     Used by all analysis nodes (Analyst, SMC, EMA, etc.). Heavily cached to prevent LangGraph sequential redundant fetching.
     """
     from datetime import datetime
+
     norm_ticker = _normalize_ticker(ticker)
     cache_key = f"{norm_ticker}_{period}_{interval}"
-    
+
     df_cache = DatastoreManager.get_df_cache()
-    
+
     if cache_key in df_cache:
         entry = df_cache[cache_key]
         if "last_updated" in entry and "df" in entry:
@@ -210,10 +221,10 @@ def _fetch_stock_history(ticker: str, period: str = "5d", interval: str = "1d") 
                 return entry["df"].copy()
             else:
                 logger.info(f"[DF_CACHE EXPIRED] Ticker {norm_ticker} data is {age_sec:.1f}s old (TTL: {ttl}s)")
-        
+
     data = _fetch_batch_history([ticker], period, interval)
     df = _extract_ticker_data(data, ticker)
-    
+
     df_cache[cache_key] = {"df": df.copy(), "last_updated": datetime.now()}
     return df.copy()
 
@@ -480,9 +491,6 @@ async def clear_vli_diagnostic() -> str:
     return "VLI Cache Simulation state has been successfully cleared. Ready for fresh diagnostic run."
 
 
-
-
-
 @tool
 async def get_stock_quote(ticker: str, period: str = "1d", interval: str = "1m", use_fast_path: bool = True, use_finviz_fallback: bool = False, force_refresh: bool = False) -> dict[str, Any] | str:
     """Retrieve realtime or delayed stock quote for a specific ticker symbol. Fast-fetch skips full history parsing where possible.
@@ -690,11 +698,11 @@ async def run_smc_analysis(ticker: str, interval: str = "auto") -> str:
     single-pass isolated scanner.
     """
     from datetime import datetime
-    
+
     norm_ticker = _normalize_ticker(ticker)
     cache_key = f"{norm_ticker}_auto_{interval}_analysis"
     analysis_cache = DatastoreManager.get_analysis_cache()
-    
+
     if cache_key in analysis_cache:
         entry = analysis_cache[cache_key]
         if "last_updated" in entry and "data" in entry:
@@ -806,12 +814,7 @@ async def run_smc_analysis(ticker: str, interval: str = "auto") -> str:
         async with _get_yf_semaphore():
             return await asyncio.wait_for(asyncio.to_thread(_fetch_stock_history, norm_ticker, period, tf), timeout=12.0)
 
-    results = await asyncio.gather(
-        fetch_with_sem(macro_period, macro_tf),
-        fetch_with_sem("1mo", tactical_tf),
-        fetch_with_sem("5d", trigger_tf),
-        return_exceptions=True
-    )
+    results = await asyncio.gather(fetch_with_sem(macro_period, macro_tf), fetch_with_sem("1mo", tactical_tf), fetch_with_sem("5d", trigger_tf), return_exceptions=True)
     mData_res, tData_res, trData_res = results
 
     try:
@@ -866,12 +869,12 @@ async def run_smc_analysis(ticker: str, interval: str = "auto") -> str:
             report.append(f"- **Zones Mapped**: {ob_c} Order Blocks | {fvg_c} Fair Value Gaps.")
             l = tDF.iloc[-1]
             report.append(f"- **OHLC**: O: `{l['open']:.2f}` | H: `{l['high']:.2f}` | L: `{l['low']:.2f}` | C: `{l['close']:.2f}` | V: `{l['volume']}`")
-            
+
             if ob_c > 0:
                 last_ob = tOB[tOB["OB"].fillna(0) != 0].iloc[-1]
                 dir_str = "Bullish (Demand)" if last_ob["OB"] == 1 else "Bearish (Supply)"
                 report.append(f"- **Active Order Block**: {dir_str} at `{last_ob['Bottom']:.4f}` - `{last_ob['Top']:.4f}`")
-                
+
             if fvg_c > 0:
                 last_fvg = tFVG[tFVG["FVG"].fillna(0) != 0].iloc[-1]
                 dir_str = "Bullish (Imbalance)" if last_fvg["FVG"] == 1 else "Bearish (Imbalance)"
@@ -902,7 +905,7 @@ async def run_smc_analysis(ticker: str, interval: str = "auto") -> str:
                     sweep_aligned = True
 
                 swept_price = liq_event["Level"].iloc[-1] if "Level" in liq_event.columns else 0
-                
+
                 report.append(f"### 3. Execution Trigger ({trigger_tf})")
                 l = trDF.iloc[-1]
                 report.append(f"- **OHLC**: O: `{l['open']:.2f}` | H: `{l['high']:.2f}` | L: `{l['low']:.2f}` | C: `{l['close']:.2f}` | V: `{l['volume']}`")
@@ -924,6 +927,7 @@ async def run_smc_analysis(ticker: str, interval: str = "auto") -> str:
 
     return "\n".join(report)
 
+
 async def get_raw_smc_tables(ticker: str, interval: str = "1d", period: str = "1y") -> str:
     """
     Headless Data Engine - Raw Data Tables Override
@@ -931,12 +935,12 @@ async def get_raw_smc_tables(ticker: str, interval: str = "1d", period: str = "1
     """
     import json
     from datetime import datetime
-    
+
     norm_ticker = ticker.upper()
-    
+
     cache_key = f"{norm_ticker}_{period}_{interval}_raw"
     analysis_cache = DatastoreManager.get_analysis_cache()
-    
+
     if cache_key in analysis_cache:
         entry = analysis_cache[cache_key]
         if "last_updated" in entry and "data" in entry:
@@ -945,48 +949,46 @@ async def get_raw_smc_tables(ticker: str, interval: str = "1d", period: str = "1
             if age_sec < ttl:
                 logger.info(f"[ANALYSIS_CACHE HIT] Reusing fast headless SMC data for {norm_ticker} (Age: {age_sec:.1f}s)")
                 return entry["data"]
-                
+
     try:
         data = await asyncio.wait_for(asyncio.to_thread(_fetch_stock_history, norm_ticker, period, interval), timeout=15.0)
         df = data.tail(100).copy()
         if df.empty:
             return json.dumps([{"error": f"No historical market data retrieved for {norm_ticker}. Ensure the ticker symbol is valid and active. (Syntax hint: Use the '$' prefix like $AAPL to bypass sentence tokenization errors)."}])
-        
+
         df.columns = [c.lower() for c in df.columns]
         # Compute pure primitive arrays
         from smartmoneyconcepts import smc
+
         swings = smc.swing_highs_lows(df, swing_length=15)
         structure = smc.bos_choch(df, swings)
         fvg = smc.fvg(df)
         ob = smc.ob(df, swings)
-        
+
         # Timeline merge wrapper
         df["swing"] = swings["HighLow"] if "HighLow" in swings else None
         df["bos"] = structure["BOS"] if "BOS" in structure else None
         df["choch"] = structure["CHOCH"] if "CHOCH" in structure else None
-        
+
         # For memory constraints, only return the last 20 blocks
         export_df = df.tail(20).copy()
-        
+
         # Serialize datetime indexes safely
         import pandas as pd
+
         export_df.reset_index(inplace=True)
         for col in export_df.columns:
             if pd.api.types.is_datetime64_any_dtype(export_df[col]):
-                export_df[col] = export_df[col].dt.strftime('%Y-%m-%d %H:%M:%S')
+                export_df[col] = export_df[col].dt.strftime("%Y-%m-%d %H:%M:%S")
 
         # Drop NaN bounds
         export_df = export_df.fillna("None")
 
-        final_json = json.dumps({
-            "ticker": norm_ticker,
-            "type": "RAW_SMC_PRICE_ACTION_TABLE",
-            "timeframe": interval,
-            "data": json.loads(export_df.to_json(orient="records"))
-        })
-        
+        final_json = json.dumps({"ticker": norm_ticker, "type": "RAW_SMC_PRICE_ACTION_TABLE", "timeframe": interval, "data": json.loads(export_df.to_json(orient="records"))})
+
         analysis_cache[cache_key] = {"data": final_json, "last_updated": datetime.now()}
         return final_json
     except Exception as e:
         import traceback
+
         return json.dumps([{"error": f"Raw Table Error: {str(e)}"}])

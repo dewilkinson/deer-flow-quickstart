@@ -108,18 +108,21 @@ async def _setup_and_execute_agent_step(state, config, agent_type, tools, agent_
 # Orchestrator Fast Bypass Tools
 def get_orchestrator_tools(config: RunnableConfig):
     """Returns a list of tools available to the Orchestrator for fast bypass."""
-    from src.tools import get_brokerage_accounts, get_brokerage_balance, get_brokerage_history, get_brokerage_statements, fetch_market_macros
+    from src.tools import get_brokerage_accounts, get_brokerage_balance, get_attribution_summary, get_daily_blotter, get_personal_risk_metrics, get_brokerage_statements, fetch_market_macros
+
     configurable = Configuration.from_runnable_config(config)
     return [
-        get_stock_quote, 
-        invalidate_market_cache, 
-        get_web_search_tool(configurable.max_search_results), 
-        crawl_tool, 
+        get_stock_quote,
+        invalidate_market_cache,
+        get_web_search_tool(configurable.max_search_results),
+        crawl_tool,
         snapper,
         get_brokerage_accounts,
         get_brokerage_balance,
-        get_brokerage_history,
+        get_attribution_summary,
+        get_daily_blotter,
+        get_personal_risk_metrics,
         get_brokerage_statements,
         fetch_market_macros,
-        read_session_artifact
+        read_session_artifact,
     ]

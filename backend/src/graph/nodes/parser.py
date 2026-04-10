@@ -60,9 +60,10 @@ async def parser_node(state: State, config: RunnableConfig) -> Command[Literal["
     else:
         messages = apply_prompt_template("parser", state)
 
-    # [ANTI-ROT] Heuristic Swap Mechanism 
+    # [ANTI-ROT] Heuristic Swap Mechanism
     # Intercept parsing and inject top 3 rules from Obsidian CORE_LOGIC.md if applicable
     import os
+
     core_logic_path = os.path.join(os.path.dirname(__file__), "..", "..", "..", "CORE_LOGIC.md")
     if os.path.exists(core_logic_path):
         try:
@@ -74,8 +75,8 @@ async def parser_node(state: State, config: RunnableConfig) -> Command[Literal["
                     query = str(raw_messages[-1].content).lower()
                     relevant_rules = [r for r in rules if any(word in r.lower() for word in query.split())]
                     if not relevant_rules:
-                        relevant_rules = rules[:3] # Fallback
-                    messages.append(HumanMessage(content=f"[SYSTEM OVERRIDE]: Relevant Heuristics Injected:\n" + "\n".join(relevant_rules[:3])))
+                        relevant_rules = rules[:3]  # Fallback
+                    messages.append(HumanMessage(content="[SYSTEM OVERRIDE]: Relevant Heuristics Injected:\n" + "\n".join(relevant_rules[:3])))
         except Exception as e:
             logger.warning(f"Failed to inject heuristic swap: {e}")
 
@@ -94,6 +95,7 @@ async def parser_node(state: State, config: RunnableConfig) -> Command[Literal["
         # 1. Execute the tools in parallel (Bypass redundant Scout LLM loops)
         name_to_tool = {t.name: t for t in tools}
         import asyncio
+
         concurrency_limiter = asyncio.Semaphore(3)
 
         async def invoke_tool(tc):

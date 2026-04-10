@@ -61,13 +61,12 @@ def router_logic(
     return next_step.step_type.value
 
 
-
 def _build_base_graph():
     """Build and return the hub-and-spoke state graph."""
     builder = StateGraph(State)
 
     # Nodes
-    builder.add_node("vli", vli_node) # Unified Spine
+    builder.add_node("vli", vli_node)  # Unified Spine
     builder.add_node("human_feedback", human_feedback_node)
     builder.add_node("portfolio_manager", portfolio_manager_node)
     builder.add_node("analyst", analyst_node)
@@ -89,11 +88,7 @@ def _build_base_graph():
 
     # 2. Specialist Return Loop
     # ALL execution agents loop back to VLI for next-step evaluation or plan maintenance
-    agents = [
-        "portfolio_manager", "analyst", "smc_analyst", "risk_manager", 
-        "journaler", "synthesizer", "coder", "imaging", "system", 
-        "session_monitor", "vision_specialist", "terminal_specialist", "human_feedback"
-    ]
+    agents = ["portfolio_manager", "analyst", "smc_analyst", "risk_manager", "journaler", "synthesizer", "coder", "imaging", "system", "session_monitor", "vision_specialist", "terminal_specialist", "human_feedback"]
     for agent in agents:
         builder.add_edge(agent, "vli")
 

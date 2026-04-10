@@ -15,9 +15,8 @@ _BASE_AGENT_LLM_MAP: dict[str, LLMType] = {
     "planner": "reasoning",
     "synthesizer": "basic",
     "coder": "basic",
-    
     # [BUGFIX: ANTI-ROT]
-    # The reporter was previously 'reasoning' to handle massive SMC payloads, but Gemini 3.1 Pro 
+    # The reporter was previously 'reasoning' to handle massive SMC payloads, but Gemini 3.1 Pro
     # frequently fails to export text outside of <think> blocks on complex state. As payloads
     # are now aggressively pruned to 10k max length, 'basic' (Flash) handles synthesis flawlessly.
     "reporter": "basic",

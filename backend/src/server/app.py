@@ -159,7 +159,7 @@ def _get_report_filename(request_text: str, content: str) -> str:
     import re
 
     # [MATCH FRONTEND JS PRE-PROCESSING]
-    # The dashboard strips these before sending, but we strip them again here 
+    # The dashboard strips these before sending, but we strip them again here
     # for robustness. We use a more explicit case-insensitive approach.
     t = request_text
     for flag in ["--raw", "--background", "--direct", "--fast"]:
@@ -623,20 +623,21 @@ async def open_vli_inbox_file_editor(filename: str):
 class OpenFileRequest(BaseModel):
     filename: str
 
+
 @app.post("/api/vli/open-file")
 async def open_vli_artifact_file(req: OpenFileRequest):
     import os
     import subprocess
     import shutil
-    
+
     from src.config.vli import PREFERRED_EDITOR
-    
+
     reports_dir = os.path.join(os.getcwd(), "data", "reports")
     file_path = os.path.join(reports_dir, req.filename)
-    
+
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="File not found")
-        
+
     try:
         # Popen to launch without blocking
         subprocess.Popen([PREFERRED_EDITOR, file_path])
@@ -704,7 +705,32 @@ async def _invoke_vli_agent(
             ticker = "VIX"
         else:
             # Fallback to general search but exclude stop-words
-            ticker_stop_words = ["GET", "STOCK", "PRICE", "LIST", "MARCO", "MARO", "VALUE", "PORT", "SYMBOL", "SMC", "FOR", "ANALYSIS", "REPORT", "ANALYZE", "FAST", "QUICK", "HIGH-LEVEL", "SHORTCUT", "RAPID", "HIGH", "LEVEL", "RAW", "DATA", "VLI"]
+            ticker_stop_words = [
+                "GET",
+                "STOCK",
+                "PRICE",
+                "LIST",
+                "MARCO",
+                "MARO",
+                "VALUE",
+                "PORT",
+                "SYMBOL",
+                "SMC",
+                "FOR",
+                "ANALYSIS",
+                "REPORT",
+                "ANALYZE",
+                "FAST",
+                "QUICK",
+                "HIGH-LEVEL",
+                "SHORTCUT",
+                "RAPID",
+                "HIGH",
+                "LEVEL",
+                "RAW",
+                "DATA",
+                "VLI",
+            ]
             words = re.findall(r"\b([A-Z]{1,10})\b", text.upper())
             for word in words:
                 if word not in ticker_stop_words:
@@ -773,9 +799,11 @@ async def _invoke_vli_agent(
                 if is_smc or raw_data_mode:
                     if raw_data_mode:
                         from src.tools.finance import get_raw_smc_tables
+
                         report = await asyncio.wait_for(get_raw_smc_tables(ticker=ticker), timeout=25.0)
                     else:
                         from src.tools.finance import run_smc_analysis
+
                         r_func = getattr(run_smc_analysis, "coroutine", getattr(run_smc_analysis, "func", None))
                         report = await asyncio.wait_for(r_func(ticker=ticker, interval="auto"), timeout=15.0)
 
@@ -783,12 +811,13 @@ async def _invoke_vli_agent(
                     try:
                         # 1. Internal Ticker-based cache
                         import os
+
                         artifacts_dir = os.path.join(os.getcwd(), "data", "artifacts")
                         os.makedirs(artifacts_dir, exist_ok=True)
                         ext = "json" if raw_data_mode else "md"
                         with open(os.path.join(artifacts_dir, f"{str(ticker).upper()}.{ext}"), "w", encoding="utf-8") as f:
                             f.write(report)
-                        
+
                         # 2. [FIX] Dashboard-compatible persistence (Slugified for Artifact Links)
                         # We use the original 'text' but strip "--raw" etc if needed to match frontend
                         clean_text = text.replace("--raw", "").replace("--RAW", "").strip()
@@ -796,7 +825,6 @@ async def _invoke_vli_agent(
                     except Exception as e:
                         logger.error(f"Failed to persist artifact for {ticker}: {e}")
 
-                    
                     duration = (datetime.now() - start_time).total_seconds()
                     log_vli_metric(f"fastpath_smc_{ticker.lower()}", duration, status="pass")
                     _vli_convergence_history.append({"timestamp": datetime.now().strftime("%H:%M:%S"), "iteration": 1, "latency": duration, "accuracy": 100.0, "status": "pass"})
@@ -842,7 +870,7 @@ async def _invoke_vli_agent(
         content_obj = [{"type": "text", "text": text}, {"type": "image_url", "image_url": {"url": image}}]
     else:
         content_obj = text
-        
+
     # [V10.5 CONTEXT PATCH]
     # We pass only the CURRENT message. Because the graph is configured with a
     # thread_id checkpointer, LangGraph will automatically append this to the
@@ -879,7 +907,7 @@ async def _invoke_vli_agent(
     }
 
     _vli_active_task = asyncio.current_task()
-    
+
     try:
         # [NEW] Kill switch check
         if _vli_reset_requested:
@@ -889,16 +917,17 @@ async def _invoke_vli_agent(
         # [DIAGNOSTIC] Starting Graph Execution
         logger.info(f"VLI Agent: Launching Graph traversal for directive: '{text[:50]}'")
         start_exec = time.time()
-        
+
         # Run the graph and get the final state with an aggressive timeout (115s to respect AsyncRetries safely)
         final_state = await asyncio.wait_for(graph.ainvoke(workflow_input, config=workflow_config), timeout=115.0)
-        
+
         exec_duration = time.time() - start_exec
         logger.info(f"VLI Agent: Graph traversal completed in {exec_duration:.2f}s")
-        
+
         # [NEW] Raw Data Headless Mode Bypass (API Engine Mode)
         if final_state.get("raw_data_mode"):
             import json
+
             for m in reversed(final_state.get("messages", [])):
                 content = str(getattr(m, "content", ""))
                 if "RAW_SMC_PRICE_ACTION_TABLE" in content:
@@ -910,7 +939,7 @@ async def _invoke_vli_agent(
         if final_state.get("final_report"):
             fr = final_state["final_report"]
             if "[]" in fr or fr == "[]" or fr.strip() == "[]":
-                logger.error(f"[DIAGNOSTIC] Exact '[]' matched inside final_report key!! Reporter generated it.")
+                logger.error("[DIAGNOSTIC] Exact '[]' matched inside final_report key!! Reporter generated it.")
             return fr, final_state
 
         # 2. Extract final textual output from history (Fallback)
@@ -923,7 +952,7 @@ async def _invoke_vli_agent(
                     continue
                 res = content
                 break
-                
+
         if res:
             if "[]" in res or res == "[]" or res.strip() == "[]":
                 logger.error(f"[DIAGNOSTIC] Exact '[]' matched inside router fallback extraction (res={res[:50]})")
@@ -939,29 +968,27 @@ async def _invoke_vli_agent(
         raise Exception(f"Agent reasoning encountered a structural failure: {str(e)}")
 
 
-async def _background_synthesis_task(
-    text: str, image: str | None, direct_mode: bool, reporter_llm_type: str, 
-    vli_llm_type: str, thread_id: str
-):
+async def _background_synthesis_task(text: str, image: str | None, direct_mode: bool, reporter_llm_type: str, vli_llm_type: str, thread_id: str):
     """Executes the deep analysis graph asynchronously."""
     try:
         from src.config.vli import get_vli_path
+
         telemetry_file = get_vli_path("VLI_Raw_Telemetry.md")
         timestamp = datetime.now().strftime("[%H:%M:%S]")
         with open(telemetry_file, "a", encoding="utf-8") as tf:
             tf.write(f"\n{timestamp} **ASYNC SYNTHESIS INITIATED**\n")
             tf.write(f"- **Thread ID**: `{thread_id}`\n")
-            
+
         response_text, final_vli_state = await _invoke_vli_agent(
             text=text,
             image=image,
             direct_mode=direct_mode,
-            raw_data_mode=False, # Force the graph to execute deep synthesis
+            raw_data_mode=False,  # Force the graph to execute deep synthesis
             reporter_llm_type=reporter_llm_type,
             vli_llm_type=vli_llm_type,
-            thread_id=thread_id
+            thread_id=thread_id,
         )
-        
+
         with open(telemetry_file, "a", encoding="utf-8") as tf:
             tf.write(f"\n{datetime.now().strftime('[%H:%M:%S]')} **VLI ASYNC TRANSACTION RESOLVED**\n")
             tf.write(f"- **Thread ID**: `{thread_id}`\n")
@@ -970,9 +997,10 @@ async def _background_synthesis_task(
 
         global _vli_last_async_report
         _vli_last_async_report = response_text
-            
+
     except Exception as e:
         logger.error(f"[ASYNC_SYNTHESIS] Background report failed: {e}")
+
 
 @app.post("/api/vli/action-plan")
 async def post_vli_action_plan(request: VLIActionPlanRequest, background_tasks: BackgroundTasks):
@@ -982,6 +1010,7 @@ async def post_vli_action_plan(request: VLIActionPlanRequest, background_tasks: 
     # [NEW] Log Issued Command to Raw Telemetry
     try:
         from src.config.vli import get_vli_path
+
         telemetry_file = get_vli_path("VLI_Raw_Telemetry.md")
         timestamp = datetime.now().strftime("[%H:%M:%S]")
         with open(telemetry_file, "a", encoding="utf-8") as tf:
@@ -1012,13 +1041,14 @@ async def post_vli_action_plan(request: VLIActionPlanRequest, background_tasks: 
 
     # Real Agent Routing for Chat/Directives
     logger.info(f"VLI: Routing directive to Gemini Agent: {request.text[:50]}...")
-    final_vli_state = {} # Ensure initialization
-    
+    final_vli_state = {}  # Ensure initialization
+
     # [BUGFIX: STATE POLLUTION] Explicitly generate a fresh Thread ID for every action plan request to prevent cross-contamination
     # between separate ticker queries (e.g. NVDA picking up AMZN history).
     import uuid
+
     transaction_id = f"vli_action_{uuid.uuid4().hex[:8]}"
-    
+
     # [NEW] ASYNC SYNTHESIS BYPASS
     wants_background = request.background_synthesis or "--BACKGROUND" in request.text.upper()
     if request.raw_data_mode and wants_background:
@@ -1026,51 +1056,67 @@ async def post_vli_action_plan(request: VLIActionPlanRequest, background_tasks: 
         text = request.text
         ticker = ""
         import re
+
         sym_match = re.search(r"\$([A-Z]{1,10})", text.upper())
         if sym_match:
             ticker = sym_match.group(1)
         else:
-            ticker_stop_words = ["GET", "STOCK", "PRICE", "LIST", "MARCO", "MARO", "VALUE", "PORT", "SYMBOL", "SMC", "FOR", "ANALYSIS", "REPORT", "ANALYZE", "FAST", "QUICK", "HIGH-LEVEL", "SHORTCUT", "RAPID", "HIGH", "LEVEL", "RAW", "DATA", "VLI"]
+            ticker_stop_words = [
+                "GET",
+                "STOCK",
+                "PRICE",
+                "LIST",
+                "MARCO",
+                "MARO",
+                "VALUE",
+                "PORT",
+                "SYMBOL",
+                "SMC",
+                "FOR",
+                "ANALYSIS",
+                "REPORT",
+                "ANALYZE",
+                "FAST",
+                "QUICK",
+                "HIGH-LEVEL",
+                "SHORTCUT",
+                "RAPID",
+                "HIGH",
+                "LEVEL",
+                "RAW",
+                "DATA",
+                "VLI",
+            ]
             words = re.findall(r"\b([A-Z]{1,10})\b", text.upper())
             for word in words:
                 if word not in ticker_stop_words:
                     ticker = word
                     break
-        
+
         if ticker:
             try:
                 from src.tools.finance import get_raw_smc_tables
                 import asyncio
+
                 report = await asyncio.wait_for(get_raw_smc_tables(ticker=ticker), timeout=25.0)
-                
+
                 # [FIX] Persist early for Async path so double-click works immediately
                 clean_text = request.text.replace("--raw", "").replace("--RAW", "").strip()
                 _persist_vli_report(clean_text, report)
 
                 # Dispatch deep learning agent to background
-                background_tasks.add_task(
-                    _background_synthesis_task, 
-                    request.text, request.image, request.direct_mode, 
-                    request.reporter_llm_type, request.vli_llm_type, transaction_id
-                )
+                background_tasks.add_task(_background_synthesis_task, request.text, request.image, request.direct_mode, request.reporter_llm_type, request.vli_llm_type, transaction_id)
                 return {"response": report, "status": "ASYNC_PENDING", "error_details": None, "state": {}}
             except Exception as fe:
                 logger.warning(f"VLI Async-Path: Atomic resolution failed for '{ticker}': {fe}")
 
     try:
-        response_text, final_vli_state = await _invoke_vli_agent(
-            request.text, 
-            request.image, 
-            request.direct_mode, 
-            request.raw_data_mode, 
-            request.reporter_llm_type, 
-            request.vli_llm_type,
-            thread_id=transaction_id
-        )
+        response_text, final_vli_state = await _invoke_vli_agent(request.text, request.image, request.direct_mode, request.raw_data_mode, request.reporter_llm_type, request.vli_llm_type, thread_id=transaction_id)
         if not response_text:
             # [V10 AUDIT] Log structural completion (Empty Payload)
             try:
                 from src.config.vli import get_vli_path
+
                 telemetry_file = get_vli_path("VLI_Raw_Telemetry.md")
                 timestamp = datetime.now().strftime("[%H:%M:%S]")
                 with open(telemetry_file, "a", encoding="utf-8") as tf:
@@ -1084,6 +1130,7 @@ async def post_vli_action_plan(request: VLIActionPlanRequest, background_tasks: 
         # [V10 AUDIT] Log structural failures to telemetry
         try:
             from src.config.vli import get_vli_path
+
             telemetry_file = get_vli_path("VLI_Raw_Telemetry.md")
             timestamp = datetime.now().strftime("[%H:%M:%S]")
             with open(telemetry_file, "a", encoding="utf-8") as tf:
@@ -1093,7 +1140,7 @@ async def post_vli_action_plan(request: VLIActionPlanRequest, background_tasks: 
                 tf.write(f"- **Status**: `{status_label}`\n- **Action**: Execution aborted.\n\n---\n")
         except:
             pass
-            
+
         status_code = "TIMEOUT" if "timed out" in str(e).lower() else "ERROR"
         return {"response": "", "status": status_code, "error_details": str(e)}
 
@@ -1101,15 +1148,15 @@ async def post_vli_action_plan(request: VLIActionPlanRequest, background_tasks: 
     try:
         telemetry_file = get_vli_path("VLI_Raw_Telemetry.md")
         timestamp = datetime.now().strftime("[%H:%M:%S]")
-        
+
         # Extract metadata from final state
         from langchain_core.messages import ToolMessage
-        
+
         hierarchy = {"Orchestrator": {"workers": []}}
         worker_counts = {}
         current_agent = "Orchestrator"
         system_nodes = ["reporter", "coordinator", "vli_coordinator", "router", "vli_parser"]
-        
+
         messages = final_vli_state.get("messages", [])
         for m in messages:
             if getattr(m, "name", None):
@@ -1126,36 +1173,36 @@ async def post_vli_action_plan(request: VLIActionPlanRequest, background_tasks: 
                             worker_counts[worker_base] = 0
                         else:
                             worker_counts[worker_base] += 1
-                        
+
                         count = worker_counts[worker_base]
                         worker_name = f"{worker_base}_{count}" if count > 0 else worker_base
-                        
+
                         if current_agent in hierarchy:
                             hierarchy[current_agent]["workers"].append(worker_name)
                         else:
                             hierarchy["Orchestrator"]["workers"].append(worker_name)
-                            
+
         # Build hierarchy markdown
         hier_lines = ["- **Execution Hierarchy**:"]
         for agent, data in hierarchy.items():
             suffix = "" if agent.endswith("_finalize") else " [LLM]"
             if agent == "Orchestrator" and not data["workers"] and len(hierarchy) == 1:
-                hier_lines.append(f"  - <span style=\"color: #58a6ff; font-weight: bold;\">[ROOT] {agent}{suffix}</span>")
+                hier_lines.append(f'  - <span style="color: #58a6ff; font-weight: bold;">[ROOT] {agent}{suffix}</span>')
                 break
-                
+
             prefix = "[ROOT]" if agent == "Orchestrator" else "[AGENT]"
-            hier_lines.append(f"  - <span style=\"color: #58a6ff; font-weight: bold;\">{prefix} {agent}{suffix}</span>")
+            hier_lines.append(f'  - <span style="color: #58a6ff; font-weight: bold;">{prefix} {agent}{suffix}</span>')
             for w in data["workers"]:
-                hier_lines.append(f"    - <span style=\"color: #d29922; font-weight: 500;\">-> {w}</span>")
-                
+                hier_lines.append(f'    - <span style="color: #d29922; font-weight: 500;">-> {w}</span>')
+
         hierarchy_md = "\n".join(hier_lines)
-        
+
         if isinstance(response_text, list):
             # Flatten LangChain multi-modal message content arrays
             response_text = " ".join([item.get("text", "") if isinstance(item, dict) else str(item) for item in response_text])
-            
+
         preview = str(response_text)[:100].strip().replace("\n", " ")
-        
+
         if not response_text.strip() or "empty payload" in response_text.lower() or "synthesis failed" in response_text.lower():
             # [RELIABILITY] Even if orchestration technically succeeded without exceptions,
             # an empty string or failing sentinel from reporter signifies a structural failure.
@@ -1167,7 +1214,7 @@ async def post_vli_action_plan(request: VLIActionPlanRequest, background_tasks: 
                 tf.write(f"- **Directive**: `{request.text[:40]}...`\n")
                 tf.write(f"- **Response Preview**: {response_text[:100]}...\n\n---\n")
             return {"response": response_text, "status": status_code, "error_details": "Reporter generated an empty payload or triggered a synthesis fail fallback."}
-            
+
         with open(telemetry_file, "a", encoding="utf-8") as tf:
             tf.write(f"\n{timestamp} **VLI TRANSACTION RESOLVED**\n")
             tf.write("- **Session Status**: `OK`\n")

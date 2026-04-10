@@ -35,7 +35,7 @@ def calculate_rsi(df: pd.DataFrame, period: int = 14):
     """Calculates Relative Strength Index (RSI)."""
     df.ta.rsi(length=period, append=True)
     # pandas_ta auto-names columns, typically 'RSI_14'
-    rsi_col = [col for col in df.columns if col.startswith('RSI')][0]
+    rsi_col = [col for col in df.columns if col.startswith("RSI")][0]
     df["rsi"] = df[rsi_col]
     return df
 
@@ -44,8 +44,8 @@ def calculate_macd(df: pd.DataFrame, fast: int = 12, slow: int = 26, signal: int
     """Calculates Moving Average Convergence Divergence (MACD)."""
     df.ta.macd(fast=fast, slow=slow, signal=signal, append=True)
     # pandas_ta names them MACD_12_26_9, MACDh_12_26_9, MACDs_12_26_9
-    macd_col = [col for col in df.columns if col.startswith('MACD_')][0]
-    macds_col = [col for col in df.columns if col.startswith('MACDs_')][0]
+    macd_col = [col for col in df.columns if col.startswith("MACD_")][0]
+    macds_col = [col for col in df.columns if col.startswith("MACDs_")][0]
     df["macd"] = df[macd_col]
     df["macd_signal"] = df[macds_col]
     return df
@@ -54,7 +54,7 @@ def calculate_macd(df: pd.DataFrame, fast: int = 12, slow: int = 26, signal: int
 def calculate_atr(df: pd.DataFrame, period: int = 14):
     """Calculates Average True Range (ATR)."""
     df.ta.atr(length=period, append=True)
-    atr_col = [col for col in df.columns if col.startswith('ATRr_')][0]
+    atr_col = [col for col in df.columns if col.startswith("ATRr_")][0]
     df["atr"] = df[atr_col]
     return df
 

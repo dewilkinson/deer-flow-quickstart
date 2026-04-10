@@ -115,7 +115,7 @@ def _create_llm_use_conf(llm_type: LLMType, conf: dict[str, Any]) -> BaseChatMod
         # Ollama doesn't need an API key for local use, but the client expects one
         ollama_conf["api_key"] = ollama_conf.get("api_key", "ollama")
         ollama_conf.pop("platform", None)
-        
+
         logger.info(f"LLM Tool: Initializing Ollama model '{ollama_conf.get('model')}' (Type: {llm_type})")
         return ChatOpenAI(**ollama_conf)
 
@@ -157,6 +157,7 @@ def _create_llm_use_conf(llm_type: LLMType, conf: dict[str, Any]) -> BaseChatMod
 
         # [RELIABILITY] Disable safety constraints that cause Empty String Crypto generation
         from langchain_google_genai import HarmCategory, HarmBlockThreshold
+
         gemini_conf["safety_settings"] = {
             HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
             HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,

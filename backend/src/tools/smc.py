@@ -87,7 +87,7 @@ async def get_smc_analysis(ticker: str, period: str = "60d", interval: str = "1d
             from smartmoneyconcepts import smc
         except ImportError:
             return "[ERROR]: The 'smartmoneyconcepts' library is required."
-            
+
         df = _fetch_stock_history(symbol, p, i)
 
         if df.empty:
@@ -107,33 +107,26 @@ async def get_smc_analysis(ticker: str, period: str = "60d", interval: str = "1d
         liq = smc.liquidity(df, swings)
 
         # Concatenate outputs with the original dataframe (resetting index to guarantee row alignment)
-        combined_df = pd.concat([
-            df.reset_index(drop=True), 
-            swings.reset_index(drop=True), 
-            structure.reset_index(drop=True), 
-            ob.reset_index(drop=True), 
-            fvg.reset_index(drop=True), 
-            liq.reset_index(drop=True)
-        ], axis=1)
-        
+        combined_df = pd.concat([df.reset_index(drop=True), swings.reset_index(drop=True), structure.reset_index(drop=True), ob.reset_index(drop=True), fvg.reset_index(drop=True), liq.reset_index(drop=True)], axis=1)
+
         # Deduplicate identical column names caused by merging different SMC indicator outputs
-        combined_df = combined_df.loc[:, ~combined_df.columns.duplicated(keep='last')]
-        
+        combined_df = combined_df.loc[:, ~combined_df.columns.duplicated(keep="last")]
+
         # Drop columns that are completely NA across all rows to save space
-        combined_df.dropna(axis=1, how='all', inplace=True)
+        combined_df.dropna(axis=1, how="all", inplace=True)
 
         # Keep only the rows where a structural event occurred (to prevent the LLM from getting lost in nulls)
-        event_columns = [col for col in ['BOS', 'bos', 'CHOCH', 'choch', 'OB', 'ob', 'FVG', 'fvg', 'Liquidity', 'liquidity', 'Level'] if col in combined_df.columns]
-        
+        event_columns = [col for col in ["BOS", "bos", "CHOCH", "choch", "OB", "ob", "FVG", "fvg", "Liquidity", "liquidity", "Level"] if col in combined_df.columns]
+
         # Rows with any event
         if event_columns:
             events_mask = combined_df[event_columns].notna().any(axis=1)
         else:
             events_mask = pd.Series(False, index=combined_df.index)
-            
+
         # Plus the last 5 candles unconditionally for context
         recent_mask = combined_df.index >= len(combined_df) - 5
-        
+
         final_df = combined_df[events_mask | recent_mask]
 
         # Return compressed payload as JSON string

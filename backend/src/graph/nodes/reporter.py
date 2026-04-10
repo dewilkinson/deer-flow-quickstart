@@ -22,6 +22,7 @@ async def reporter_node(state: State, config: RunnableConfig):
     try:
         # [NEW] Extract configuration for template rendering early to allow custom LLM binding
         from src.config.configuration import Configuration
+
         configurable = Configuration.from_runnable_config(config)
 
         # Load dynamic synthesis LLM (Default to agents.py mapping, override if API requests raw/basic synthesis)
@@ -32,12 +33,12 @@ async def reporter_node(state: State, config: RunnableConfig):
             llm_type = config["configurable"]["reporter_llm_type"]
         else:
             llm_type = AGENT_LLM_MAP.get("reporter", "reasoning")
-            
+
         llm = get_llm_by_type(llm_type)
 
         raw_messages = state.get("messages", [])
-        
-        # [ANTI-ROT] Stateless Transaction Model: 
+
+        # [ANTI-ROT] Stateless Transaction Model:
         # Context window expanded to 12 to ensure all Specialist turns are visible for synthesis.
         MAX_HISTORY = 12
         if len(raw_messages) > MAX_HISTORY:
@@ -53,14 +54,17 @@ async def reporter_node(state: State, config: RunnableConfig):
 
         for m in raw_messages:
             m_type = getattr(m, "type", m.get("type", "")) if isinstance(m, dict) else getattr(m, "type", "")
-            if not m_type and isinstance(m, HumanMessage): m_type = "human"
-            elif not m_type and isinstance(m, AIMessage): m_type = "ai"
-            elif not m_type and isinstance(m, ToolMessage): m_type = "tool"
+            if not m_type and isinstance(m, HumanMessage):
+                m_type = "human"
+            elif not m_type and isinstance(m, AIMessage):
+                m_type = "ai"
+            elif not m_type and isinstance(m, ToolMessage):
+                m_type = "tool"
 
             if m_type == "human" or isinstance(m, HumanMessage):
                 content = str(m.get("content", "")) if isinstance(m, dict) else str(getattr(m, "content", ""))
                 compacted.append(HumanMessage(content=content))
-            
+
             elif m_type == "ai" or isinstance(m, AIMessage):
                 if isinstance(m, dict):
                     raw_content = m.get("content", "")
@@ -73,24 +77,25 @@ async def reporter_node(state: State, config: RunnableConfig):
                     content = " ".join([item.get("text", "") if isinstance(item, dict) else str(item) for item in raw_content])
                 else:
                     content = str(raw_content)
-                
+
                 if not content.strip() and tool_calls:
                     content = f"[Agent invoked tool(s): {', '.join(tc.get('name', 'unknown') for tc in tool_calls)}]"
-                
+
                 logger.debug(f"[VLI_REPORTER] Compacting AIMessage of len {len(content)}: {content[:100]}...")
                 if len(content) > 10000:
                     content = content[:10000] + "\n... [Content Truncated]"
-                
+
                 if content.strip():
                     compacted.append(AIMessage(content=content))
-            
+
             elif m_type == "tool" or isinstance(m, ToolMessage):
                 content = str(m.get("content", "")) if isinstance(m, dict) else str(getattr(m, "content", ""))
                 name = m.get("name", "unknown") if isinstance(m, dict) else getattr(m, "name", "unknown")
-                
+
                 try:
                     # Attempt to compress raw JSON arrays into flattened mathematical summaries if massive
                     import json
+
                     parsed = json.loads(content)
                     if isinstance(parsed, list) and len(parsed) > 500:
                         content = f"[Truncated JSON List of {len(parsed)} items. Keys: {str(list(parsed[0].keys()))[:200]} if mapping]."
@@ -111,10 +116,8 @@ async def reporter_node(state: State, config: RunnableConfig):
         # [STABILITY] Google Gemini SDK requires strict alternating turns.
         # To completely bypass internal protobuf/conversational turn rejection for multi-agent loops,
         # we squash the ENTIRE context payload into a SINGLE HumanMessage for the Reporter.
-        synthesized_history = "\n\n==== CONTEXTUAL DATA ====\n\n".join(
-            [m.content for m in compacted if hasattr(m, 'content') and m.content.strip()]
-        )
-        
+        synthesized_history = "\n\n==== CONTEXTUAL DATA ====\n\n".join([m.content for m in compacted if hasattr(m, "content") and m.content.strip()])
+
         # Guardrail against entirely empty history
         if not synthesized_history.strip():
             synthesized_history = "No specialist data generated. Produce a default blank analysis."
