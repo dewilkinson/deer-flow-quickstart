@@ -8,7 +8,7 @@
         "read_journal_entry",
         "get_journal_folder",
         "set_journal_folder",
-        "get_brokerage_history",
+        "get_daily_blotter",
         "get_stock_quote"
     ]
 }

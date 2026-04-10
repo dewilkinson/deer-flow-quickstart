@@ -4,7 +4,9 @@
     "prompt_file": "scout",
     "tools": [
         "get_brokerage_accounts", 
-        "get_brokerage_history", 
+        "get_attribution_summary",
+        "get_daily_blotter",
+        "get_personal_risk_metrics",
         "get_brokerage_balance", 
         "get_brokerage_statements", 
         "get_stock_quote",

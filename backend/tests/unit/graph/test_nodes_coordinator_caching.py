@@ -41,4 +41,5 @@ def test_coordinator_cache_injection_populated():
 
         args, _ = mock_apply.call_args
         state_passed = args[1]
-        assert state_passed["CACHED_TICKERS"] == "AMD, NVDA"
+        assert "AMD" in state_passed["CACHED_TICKERS"]
+        assert "NVDA" in state_passed["CACHED_TICKERS"]

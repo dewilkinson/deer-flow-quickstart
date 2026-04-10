@@ -51,7 +51,7 @@ def get_brokerage_accounts(config: RunnableConfig):
     client, user_id, user_secret, mock_broker = _get_client_and_creds(config)
 
     if not client or not user_id or not user_secret:
-        if mock_broker == "true":
+        if str(mock_broker).lower() == "true":
             logger.info("MOCK_BROKER=true, returning simulated data.")
             return [{"id": "mock-fidelity-1", "name": "Fidelity Rollover IRA", "institution": "Fidelity"}, {"id": "mock-fidelity-2", "name": "Fidelity Individual", "institution": "Fidelity"}]
         return "[ERROR]: SnapTrade credentials (SNAPTRADE_CLIENT_ID, SNAPTRADE_CONSUMER_KEY, SNAPTRADE_USER_ID, SNAPTRADE_USER_SECRET) are not fully configured."
@@ -73,7 +73,7 @@ def get_brokerage_balance(account_id: str, config: RunnableConfig):
     client, user_id, user_secret, mock_broker = _get_client_and_creds(config)
 
     if not client or not user_id or not user_secret:
-        if mock_broker == "true":
+        if str(mock_broker).lower() == "true":
             logger.info("MOCK_BROKER=true, returning simulated balance.")
             return [{"currency": {"code": "USD", "name": "US Dollar"}, "cash": 25420.69, "amount": 25420.69}]
         return "[ERROR]: SnapTrade credentials are not fully configured."
@@ -108,7 +108,7 @@ def _fetch_aggregated_history(config: RunnableConfig, days: int = 365):
     client, user_id, user_secret, mock_broker = _get_client_and_creds(config)
 
     if not client or not user_id or not user_secret:
-        if mock_broker == "true":
+        if str(mock_broker).lower() == "true":
             logger.info("DAL: MOCK_BROKER=true, parsing local Fidelity CSV.")
 
             # Try Z drive map or fallback to local repo map
@@ -319,7 +319,7 @@ def get_brokerage_statements(account_id: str, config: RunnableConfig):
     client, user_id, user_secret, mock_broker = _get_client_and_creds(config)
 
     if not client or not user_id or not user_secret:
-        if mock_broker == "true":
+        if str(mock_broker).lower() == "true":
             logger.info("MOCK_BROKER=true, returning simulated statements.")
             return [
                 {"date": "2026-02-28", "type": "MONTHLY_STATEMENT", "url": "https://example.com/mock-statement-feb-2026.pdf"},
