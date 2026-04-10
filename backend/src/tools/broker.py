@@ -227,9 +227,11 @@ def get_attribution_summary(config: RunnableConfig):
         return "No trade history available for attribution."
 
     pnl_map = {}
+    ignore_list = {"CASH", "FZFXX", "SPAXX", "FCASH", "FDRXX"}
+
     for t in history:
         sym = t.get("symbol", "UNKNOWN")
-        if not sym or sym == "CASH":
+        if not sym or sym in ignore_list:
             continue
 
         action = str(t.get("action", "")).upper()

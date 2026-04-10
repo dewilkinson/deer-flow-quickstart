@@ -27,9 +27,11 @@ def reconcile_trades(history: list[dict], allow_short: bool = False) -> dict:
     buys = sum(1 for t in history if "BUY" in str(t.get("action", "")).upper())
     sells = sum(1 for t in history if "SELL" in str(t.get("action", "")).upper())
 
+    ignore_list = {"CASH", "FZFXX", "SPAXX", "FCASH", "FDRXX"}
+
     for t in sorted_history:
         sym = t.get("symbol")
-        if not sym or sym == "CASH":
+        if not sym or sym in ignore_list:
             continue
 
         action = str(t.get("action", "")).upper()
