@@ -25,7 +25,6 @@ conf.yaml
 # Next.js build
 .next/
 out/
-build/
 web/node_modules/
 web/.next/
 
@@ -44,56 +43,7 @@ backend/*.log
 backend/*.txt
 backend/logs/*.json
 backend/logs/*.jsonl
-tmp/
-!backend/requirements.txt
-
-# Local data and test artifacts
-# Python-generated files
-__pycache__/
-*.py[oc]
-build/
-dist/
-wheels/
-*.egg-info
-.coverage
-.coverage.*
-agent_history.gif
-static/browser_history/*.gif
-
-# Virtual environments
-.venv
-.venv_old/
-venv/
-node_modules/
-
-# Environment variables
-.env
-
-# user conf
-conf.yaml
-
-# Next.js build
-.next/
-out/
-build/
-web/node_modules/
-web/.next/
-
-.idea/
-.langgraph_api/
-.DS_Store
-
-# coverage report
-coverage.xml
-coverage/
-
-# Logs and temporary files
-*.log
-*.txt
-backend/*.log
-backend/*.txt
-backend/logs/*.json
-backend/logs/*.jsonl
+backend/data/reports/
 tmp/
 !backend/requirements.txt
 

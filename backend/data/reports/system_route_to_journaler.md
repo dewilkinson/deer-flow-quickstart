@@ -1,1 +1,0 @@
-Status: ERROR. Obsidian vault path unconfigured. Account UUID required to execute `get_brokerage_history`. Awaiting manual input.
