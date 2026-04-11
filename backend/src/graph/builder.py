@@ -88,7 +88,8 @@ def _build_base_graph():
 
     # 2. Specialist Return Loop
     # ALL execution agents loop back to VLI for next-step evaluation or plan maintenance
-    agents = ["portfolio_manager", "analyst", "smc_analyst", "risk_manager", "journaler", "synthesizer", "coder", "imaging", "system", "session_monitor", "vision_specialist", "terminal_specialist", "human_feedback"]
+    agents = ["portfolio_manager", "analyst", "smc_analyst", "risk_manager", "journaler", "synthesizer", "coder", "imaging", "system", "session_monitor", "vision_specialist", "terminal_specialist"]
+
     for agent in agents:
         builder.add_edge(agent, "vli")
 

@@ -1,24 +1,15 @@
-import sys
-
-if sys.platform == "win32" and hasattr(sys.stdout, "reconfigure"):
-    sys.stdout.reconfigure(encoding="utf-8")
-    sys.stderr.reconfigure(encoding="utf-8")
 import asyncio
+from src.graph.builder import build_graph
+from langchain_core.messages import HumanMessage
 
-sys.path.append("c:\\github\\cobalt-multi-agent\\backend")
-from src.server.app import _invoke_vli_agent
-
-
-async def main():
+async def test():
+    g = build_graph()
     try:
-        res = await _invoke_vli_agent("run smc analysis on ITA", direct_mode=False)
-        print("RESULT:")
+        res = await g.ainvoke({'messages': [HumanMessage(content="Fast Price for MSFT")], 'current_plan': '', 'raw_data_mode': False})
         print(res)
-    except Exception:
+    except Exception as e:
         import traceback
-
         traceback.print_exc()
 
-
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(test())

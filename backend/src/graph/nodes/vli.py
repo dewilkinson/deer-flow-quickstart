@@ -12,6 +12,7 @@ from typing import Any, Literal, cast
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.types import Command
+from langgraph.graph import END
 
 from src.config.agents import AGENT_LLM_MAP
 from src.config.analyst import get_analyst_keywords
@@ -174,7 +175,7 @@ async def vli_node(
              # Omit final_report to keep report window CLEAR (it will show 'Awaiting Results')
              return Command(
                  update={"messages": fallback_msgs_all + [response]},
-                 goto="__end__"
+                 goto=END
              )
     except Exception as e:
         logger.error(f"[VLI_SPINE] Phase A tiered fallback CRASHED: {e}")
@@ -211,7 +212,7 @@ async def vli_node(
         except Exception as e:
              logger.error(f"Reporter Synthesis Error after fallback: {str(e)}")
              final_report_text = "Analysis completed. (PHASE_SYNTHESIS_INTERRUPTED): The reasoning engine experienced a structural validation failure. Standardized output logic is active."
-             return Command(update={"final_report": final_report_text}, goto="__end__")
+             return Command(update={"final_report": final_report_text}, goto=END)
 
         # [NEW] Prepend fallback warnings to chat answer
         fallback_prefix = "\n".join([f"**{m.content}**" for m in fb_msgs1 + fb_msgs2 if m.name == "system_fallback"])
@@ -219,7 +220,7 @@ async def vli_node(
 
         return Command(
             update={"final_report": final_answer, "messages": fb_msgs1 + [response] + t_msgs + fb_msgs2 + [AIMessage(content=final_answer, name="vli")]}, 
-            goto="__end__"
+            goto=END
         )
 
     # 5. Phase B: Planning & Coordination
@@ -230,6 +231,32 @@ async def vli_node(
     try:
         plan_obj, fb_msgs3 = await _run_node_with_tiered_fallback("coordinator", state_for_prompt, config, tools=tools, is_structured=True, structured_schema=PlanSchema, messages=messages_coord)
         fallback_msgs_all.extend(fb_msgs3)
+        
+        # [BUGFIX: QUOTA PROPAGATION] Safe exit on quota failure instead of downstream exception
+        is_quota_failure = False
+        quota_thought = ""
+        if isinstance(plan_obj, dict):
+            is_quota_failure = plan_obj.get("title") == "Quota Failure"
+            quota_thought = plan_obj.get("thought", "RESOURCE_EXHAUSTED: System quota reached.")
+        else:
+            is_quota_failure = getattr(plan_obj, "title", None) == "Quota Failure"
+            quota_thought = getattr(plan_obj, "thought", "RESOURCE_EXHAUSTED: System quota reached.")
+            
+        if is_quota_failure:
+            # We are in VLI Tier 3 Drop-out
+            cmd = Command(
+                update={"messages": fallback_msgs_all + [
+                    # We inject a simulated AIMessage so the UI parses the fallback sequence
+                    AIMessage(content="[VLI_SPINE] Quota limit reached on Tier 3 fallback. Managed Processing Recovery initiated.", name="coordinator")
+                ]},
+                goto="reporter"
+            )
+            print("====== QUOTA COMMAND ======")
+            print("Update keys:", cmd.update.keys())
+            print("Goto:", cmd.goto)
+            print("===========================")
+            return cmd
+            
     except Exception as e:
         logger.error(f"[VLI_SPINE] Structural Parsing Failure: {e}. Falling back to default analyst plan.")
         # [RECOVERY] If JSON schema fails, force a safe default technical plan
@@ -256,18 +283,9 @@ async def vli_node(
         fallback_prefix = "\n".join([f"**{m.content}**" for m in fallback_msgs_all if getattr(m, 'name', '') == "system_fallback"])
         final_answer = f"{fallback_prefix}\n\n{resp}" if fallback_prefix else resp
         
-        return Command(update={"current_plan": plan_obj, "final_report": final_answer, "messages": fallback_msgs_all + [AIMessage(content=final_answer, name="vli")]}, goto="__end__")
+        return Command(update={"current_plan": plan_obj, "final_report": final_answer, "messages": fallback_msgs_all + [AIMessage(content=final_answer, name="vli")]}, goto=END)
 
-    # 6. Dispatch to Router Logic
-    logger.info(f"[VLI_SPINE] Dispatching Plan: {plan_obj.title} ({len(plan_obj.steps)} steps)")
 
-    next_agent = plan_obj.steps[0].step_type.value
-
-    # If we need human feedback first
-    if not state.get("is_test_mode", False) and not state.get("is_plan_approved", False):
-        next_agent = "human_feedback"
-
-    return Command(update={"current_plan": plan_obj, "steps_completed": 0, "research_topic": plan_obj.title, "messages": fb_msgs1 + fb_msgs3, "locale": plan_obj.locale}, goto=next_agent)
 
     # Guardrail: Force technical nodes if the model tries to answer deep questions directly
     if (not plan_obj.steps or plan_obj.has_enough_context) and is_technical:
@@ -284,7 +302,7 @@ async def vli_node(
         fallback_prefix = "\n".join([f"**{m.content}**" for m in fallback_msgs_all if getattr(m, 'name', '') == "system_fallback"])
         final_answer = f"{fallback_prefix}\n\n{resp}" if fallback_prefix else resp
         
-        return Command(update={"current_plan": plan_obj, "final_report": final_answer, "messages": fallback_msgs_all + [AIMessage(content=final_answer, name="vli")]}, goto="__end__")
+        return Command(update={"current_plan": plan_obj, "final_report": final_answer, "messages": fallback_msgs_all + [AIMessage(content=final_answer, name="vli")]}, goto=END)
 
     # 6. Dispatch to Router Logic
     logger.info(f"[VLI_SPINE] Dispatching Plan: {plan_obj.title} ({len(plan_obj.steps)} steps)")
@@ -295,7 +313,7 @@ async def vli_node(
     if not state.get("is_test_mode", False) and not state.get("is_plan_approved", False):
         next_agent = "human_feedback"
 
-    return Command(
+    cmd = Command(
         update={
             "current_plan": plan_obj, 
             "steps_completed": 0, 
@@ -305,3 +323,8 @@ async def vli_node(
         }, 
         goto=next_agent
     )
+    # print("====== RETURNING COMMAND ======")
+    # print("Update:", cmd.update)
+    # print("Goto:", cmd.goto)
+    # print("===============================")
+    return cmd

@@ -1,0 +1,6 @@
+{
+    "type": "coordinator",
+    "name": "The Coordinator",
+    "prompt_file": "coordinator",
+    "tools": []
+}

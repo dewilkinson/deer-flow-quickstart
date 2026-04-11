@@ -17,7 +17,13 @@ logger = logging.getLogger(__name__)
 async def reporter_node(state: State, config: RunnableConfig):
     # 2. Dynamic Synthesis
     if state.get("final_report"):
-        return {}
+        return {"messages": []}
+
+    raw_messages = state.get("messages", [])
+    if raw_messages:
+        last_msg_content = str(getattr(raw_messages[-1], "content", ""))
+        if "RESOURCE_EXHAUSTED" in last_msg_content:
+            return {"final_report": last_msg_content, "messages": [AIMessage(content=last_msg_content, name="reporter_finalize")]}
 
     try:
         # [NEW] Extract configuration for template rendering early to allow custom LLM binding
@@ -136,7 +142,7 @@ async def reporter_node(state: State, config: RunnableConfig):
         except Exception as e:
              logger.error(f"Reporter Synthesis Error after fallback: {str(e)}")
              final_report_text = "Analysis completed. (PHASE_SYNTHESIS_INTERRUPTED): The reasoning engine experienced a structural validation failure. Managed recovery plan is active."
-             return {"final_report": final_report_text}
+             return {"final_report": final_report_text, "messages": [AIMessage(content=final_report_text, name="reporter_finalize")]}
 
         # Log performance metrics
         end_time = datetime.now()
@@ -164,5 +170,6 @@ async def reporter_node(state: State, config: RunnableConfig):
     except Exception as e:
         logger.error(f"Reporter Synthesis Error: {str(e)}")
         final_report_text = "Analysis completed. (PHASE_SYNTHESIS_RECOVERY): The system has transitioned to a managed reporting baseline due to model constraints."
+        fb_msgs = []
 
     return {"final_report": final_report_text, "messages": fb_msgs + [AIMessage(content=final_report_text, name="reporter_finalize")]}

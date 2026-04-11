@@ -511,8 +511,8 @@
 
                             <div class="control-group" style="margin-left: 5px;">
                                 <select class="control-select">
-                                    <option>Gemini 3 Flash</option>
-                                    <option selected>Gemini Pro 3 (low)</option>
+                                    <option selected>Gemini 2.5 Flash</option>
+                                    <option>Gemini 3 Pro (low)</option>
                                     <option>Claude 3.5 Sonnet</option>
                                 </select>
                                 <span class="dropdown-arrow">▼</span>
@@ -846,6 +846,7 @@
                 }
 
                 console.log("[VLI_TRACE] " + new Date().toLocaleTimeString() + " - Submitting command to backend: " + requestText);
+                const startTime = performance.now();
                 const res = await fetch('/api/vli/action-plan', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
@@ -857,7 +858,8 @@
                     })
                 });
                 const data = await res.json();
-                console.log("[VLI_TRACE] " + new Date().toLocaleTimeString() + " - Command response received.");
+                const durationSec = ((performance.now() - startTime) / 1000).toFixed(2);
+                console.log("[VLI_TRACE] " + new Date().toLocaleTimeString() + ` - Command response received in ${durationSec}s.`);
                 
                 if (isProcessing) {
                     const aiMsg = document.createElement('div');
@@ -870,9 +872,9 @@
                             const url = URL.createObjectURL(blob);
                             const artifactId = 'artifact_' + Date.now() + Math.floor(Math.random()*1000);
                             sessionArtifacts[artifactId] = responseText;
-                            aiMsg.innerHTML = `<strong>[HEADLESS DATA ENGINE - RAW JSON]:</strong><br>Returned <a href="${url}" download="vli_raw_payload.json" onclick="renderArtifactToReport(event, '${artifactId}')" ondblclick="openNativeNotepad('vli_raw_payload.json')" style="color: #e5e7eb; font-weight: 700; text-decoration: underline; background: rgba(128, 128, 128, 0.25); padding: 4px 8px; border-radius: 4px; display: inline-block; margin-top: 10px; cursor: pointer;">vli_raw_payload.json</a>`;
+                            aiMsg.innerHTML = `<strong>[HEADLESS DATA ENGINE - RAW JSON]:</strong><br>Returned <a href="${url}" download="vli_raw_payload.json" onclick="renderArtifactToReport(event, '${artifactId}')" ondblclick="openNativeNotepad('vli_raw_payload.json')" style="color: #e5e7eb; font-weight: 700; text-decoration: underline; background: rgba(128, 128, 128, 0.25); padding: 4px 8px; border-radius: 4px; display: inline-block; margin-top: 10px; cursor: pointer;">vli_raw_payload.json</a><div style="font-size:10px; color:var(--text-muted); margin-top:8px;">⏱️ Latency: ${durationSec}s</div>`;
                         } catch (e) {
-                            aiMsg.innerHTML = `<strong>[HEADLESS DATA ENGINE - RAW JSON]:</strong> Data array returned successfully.`;
+                            aiMsg.innerHTML = `<strong>[HEADLESS DATA ENGINE - RAW JSON]:</strong> Data array returned successfully.<div style="font-size:10px; color:var(--text-muted); margin-top:8px;">⏱️ Latency: ${durationSec}s</div>`;
                         }
                     } else {
                         const leakKeywords = ["# SECURITY OVERRIDE", "APEX 500 SYSTEM", "USER IDENTITY: DAVE", "OPERATIONAL MANDATE", "QUOTA LIMIT", "RESOURCE_EXHAUSTED", "RATE_LIMIT"];
@@ -884,14 +886,14 @@
                             const warnMsg = document.createElement('div');
                             warnMsg.className = 'msg msg-ai';
                             warnMsg.style.borderLeftColor = '#ff9d00';
-                            let matchedModel = "Gemini 3 Pro";
-                            const match = cleanText.match(/Quota limit reached for ([^.]+)/i);
+                            let matchedModel = "Gemini Pro";
+                            const match = cleanText.match(/(?:Quota limit reached for|Tier .*? failed).*?([a-z0-9.-]*?gemini-[a-z0-9.-]+)/i);
                             if (match) {
                                 matchedModel = match[1].replace(/[()]/g, '').trim();
-                            } else if (cleanText.includes("basic") || cleanText.includes("flash")) {
-                                matchedModel = "Gemini Flash";
+                            } else if (cleanText.includes("gemini-2.5-flash") || cleanText.includes("basic") || cleanText.includes("flash")) {
+                                matchedModel = "Gemini 2.5 Flash";
                             }
-                            warnMsg.innerHTML = `<span style="color: #ff9d00; font-weight: normal;">⚠️ You have reached your quota limit for <span style="color: white; font-family: 'Courier New', Courier, monospace; font-weight: bold;">${matchedModel}</span>. Please add more credits to continue.</span>`;
+                            warnMsg.innerHTML = `<span style="color: #ff9d00; font-weight: normal;">⚠️ You have reached an execution limit or structural exception for <span style="color: white; font-family: 'Courier New', Courier, monospace; font-weight: bold;">${matchedModel}</span>. Managed recovery active.</span>`;
                             msgBox.appendChild(warnMsg);
                             
                             // Strip internal fallback wrapper from the response if present 
@@ -953,9 +955,9 @@
                             sessionArtifacts[artifactId] = cleanText;
                             
                             // Keep Chat completely clean with just the file link redirect
-                            aiMsg.innerHTML = `<strong>Analysis posted to Reports window.</strong><br>Returned: <a href="${url}" download="${filename}" onclick="renderArtifactToReport(event, '${artifactId}')" ondblclick="openNativeNotepad('${filename}')" style="color: #e5e7eb; font-weight: 700; text-decoration: underline; background: rgba(128, 128, 128, 0.25); padding: 4px 8px; border-radius: 4px; display: inline-block; margin-top: 10px; cursor: pointer;">${filename}</a>`;
+                            aiMsg.innerHTML = `<strong>Analysis posted to Reports window.</strong><br>Returned: <a href="${url}" download="${filename}" onclick="renderArtifactToReport(event, '${artifactId}')" ondblclick="openNativeNotepad('${filename}')" style="color: #e5e7eb; font-weight: 700; text-decoration: underline; background: rgba(128, 128, 128, 0.25); padding: 4px 8px; border-radius: 4px; display: inline-block; margin-top: 10px; cursor: pointer;">${filename}</a><div style="font-size:10px; color:var(--text-muted); margin-top:8px;">⏱️ Latency: ${durationSec}s</div>`;
                         } else {
-                            aiMsg.innerHTML = applyStatusFormatting(marked.parse(responseText));
+                            aiMsg.innerHTML = applyStatusFormatting(marked.parse(responseText)) + `<div style="font-size:10px; color:var(--text-muted); margin-top:8px;">⏱️ Latency: ${durationSec}s</div>`;
                         }
                     } // close else
 
@@ -1007,6 +1009,7 @@
         document.getElementById('chat-input').addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
+                if (isProcessing) return; // [FIX] Prevent accidental cancels via keyboard
                 handleSendStop();
             } else if (e.key === 'ArrowUp') {
                 if (chatHistory.length > 0 && historyIndex > 0) {

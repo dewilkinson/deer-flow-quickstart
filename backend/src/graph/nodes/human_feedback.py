@@ -80,21 +80,16 @@ def human_feedback_node(state: State) -> Command[Literal["vli", "reporter", "syn
         return Command(goto="reporter")
 
     st_raw = getattr(next_step, "step_type", "reporter") if not isinstance(next_step, dict) else next_step.get("step_type", "reporter")
-    st = str(st_raw).lower()
+    st = str(st_raw.value if hasattr(st_raw, "value") else st_raw).lower()
 
     logger.info(f"[ROUTING] Planning transition to Node: {st} (Step: {getattr(next_step, 'title', 'Untitled') if not isinstance(next_step, dict) else next_step.get('title')})")
 
-    if st == "synthesizer":
-        return Command(goto="synthesizer")
+    # Map generic names
     if st == "processing":
-        return Command(goto="coder")
-    if st == "journaler":
-        return Command(goto="journaler")
-    if st == "analyst":
-        return Command(goto="analyst")
-    if st == "imaging":
-        return Command(goto="imaging")
-    if st == "system":
-        return Command(goto="system")
+        st = "coder"
+
+    valid_agents = ["synthesizer", "coder", "journaler", "analyst", "smc_analyst", "imaging", "system", "portfolio_manager", "risk_manager", "session_monitor", "vision_specialist", "terminal_specialist"]
+    if st in valid_agents:
+        return Command(goto=st)
 
     return Command(goto="reporter")

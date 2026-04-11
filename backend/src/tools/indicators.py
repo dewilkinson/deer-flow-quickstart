@@ -43,11 +43,18 @@ def calculate_rsi(df: pd.DataFrame, period: int = 14):
 def calculate_macd(df: pd.DataFrame, fast: int = 12, slow: int = 26, signal: int = 9):
     """Calculates Moving Average Convergence Divergence (MACD)."""
     df.ta.macd(fast=fast, slow=slow, signal=signal, append=True)
-    # pandas_ta names them MACD_12_26_9, MACDh_12_26_9, MACDs_12_26_9
-    macd_col = [col for col in df.columns if col.startswith("MACD_")][0]
-    macds_col = [col for col in df.columns if col.startswith("MACDs_")][0]
-    df["macd"] = df[macd_col]
-    df["macd_signal"] = df[macds_col]
+    try:
+        macd_col = [col for col in df.columns if col.startswith("MACD_")][0]
+        macds_col = [col for col in df.columns if col.startswith("MACDs_")][0]
+        macdh_col = [col for col in df.columns if col.startswith("MACDh_")][0]
+        df["macd"] = df[macd_col]
+        df["macd_signal"] = df[macds_col]
+        df["macd_hist"] = df[macdh_col]
+    except IndexError:
+        # Fallback if pandas_ta failed to append the indicator columns
+        df["macd"] = 0.0
+        df["macd_signal"] = 0.0
+        df["macd_hist"] = 0.0
     return df
 
 

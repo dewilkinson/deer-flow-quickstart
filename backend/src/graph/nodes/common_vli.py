@@ -6,9 +6,11 @@
 import asyncio
 import logging
 import time
+import traceback
 from datetime import datetime
 
-from langchain_core.messages import AIMessage
+from langchain_core.messages import AIMessage, SystemMessage
+from src.llms.llm import get_llm_by_type
 from langchain_core.runnables import RunnableConfig
 from tenacity import AsyncRetrying, retry_if_exception, stop_after_attempt, wait_exponential
 
@@ -43,12 +45,14 @@ async def _run_node_with_tiered_fallback(agent_type, state, config, tools=None, 
         AGENT_LLM_MAP[agent_type] = tier
         
         # Re-initialize based on tier
+        is_graph = False
         if tools:
             if is_structured and structured_schema:
                 llm = get_llm_by_type(tier)
                 runnable = llm.bind_tools(tools).with_structured_output(structured_schema)
             else:
                 runnable = create_agent_from_registry(agent_type, tools)
+                is_graph = True
         else:
             runnable = get_llm_by_type(tier)
 
@@ -56,22 +60,30 @@ async def _run_node_with_tiered_fallback(agent_type, state, config, tools=None, 
         t0 = time.time()
         # [PERFORMANCE] Set aggressive timeouts to survive reasoning stalls and force basic/legacy rotation
         tier_timeouts = {
-            "reasoning": 4.0,
-            "basic": 40.0,
-            "legacy": 40.0
+            "reasoning": 110.0,
+            "basic": 110.0,
+            "legacy": 110.0
         }
-        tier_timeout = tier_timeouts.get(tier, 45)
+        tier_timeout = tier_timeouts.get(tier, 110.0)
         logger.info(f"[TIMING] Tier {tier} ({agent_type}) started (Internal Timeout: {tier_timeout}s).")
         
         try:
             if messages is not None:
-                result = await asyncio.wait_for(asyncio.to_thread(runnable.invoke, messages), timeout=tier_timeout)
+                if is_graph:
+                    # Agent graph needs dict payload
+                    result = await asyncio.wait_for(runnable.ainvoke({"messages": messages}), timeout=tier_timeout)
+                    if isinstance(result, dict) and "messages" in result and result["messages"]:
+                        result = result["messages"][-1]
+                else:
+                    result = await asyncio.wait_for(runnable.ainvoke(messages), timeout=tier_timeout)
             else:
                 if is_structured:
                     st_llm = runnable.with_structured_output(structured_schema)
-                    result = await asyncio.wait_for(asyncio.to_thread(st_llm.invoke, state), timeout=tier_timeout)
+                    result = await asyncio.wait_for(st_llm.ainvoke(state), timeout=tier_timeout)
                 else:
-                    result = await asyncio.wait_for(asyncio.to_thread(runnable.invoke, state), timeout=tier_timeout)
+                    result = await asyncio.wait_for(runnable.ainvoke(state), timeout=tier_timeout)
+                    if isinstance(result, dict) and "messages" in result and result["messages"]:
+                        result = result["messages"][-1]
             
             # [PROMPT LEAKAGE GUARD] Detect if the model is echoing its own instructions/security protocol
             res_str = str(result).upper()
@@ -96,22 +108,36 @@ async def _run_node_with_tiered_fallback(agent_type, state, config, tools=None, 
                     raise TypeError(f"Agent Intelligence Failure: Structural validation failed on all tiers.")
                 
             logger.info(f"[TIMING] Tier {tier} ({agent_type}) finished in {time.time() - t0:.2f}s.")
+            if hasattr(result, "additional_kwargs"):
+                result.additional_kwargs["duration_secs"] = time.time() - t0
             return result, fallback_messages
         except Exception as e:
-            logger.error(f"[VLI_TIER_FAIL] Tier {tier} failed after {time.time() - t0:.2f}s: {e}")
-            e_str = str(e).upper()
-            is_quota = any(x in e_str for x in ["RESOURCE_EXHAUSTED", "429", "QUOTA", "LIMIT", "EXHAUSTED", "RATE_LIMIT", "TIMEOUT", "CANCELLED"])
+            if isinstance(e, asyncio.TimeoutError):
+                logger.error(f"[VLI_TIER_FAIL] Tier {tier} timed out after {tier_timeout:.2f}s")
+                fallback_messages.append(SystemMessage(content=f"[TIER_{tier.upper()}_TIMEOUT] Try a fallback reasoning strategy."))
+            else:
+                logger.error(f"[VLI_TIER_FAIL] Tier {tier} failed after {time.time() - t0:.2f}s: {e}")
+                logger.error("".join(traceback.format_tb(e.__traceback__)))
+                fallback_messages.append(SystemMessage(content=f"[TIER_{tier.upper()}_FAILURE] Error: {e}. Adjust approach and try fallback tier."))
+            
+            e_str = (str(e) + " " + e.__class__.__name__).upper()
+            is_quota = any(x in e_str for x in ["RESOURCE_EXHAUSTED", "429", "QUOTA", "LIMIT", "EXHAUSTED", "RATE_LIMIT"])
             
             if is_quota:
                 try:
+                    tmp_llm = get_llm_by_type(tier)
+                    actual_model = getattr(tmp_llm, 'model_name', getattr(tmp_llm, 'model', f"Gemini {tier}"))
+                except Exception:
                     actual_model = getattr(runnable, 'model_name', getattr(runnable, 'model', f"Gemini {tier}"))
-                except:
-                    actual_model = f"Gemini {tier}"
                 
-                # Prettify the model name
-                if "3.1" in actual_model.lower() or "pro" in actual_model.lower() or tier == "reasoning":
+                model_str = str(actual_model).lower()
+                
+                # [UI] Prettify the model name for the dashboard warning
+                if "3" in model_str and "flash" in model_str:
+                    actual_model = "Gemini 3 Flash"
+                elif "3.1" in model_str or "pro" in model_str:
                     actual_model = "Gemini 3 Pro"
-                elif "flash" in actual_model.lower() or tier in ["basic", "core", "reporter"]:
+                elif "flash" in model_str or tier in ["basic", "core", "reporter"]:
                     actual_model = "Gemini Flash"
                     
                 fail_msg = f"RESOURCE_EXHAUSTED: Quota limit reached for {actual_model}."

@@ -131,6 +131,7 @@ _vli_rules_enabled = False
 _vli_convergence_history = []
 _vli_last_async_report = ""
 _vli_last_ux_card = {}
+_vli_action_cache_data = {}  # [NEW] Short-term identical query cache
 
 def scrub_vli_output(text) -> str:
     """Universal firewall to prevent technical instruction leakage and verbose error clusters."""
@@ -139,6 +140,7 @@ def scrub_vli_output(text) -> str:
     upper_content = content.upper()
     leak_keywords = ["SECURITY OVERRIDE", "APEX 500 SYSTEM", "SYSTEM INSTRUCTION", "USER IDENTITY", "OPERATIONAL MANDATE", "EXPECTED DICT", "SYSTEMMESSAGE"]
     if any(k in upper_content for k in leak_keywords):
+        logger.error(f"[SCRUBBER DEBUG] Caught leak keywords in: {content}")
         return "**Managed Processing Recovery**: The analytical engine experienced a structural interruption or reasoning quota limit. Technical metadata has been suppressed for system integrity."
     return content
 _vli_reset_requested = False
@@ -1047,6 +1049,34 @@ async def post_vli_action_plan(request: VLIActionPlanRequest, background_tasks: 
             f.write(request.text)
         return {"response": "Plan captured. Vault updated. Session Monitor is analyzing directives...", "status": "OK", "error_details": None}
 
+    # [NEW] Check Durable Action Cache
+    clean_req_text = request.text.strip().upper()
+    import os, json, hashlib, time
+    cache_dir = os.path.join(os.getcwd(), "data", "artifacts", "vli_cache")
+    os.makedirs(cache_dir, exist_ok=True)
+    cache_key = hashlib.md5(clean_req_text.encode()).hexdigest()
+    cache_file = os.path.join(cache_dir, f"{cache_key}.json")
+
+    if not request.background_synthesis and os.path.exists(cache_file):
+        try:
+            with open(cache_file, "r", encoding="utf-8") as cf:
+                cached_data = json.load(cf)
+            if (time.time() - cached_data["timestamp"]) < 300: # 5 min TTL
+                logger.info(f"VLI Agent: Cache hit for '{clean_req_text}'")
+                try:
+                    from src.config.vli import get_vli_path
+                    telemetry_file = get_vli_path("VLI_Raw_Telemetry.md")
+                    timestamp = datetime.now().strftime("[%H:%M:%S]")
+                    with open(telemetry_file, "a", encoding="utf-8") as tf:
+                        tf.write(f"\n{timestamp} **CACHE HIT (Graph Bypassed)**\n")
+                        tf.write(f"- **Directive**: `{request.text[:40]}...`\n")
+                        tf.write(f"- **Action**: Retrieved from durable short-term cache (TTL 300s).\n\n---\n")
+                except:
+                    pass
+                return {"response": cached_data["response_text"], "status": "OK", "error_details": None}
+        except:
+            pass
+
     # Real Agent Routing for Chat/Directives
     logger.info(f"VLI: Routing directive to Gemini Agent: {request.text[:50]}...")
     final_vli_state = {}  # Ensure initialization
@@ -1160,7 +1190,7 @@ async def post_vli_action_plan(request: VLIActionPlanRequest, background_tasks: 
         # Extract metadata from final state
         from langchain_core.messages import ToolMessage
 
-        hierarchy = {"Orchestrator": {"workers": []}}
+        hierarchy = {"Orchestrator": {"workers": [], "duration": 0.0}}
         worker_counts = {}
         current_agent = "Orchestrator"
         system_nodes = ["reporter", "coordinator", "vli_coordinator", "router", "vli_parser"]
@@ -1173,7 +1203,10 @@ async def post_vli_action_plan(request: VLIActionPlanRequest, background_tasks: 
                     if name not in system_nodes:
                         current_agent = name
                         if current_agent not in hierarchy:
-                            hierarchy[current_agent] = {"workers": []}
+                            hierarchy[current_agent] = {"workers": [], "duration": 0.0}
+                        
+                        dur = getattr(m, "additional_kwargs", {}).get("duration_secs", 0.0)
+                        hierarchy[current_agent]["duration"] += dur
                 elif isinstance(m, ToolMessage):
                     if not name.startswith("transfer_to_"):
                         worker_base = f"{name}_worker"
@@ -1194,12 +1227,15 @@ async def post_vli_action_plan(request: VLIActionPlanRequest, background_tasks: 
         hier_lines = ["- **Execution Hierarchy**:"]
         for agent, data in hierarchy.items():
             suffix = "" if agent.endswith("_finalize") else " [LLM]"
+            dur = data.get("duration", 0.0)
+            dur_str = f" ({dur:.1f}s)" if dur > 0 else ""
+
             if agent == "Orchestrator" and not data["workers"] and len(hierarchy) == 1:
-                hier_lines.append(f'  - <span style="color: #58a6ff; font-weight: bold;">[ROOT] {agent}{suffix}</span>')
+                hier_lines.append(f'  - <span style="color: #58a6ff; font-weight: bold;">[ROOT] {agent}{suffix}{dur_str}</span>')
                 break
 
             prefix = "[ROOT]" if agent == "Orchestrator" else "[AGENT]"
-            hier_lines.append(f'  - <span style="color: #58a6ff; font-weight: bold;">{prefix} {agent}{suffix}</span>')
+            hier_lines.append(f'  - <span style="color: #58a6ff; font-weight: bold;">{prefix} {agent}{suffix}{dur_str}</span>')
             for w in data["workers"]:
                 hier_lines.append(f'    - <span style="color: #d29922; font-weight: 500;">-> {w}</span>')
 
@@ -1238,6 +1274,13 @@ async def post_vli_action_plan(request: VLIActionPlanRequest, background_tasks: 
     # Note: Slugification logic matches VLI_session_dashboard.html exactly.
     if response_text and len(response_text) > 50:
         _persist_vli_report(request.text, response_text)
+        
+        # [NEW] Save to durable cache
+        try:
+            with open(cache_file, "w", encoding="utf-8") as cf:
+                json.dump({"timestamp": time.time(), "response_text": response_text}, cf)
+        except Exception as ce:
+            logger.error(f"VLI: Failed to write cache: {ce}")
 
     return {"response": response_text, "status": "OK", "error_details": None}
 
