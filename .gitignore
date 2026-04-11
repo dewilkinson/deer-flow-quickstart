@@ -44,6 +44,7 @@ backend/*.txt
 backend/logs/*.json
 backend/logs/*.jsonl
 backend/data/reports/
+backend/data/artifacts/vli_cache/
 tmp/
 !backend/requirements.txt
 
