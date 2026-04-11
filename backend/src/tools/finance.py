@@ -995,6 +995,74 @@ async def get_raw_smc_tables(ticker: str, interval: str = "1d", period: str = "1
 
         return json.dumps([{"error": f"Raw Table Error: {str(e)}"}])
 
+
+@tool
+async def get_macro_stocks() -> str:
+    """
+    Institutional Macro Registry Tool: Fetches the current states of all registered macro indicators
+    (Indices, Yields, Commodities, Crypto). Generates 'get_macro_stocks.json' for automated reporting.
+    """
+    from src.services.macro_registry import macro_registry
+    from datetime import datetime
+    import json
+    import os
+
+    macros = macro_registry.get_macros()
+    results = {}
+
+    # Batch fetch using the datastore infrastructure
+    ticker_list = list(macros.values())
+    try:
+        # We use a 5-day window to ensure we have a previous close for percentage calculation
+        data = await asyncio.wait_for(
+            asyncio.to_thread(_fetch_batch_history, ticker_list, "5d", "1d"),
+            timeout=15.0
+        )
+
+        rows = []
+        for label, ticker in macros.items():
+            ticker_df = _extract_ticker_data(data, ticker)
+            if ticker_df.empty:
+                results[label] = {"symbol": ticker, "status": "Error (No Data)"}
+                continue
+
+            last_row = ticker_df.iloc[-1]
+            prev_row = ticker_df.iloc[-2] if len(ticker_df) > 1 else last_row
+
+            price = float(last_row["Close"])
+            change = ((price / float(prev_row["Close"])) - 1) * 100
+
+            results[label] = {
+                "symbol": ticker,
+                "price": round(price, 4),
+                "change_pct": round(change, 2),
+                "volume": int(last_row["Volume"]),
+                "last_updated": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            }
+
+            # Format row for Markdown table
+            color = "🟢" if change >= 0 else "🔴"
+            rows.append(f"| {label} | {ticker} | {price:,.2f} | {color} {change:+.2f}% | {int(last_row['Volume']):,} |")
+
+        # Create Artifact
+        artifact_path = os.path.join("data", "artifacts", "get_macro_stocks.json")
+        os.makedirs(os.path.dirname(artifact_path), exist_ok=True)
+        with open(artifact_path, "w", encoding="utf-8") as f:
+            json.dump(results, f, indent=4)
+
+        # Format Return Table
+        table = "# Macro Stocks State\n\n"
+        table += "| Asset | Ticker | Price | Change | Volume |\n"
+        table += "| :--- | :--- | :--- | :--- | :--- |\n"
+        table += "\n".join(rows)
+        table += f"\n\n> [!NOTE]\n> Analysis posted to Reports window (get_macro_stocks.json)."
+
+        return table
+
+    except Exception as e:
+        logger.error(f"Macro Tool Error: {e}")
+        return f"[ERROR]: Failed to fetch macro indicators: {str(e)}"
+
 # Datastore Registration
 try:
     from src.services.datastore import DatastoreManager
