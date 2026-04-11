@@ -130,9 +130,16 @@ def _create_llm_use_conf(llm_type: LLMType, conf: dict[str, Any]) -> BaseChatMod
         gemini_conf["max_retries"] = 0
         gemini_conf["timeout"] = 30
 
+        # [RELIABILITY] Fallback to BASIC_MODEL__api_key if this specific tier (e.g. legacy) lacks one
+        key_val = gemini_conf.get("api_key", "")
+        if not key_val:
+            key_val = os.environ.get("BASIC_MODEL__api_key", os.environ.get("GEMINI_API_KEY", ""))
+            if key_val:
+                gemini_conf["api_key"] = key_val
+
         # Map common keys to Google AI Studio specific keys
         if "api_key" in gemini_conf:
-            gemini_conf["google_api_key"] = gemini_conf.pop("api_key")
+            gemini_conf["google_api_key"] = gemini_conf["api_key"]
 
         # Remove base_url and platform since Google AI Studio doesn't use them
         gemini_conf.pop("base_url", None)

@@ -3,6 +3,7 @@
 # License: PolyForm Noncommercial 1.0.0
 
 from typing import Any
+from collections import OrderedDict
 
 # Centralized Agent Contexts (Durable during node execution)
 # Each agent node has only one context shared by all sub-modules
@@ -23,10 +24,11 @@ GLOBAL_CONTEXT: dict[str, Any] = {}
 GENERAL_CONTEXT = GLOBAL_CONTEXT  # Alias for compatibility
 
 # Persisted Market Data Cache (Used by Hybrid Resolver)
-history_cache: dict[str, Any] = {}
+# Now using OrderedDict to support LRU eviction logic
+history_cache: OrderedDict[str, Any] = OrderedDict()
 
 # DataFrame Raw Price Caches
-df_cache: dict[str, Any] = {}
+df_cache: OrderedDict[str, Any] = OrderedDict()
 
 # Computed SMC Pre-Calculated Results
-analysis_cache: dict[str, Any] = {}
+analysis_cache: OrderedDict[str, Any] = OrderedDict()

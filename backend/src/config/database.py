@@ -130,9 +130,33 @@ class SessionMessage(Base):
     session = relationship("ResearchSession", back_populates="messages")
 
 
+class PersistentCache(Base):
+    """Model for tiered persistent caching of analytical artifacts."""
+
+    __tablename__ = "persistent_cache"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    ticker = Column(String(50), nullable=False, index=True)
+    resource_type = Column(String(100), nullable=False)  # smc, news, search
+    timeframe = Column(String(20), nullable=True)        # 1h, 1d, etc.
+    reference_price = Column(Float, nullable=False)      # Price at time of cache creation
+    data = Column(Text, nullable=False)                  # JSON string of analysis/results
+    heat_score = Column(Float, default=0.0)             # For immunity logic
+    last_accessed = Column(DateTime, default=datetime.utcnow)
+    expires_at = Column(DateTime, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    def is_expired(self) -> bool:
+        return datetime.utcnow() > self.expires_at
+
+
 # Database connection and session management
 def get_database_url() -> str:
     """Get database URL from environment variables."""
+    # Check if we're in test mode
+    if os.getenv("VLI_TEST_MODE", "False").lower() == "true":
+        return "sqlite:///./vli_test.db"
+
     # Check if full URL is provided
     full_url = os.getenv("RESEARCH_DB_URL")
     if full_url:

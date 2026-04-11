@@ -84,3 +84,7 @@ def load_yaml_config(file_path: str) -> dict[str, Any]:
     # 将处理后的配置存入缓存
     _config_cache[file_path] = processed_config
     return processed_config
+
+def get_config() -> dict[str, Any]:
+    """Retrieves the main application configuration (backend/conf.yaml)."""
+    return load_yaml_config("conf.yaml")

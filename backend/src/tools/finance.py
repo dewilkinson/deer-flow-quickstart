@@ -62,9 +62,7 @@ def _get_session():
     return session
 
 
-from src.services.datastore import DatastoreManager
-
-DatastoreManager.register_fetcher(lambda tickers, period, interval: _fetch_batch_history(tickers, period, interval))
+# Datastore registration is moved to the bottom of the file to prevent circular imports
 
 
 def _normalize_ticker(ticker: str) -> str:
@@ -257,13 +255,14 @@ async def get_symbol_history_data(symbols: list[str], period: str = "1d", interv
         sym = sym.upper()
         # No heat tracking for Scout
 
-        cache_key = f"{sym}_{period}_{interval}"
-        cached_entry = history_cache.get(cache_key)
-
+        from src.services.datastore import DatastoreManager
+        # Refactor Phase 2: Use DatastoreManager.get_artifact
+        cached_entry = DatastoreManager.get_artifact(sym, "history", interval)
+        
         is_stale = True
-        if cached_entry and "last_updated" in cached_entry:
-            age = (now - cached_entry["last_updated"]).total_seconds() / 60.0
-            if age <= expiry_minutes:
+        if cached_entry and "updated_at" in cached_entry:
+            age_min = (now - cached_entry["updated_at"]).total_seconds() / 60.0
+            if age_min <= expiry_minutes:
                 is_stale = False
 
         if not is_stale:
@@ -298,7 +297,8 @@ async def get_symbol_history_data(symbols: list[str], period: str = "1d", interv
                                 q = f_data[sym.upper()]
                                 data_str = f"### {sym}\n- **Price**: {q['price']:.2f}\n- **Volume**: {q['volume']:,}\n- **Source**: Finviz (Fallback)"
                                 results.append(data_str)
-                                history_cache[f"{sym}_{period}_{interval}"] = {"data": data_str, "last_updated": datetime.now(), "period": period, "interval": interval}
+                                # Refactor Phase 2/3: Store with current price for drift check
+                                DatastoreManager.store_artifact(sym, "history", interval, data_str, price=float(q["price"]))
                                 continue
                         except:
                             pass
@@ -317,7 +317,9 @@ async def get_symbol_history_data(symbols: list[str], period: str = "1d", interv
                     }
                     data_str = f"### {sym}\n- **Period**: {period} | **Interval**: {interval}\n- **Open**: {raw_ohlcv['Open']:.2f}\n- **High**: {raw_ohlcv['High']:.2f}\n- **Low**: {raw_ohlcv['Low']:.2f}\n- **Close**: {raw_ohlcv['Close']:.2f}\n- **Volume**: {raw_ohlcv['Volume']:,}\n"
 
-                    history_cache[f"{sym}_{period}_{interval}"] = {"data": data_str, "raw": raw_ohlcv, "last_updated": datetime.now(), "period": period, "interval": interval}
+                    # Refactor Phase 2/3: Store with current price for drift check
+                    current_price = raw_ohlcv["Close"]
+                    DatastoreManager.store_artifact(sym, "history", interval, {"data": data_str, "raw": raw_ohlcv}, price=current_price)
                     results.append(data_str)
             except TimeoutError:
                 logger.error(f"Timeout: Fetch for {others} timed out.")
@@ -349,21 +351,26 @@ async def simulate_cache_volatility(num_high: int = 10, num_moderate: int = 30, 
     for i in range(num_high):
         sym = f"HIGH_{i}"
         ticker_metadata[sym] = {"heat": 100}
-        history_cache[f"{sym}_1d_1h"] = {"data": f"### {sym}\nMock high heat", "last_updated": stale_time, "period": "1d", "interval": "1h"}
+        from src.services.heat_manager import HeatManager
+        # Force high heat in new Manager
+        HeatManager.increment_heat(sym, 100.0)
+        DatastoreManager.store_artifact(sym, "history", "1h", f"### {sym}\nMock high heat", price=100.0)
         cached_tickers_set.add(sym)
 
     # 30 Moderate Activity
     for i in range(num_moderate):
         sym = f"MOD_{i}"
         ticker_metadata[sym] = {"heat": 10}
-        history_cache[f"{sym}_1d_1h"] = {"data": f"### {sym}\nMock mod heat", "last_updated": stale_time, "period": "1d", "interval": "1h"}
+        HeatManager.increment_heat(sym, 10.0)
+        DatastoreManager.store_artifact(sym, "history", "1h", f"### {sym}\nMock mod heat", price=100.0)
         cached_tickers_set.add(sym)
 
     # 10 Inactive
     for i in range(num_inactive):
         sym = f"INACT_{i}"
         ticker_metadata[sym] = {"heat": 1}
-        history_cache[f"{sym}_1d_1h"] = {"data": f"### {sym}\nMock inactive", "last_updated": stale_time, "period": "1d", "interval": "1h"}
+        HeatManager.increment_heat(sym, 1.0)
+        DatastoreManager.store_artifact(sym, "history", "1h", f"### {sym}\nMock inactive", price=100.0)
         cached_tickers_set.add(sym)
 
     # Simulate random clicks to reach final distribution
@@ -519,12 +526,12 @@ async def get_stock_quote(ticker: str, period: str = "1d", interval: str = "1m",
 
     try:
         # 1. Warm Cache Phase: Check global scope for recent data (< 2 mins)
-        cache_key = f"{norm_ticker}_{period}_{interval}"
-        history_cache = DatastoreManager.get_history_cache()
-        if cache_key in history_cache:
-            entry = history_cache[cache_key]
+        from src.services.datastore import DatastoreManager
+        # Refactor Phase 2: Use DatastoreManager.get_artifact
+        entry = DatastoreManager.get_artifact(norm_ticker, "history", interval)
+        if entry:
             # [STABILITY] Accept data up to 120s old for immediate resonance
-            age_sec = (datetime.now() - entry["last_updated"]).total_seconds()
+            age_sec = (datetime.now() - entry["updated_at"]).total_seconds()
             if age_sec < 120:
                 logger.info(f"VLI Fast-Path: Warm cache hit for {norm_ticker} (Age: {age_sec:.1f}s)")
                 # Extract price from the data_str or use a fallback
@@ -700,17 +707,12 @@ async def run_smc_analysis(ticker: str, interval: str = "auto") -> str:
     from datetime import datetime
 
     norm_ticker = _normalize_ticker(ticker)
-    cache_key = f"{norm_ticker}_auto_{interval}_analysis"
-    analysis_cache = DatastoreManager.get_analysis_cache()
+    # Refactor Phase 2: Use DatastoreManager
+    entry = DatastoreManager.get_artifact(norm_ticker, "smc_analysis", interval)
+    if entry:
+        logger.info(f"[ANALYSIS_CACHE HIT] Reusing cached SMC analyst report for {norm_ticker}")
+        return entry["data"]
 
-    if cache_key in analysis_cache:
-        entry = analysis_cache[cache_key]
-        if "last_updated" in entry and "data" in entry:
-            age_sec = (datetime.now() - entry["last_updated"]).total_seconds()
-            ttl = _get_ttl_seconds(interval if interval != "auto" else "1d")
-            if age_sec < ttl:
-                logger.info(f"[ANALYSIS_CACHE HIT] Reusing cached SMC analyst report for {norm_ticker} (Age: {age_sec:.1f}s)")
-                return entry["data"]
     import os
     import sys
 
@@ -992,3 +994,10 @@ async def get_raw_smc_tables(ticker: str, interval: str = "1d", period: str = "1
         import traceback
 
         return json.dumps([{"error": f"Raw Table Error: {str(e)}"}])
+
+# Datastore Registration
+try:
+    from src.services.datastore import DatastoreManager
+    DatastoreManager.register_fetcher(lambda tickers, period, interval: _fetch_batch_history(tickers, period, interval))
+except ImportError:
+    logger.warning("Could not register finance fetcher in DatastoreManager due to circularity or initialization order.")

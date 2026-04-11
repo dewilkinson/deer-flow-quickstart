@@ -31,3 +31,10 @@ _executor_mock.MAX_CONCURRENT_SUBAGENTS = 3
 _executor_mock.get_background_task_result = MagicMock()
 
 sys.modules["deerflow.subagents.executor"] = _executor_mock
+
+import pytest
+@pytest.fixture(scope="session", autouse=True)
+def init_test_database():
+    """Initialize the database for testing."""
+    from src.config.database import create_tables
+    create_tables()
