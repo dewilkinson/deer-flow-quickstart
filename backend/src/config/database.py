@@ -241,7 +241,7 @@ def init_database():
 
         # Create tables
         print("Creating database tables (disabled for testing)...")
-        # create_tables()
+        create_tables()
         print("[SUCCESS] Database tables bypassed successfully")
 
     except ImportError as e:

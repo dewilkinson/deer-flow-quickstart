@@ -25,7 +25,7 @@ class TestGetWebSearchTool:
     @patch("src.tools.search.LoggedDuckDuckGoSearch")
     def test_get_web_search_tool_duckduckgo(self, mock_ddg):
         tool = get_web_search_tool(max_search_results=3)
-        assert tool == mock_ddg.return_value
+        assert tool.tool_instance == mock_ddg.return_value
         mock_ddg.assert_called_once_with(
             name="web_search",
             num_results=3,

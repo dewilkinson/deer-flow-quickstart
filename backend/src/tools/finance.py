@@ -927,7 +927,27 @@ async def run_smc_analysis(ticker: str, interval: str = "auto") -> str:
     else:
         report.append("- **Status**: **[FAIL]** Trigger does not align with Macro trend, or missing tactical structural zones.")
 
-    return "\n".join(report)
+    final_report = "\n".join(report)
+    
+    # Phase 3 Integration: Store the analysis in the persistent cache
+    # We use the macro timeframe's last price as the reference for drift monitoring
+    current_price = 0.0
+    try:
+        # mData_res contains the macro dataframe (1d or similar)
+        if not mData_res.empty:
+            current_price = float(mData_res.iloc[-1]["Close"])
+    except:
+        pass
+        
+    DatastoreManager.store_artifact(
+        ticker=norm_ticker,
+        resource_type="smc_analysis",
+        timeframe=interval,
+        data=final_report,
+        price=current_price if current_price > 0 else None
+    )
+
+    return final_report
 
 
 async def get_raw_smc_tables(ticker: str, interval: str = "1d", period: str = "1y") -> str:
@@ -988,7 +1008,16 @@ async def get_raw_smc_tables(ticker: str, interval: str = "1d", period: str = "1
 
         final_json = json.dumps({"ticker": norm_ticker, "type": "RAW_SMC_PRICE_ACTION_TABLE", "timeframe": interval, "data": json.loads(export_df.to_json(orient="records"))})
 
-        analysis_cache[cache_key] = {"data": final_json, "last_updated": datetime.now()}
+        # Phase 3 Integration: Store the raw data in the persistent cache
+        # We use the last Close price as the reference for drift monitoring
+        current_price = float(df["close"].iloc[-1])
+        DatastoreManager.store_artifact(
+            ticker=norm_ticker,
+            resource_type="smc_analysis",
+            timeframe=interval + "_raw",
+            data=final_json,
+            price=current_price
+        )
         return final_json
     except Exception as e:
         import traceback
