@@ -216,30 +216,30 @@ def _persist_vli_report(request_text: str, content: str):
 
 
 def _get_vli_intent(text: str) -> str:
-    """Standardized intent classification for Market Awareness vs Tactical Execution."""
+    """Standardized intent classification for Market Insight vs Tactical Execution."""
     text_trim = text.strip()
     text_upper = text_trim.upper()
     is_smc = "SMC" in text_upper
     
-    # [NEW] Question & General Detection: Expanded triggers
-    question_starters = ["WHAT", "HOW", "WHY", "WHEN", "WHICH", "IS", "CAN", "WHO", "WHOSE", "WHOM", "ARE", "DIFFERENCE", "WILL", "DOES", "COULD", "SHOULD"]
-    is_question = any(text_upper.startswith(qs) for qs in question_starters) or text_trim.endswith("?") or text_trim.endswith("!")
-    
-    # [HEURISTIC] Default to MARKET_AWARENESS unless explicit "Tactical Triggers" are found.
     tactical_triggers = ["ANALYZE", "ANALYSIS", "STRIKE", "SIGNAL", "SMC", "ENTRY", "SCAN", "SWORD", "SHIELD", "SETUP", "TRADE", "EXECUTE"]
-    educational_markers = ["LEARN", "EDUCATION", "EXPLAIN", "CONCEPT", "VS", "COMPARE", "PERFORMANCE", "KEEP UP", "YTD", "YEAR", "GIVEN", "OUTLOOK", "SCENARIO", "RECOMMEND", "SUGGEST", "DOES"]
+    educational_markers = ["LEARN", "EDUCATION", "EXPLAIN", "CONCEPT", "VS", "COMPARE", "PERFORM", "KEEP UP", "YTD", "YEAR", "GIVEN", "OUTLOOK", "SCENARIO", "RECOMMEND", "SUGGEST", "DOES", "HOW"]
     
     is_tactical = any(kw in text_upper for kw in tactical_triggers) or is_smc
     is_educational = any(kw in text_upper for kw in educational_markers)
     
-    # Questions and general queries are always Market Awareness
-    if is_question:
-        return "MARKET_AWARENESS"
-    
-    # Robustness: Comparison queries or general checks without "Analyze" are always MARKET_AWARENESS
     if is_tactical and not is_educational:
         return "TACTICAL_EXECUTION"
-    return "MARKET_AWARENESS"
+        
+    question_starters = ["WHAT", "HOW", "WHY", "WHEN", "WHICH", "IS", "CAN", "WHO", "WHOSE", "WHOM", "ARE", "DIFFERENCE", "WILL", "DOES", "COULD", "SHOULD"]
+    is_question = any(text_upper.startswith(qs) for qs in question_starters) or text_trim.endswith("?") or text_trim.endswith("!")
+    
+    if is_educational or is_question:
+        return "MARKET_INSIGHT"
+        
+    if is_tactical:
+        return "TACTICAL_EXECUTION"
+        
+    return "MARKET_INSIGHT"
 
 
 def create_futures_watchlist_panel():
@@ -980,7 +980,7 @@ async def _invoke_vli_agent(
         "verbosity": 1,
         "direct_mode": direct_mode,
         "raw_data_mode": raw_data_mode,
-        "intent_mode": intent_mode,
+        "intent": intent_mode, # Explicit reset
     }
 
     # [RESONANCE FLOOR] Configuration for reliable execution
@@ -1158,7 +1158,7 @@ async def post_vli_action_plan(request: VLIActionPlanRequest, background_tasks: 
             logger.error(f"VLI: Cache read failure: {e}")
     else:
         # [NEW] Explicit Cache Deletion for bypass hits (Prevent ghost hits if intent logic fluctuates)
-        if (is_note or intent_mode == "MARKET_AWARENESS") and os.path.exists(cache_file):
+        if (is_note or intent_mode == "MARKET_INSIGHT") and os.path.exists(cache_file):
             try:
                 os.remove(cache_file)
                 logger.info(f"[VLI_CACHE] Purged stale cache entry for Market Awareness hash: {cache_key}")

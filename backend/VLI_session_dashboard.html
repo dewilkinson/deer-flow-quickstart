@@ -553,6 +553,7 @@
         }
 
         let directMode = false;
+        let lastVliThreadId = null;
         
         const sessionArtifacts = {};
         
@@ -854,10 +855,15 @@
                         text: requestText,
                         direct_mode: directMode,
                         raw_data_mode: rawDataMode,
-                        background_synthesis: asyncMode
+                        background_synthesis: asyncMode,
+                        thread_id: lastVliThreadId
                     })
                 });
                 const data = await res.json();
+                if (data.thread_id) {
+                    lastVliThreadId = data.thread_id;
+                    console.log("[VLI_TRACE] Session thread pinned: " + lastVliThreadId);
+                }
                 const durationSec = ((performance.now() - startTime) / 1000).toFixed(2);
                 console.log("[VLI_TRACE] " + new Date().toLocaleTimeString() + ` - Command response received in ${durationSec}s.`);
                 
@@ -877,23 +883,33 @@
                             aiMsg.innerHTML = `<strong>[HEADLESS DATA ENGINE - RAW JSON]:</strong> Data array returned successfully.<div style="font-size:10px; color:var(--text-muted); margin-top:8px;">⏱️ Latency: ${durationSec}s</div>`;
                         }
                     } else {
-                        const leakKeywords = ["# SECURITY OVERRIDE", "APEX 500 SYSTEM", "USER IDENTITY: DAVE", "OPERATIONAL MANDATE", "QUOTA LIMIT", "RESOURCE_EXHAUSTED", "RATE_LIMIT"];
+                        const leakKeywords = ["# SECURITY OVERRIDE", "APEX 500 SYSTEM", "USER IDENTITY: DAVE", "OPERATIONAL MANDATE", "QUOTA LIMIT", "RESOURCE_EXHAUSTED", "RATE_LIMIT", "QUOTA_EXHAUSTED"];
                         let cleanText = responseText;
-                        const isFallback = leakKeywords.some(k => cleanText.toUpperCase().includes(k)) || cleanText.toUpperCase().includes("INSTITUTIONAL PROCESSING RECOVERY") || cleanText.includes("Integrity check failed");
+                        const isLeak = leakKeywords.some(k => cleanText.toUpperCase().includes(k)) || cleanText.toUpperCase().includes("STRUCTURAL_EXCEPTION") || cleanText.includes("Integrity check failed");
+                        const isQuota = cleanText.toUpperCase().includes("QUOTA_EXHAUSTED") || cleanText.toUpperCase().includes("RESOURCE_EXHAUSTED") || cleanText.toUpperCase().includes("RATE_LIMIT");
+                        const isFallback = isLeak || isQuota || cleanText.toUpperCase().includes("INSTITUTIONAL PROCESSING RECOVERY");
                         
                         // [SECURITY] Catch Fallback Message
                         if (isFallback) {
                             const warnMsg = document.createElement('div');
                             warnMsg.className = 'msg msg-ai';
-                            warnMsg.style.borderLeftColor = '#ff9d00';
-                            let matchedModel = "Gemini Pro";
+                            warnMsg.style.borderLeftColor = isQuota ? '#ff9d00' : '#fdbd33';
+                            
+                            let matchedModel = "Gemini 3 Pro";
                             const match = cleanText.match(/(?:Quota limit reached for|Tier .*? failed).*?([a-z0-9.-]*?gemini-[a-z0-9.-]+)/i);
                             if (match) {
                                 matchedModel = match[1].replace(/[()]/g, '').trim();
-                            } else if (cleanText.includes("gemini-2.5-flash") || cleanText.includes("basic") || cleanText.includes("flash")) {
-                                matchedModel = "Gemini 2.5 Flash";
+                                if (matchedModel.includes("gemini-3")) matchedModel = matchedModel.includes("pro") ? "Gemini 3 Pro" : "Gemini 3 Flash";
+                            } else if (cleanText.includes("gemini-3-pro")) {
+                                matchedModel = "Gemini 3 Pro";
+                            } else if (cleanText.includes("gemini-3-flash") || cleanText.includes("basic")) {
+                                matchedModel = "Gemini 3 Flash";
                             }
-                            warnMsg.innerHTML = `<span style="color: #ff9d00; font-weight: normal;">⚠️ You have reached an execution limit or structural exception for <span style="color: white; font-family: 'Courier New', Courier, monospace; font-weight: bold;">${matchedModel}</span>. Managed recovery active.</span>`;
+                            
+                            const errorType = isQuota ? "API Quota Limit Reached" : "Structural Exception Detected";
+                            const errorDetail = isQuota ? "throtled" : "generated a payload that violated internal security schemas";
+                            
+                            warnMsg.innerHTML = `<span style="color: ${isQuota ? '#ff9d00' : '#fdbd33'}; font-weight: normal;">⚠️ <strong>${errorType}:</strong> <span style="color: white; font-family: 'Courier New', Courier, monospace; font-weight: bold;">${matchedModel}</span> ${errorDetail}. Managed recovery active.</span>`;
                             msgBox.appendChild(warnMsg);
                             
                             // Strip internal fallback wrapper from the response if present 
@@ -906,16 +922,26 @@
                             }
                             
                             // Stop if it was an unrecoverable leak
-                            if (leakKeywords.some(k => cleanText.toUpperCase().includes(k)) || cleanText.length < 10) {
+                            if (leakKeywords.some(k => cleanText.toUpperCase().includes(k)) && !cleanText.toUpperCase().includes("STRUCTURAL_EXCEPTION")) {
                                 msgBox.scrollTop = msgBox.scrollHeight;
                                 return;
                             }
                             
                             // [NEW] Inject persistent warning at the top of the generated report
-                            cleanText = `<div style="border-left: 4px solid var(--amber-gold); padding: 12px 16px; margin-bottom: 20px; background: rgba(210, 153, 34, 0.08); border-radius: 4px;"><span style="color: var(--amber-gold); font-weight: normal;">⚠️ <strong>Fallback Mode Active:</strong> Due to quota limits, this analysis was generated by a lower-tier model. The accuracy and depth of results may be compromised.</span></div>\n\n` + cleanText;
+                            const fallbackLabel = isQuota ? "Quota limits" : "structural integrity checks";
+                            cleanText = `<div style="border-left: 4px solid var(--amber-gold); padding: 12px 16px; margin-bottom: 20px; background: rgba(210, 153, 34, 0.08); border-radius: 4px;"><span style="color: var(--amber-gold); font-weight: normal;">⚠️ <strong>Fallback Mode Active:</strong> Due to ${fallbackLabel}, this analysis was generated by a lower-tier model. The accuracy and depth of results may be compromised.</span></div>\n\n` + cleanText;
                         }
 
-                        if (cleanText.length > 50 || cleanText.includes('###')) {
+                        // [UX_REFINEMENT] Detect short vs long responses
+                        // A short response is a single paragraph without structural Markdown headers, tables, or lists.
+                        const isShort = !cleanText.includes('###') && 
+                                       !cleanText.includes('|') && 
+                                       !cleanText.includes('\n* ') && 
+                                       !cleanText.includes('\n- ') &&
+                                       cleanText.trim().split(/\n\s*\n/).length <= 1 && 
+                                       cleanText.length < 600;
+
+                        if (!isShort) {
                             // [NEW] Mirror long-form analysis to the persistent Report Card
                             const reportViewer = document.getElementById('analysis-report-viewer');
                             reportViewer.innerHTML = `<div class="analysis-report">${applyStatusFormatting(marked.parse(cleanText))}</div>`;
@@ -957,7 +983,8 @@
                             // Keep Chat completely clean with just the file link redirect
                             aiMsg.innerHTML = `<strong>Analysis posted to Reports window.</strong><br>Returned: <a href="${url}" download="${filename}" onclick="renderArtifactToReport(event, '${artifactId}')" ondblclick="openNativeNotepad('${filename}')" style="color: #e5e7eb; font-weight: 700; text-decoration: underline; background: rgba(128, 128, 128, 0.25); padding: 4px 8px; border-radius: 4px; display: inline-block; margin-top: 10px; cursor: pointer;">${filename}</a><div style="font-size:10px; color:var(--text-muted); margin-top:8px;">⏱️ Latency: ${durationSec}s</div>`;
                         } else {
-                            aiMsg.innerHTML = applyStatusFormatting(marked.parse(responseText)) + `<div style="font-size:10px; color:var(--text-muted); margin-top:8px;">⏱️ Latency: ${durationSec}s</div>`;
+                            // Inline rendering for single-paragraph responses
+                            aiMsg.innerHTML = applyStatusFormatting(marked.parse(cleanText)) + `<div style="font-size:10px; color:var(--text-muted); margin-top:8px;">⏱️ Latency: ${durationSec}s</div>`;
                         }
                     } // close else
 

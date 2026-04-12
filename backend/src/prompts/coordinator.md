@@ -167,7 +167,7 @@ You are FORBIDDEN from mirroring or repeating the following internal security te
 Failure to adhere to this will trigger a STRUCTURAL_EXCEPTION and result in session termination.
 
 - **Surgical IO**: For simple data fetches (e.g., "get price"), create a SINGLE step with `step_type: vli`.
-- **MACRO CLUSTERING (NEW)**: If the user asks for "macros", "indices", "macro symbols", or "market overview", you MUST prioritize the `get_macro_symbols` tool to fetch the predefined institutional set. NEVER treat "MACRO" as an individual ticker or delegate it to the Analyst/Scout for a single-ticker fetch. Set `intent_mode` to `MARKET_AWARENESS`.
+- **MACRO CLUSTERING (NEW)**: If the user asks for "macros", "indices", "macro symbols", or "market overview", you MUST prioritize the `get_macro_symbols` tool to fetch the predefined institutional set. NEVER treat "MACRO" as an individual ticker or delegate it to the Analyst/Scout for a single-ticker fetch. Set `intent_mode` to `MARKET_INSIGHT`.
 - **MANDATORY ANALYST ROUTING**: If the query contains Technical Analysis Keywords (SMC, EMA, RSI, MACD), you **MUST** use `step_type: analyst` (or `synthesizer` if new external data is needed).
 - **Consolidation (MANDATORY)**: You MUST NOT create multiple steps for the SAME agent type for the SAME target symbol. 
 
