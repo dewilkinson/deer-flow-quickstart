@@ -309,12 +309,29 @@ def _compact_history(messages: list) -> list:
     Filters out structural planning messages to provide a clean context for the reporter.
     """
     compacted = []
-    # Nodes whose messages should be ignored in final narrative synthesis
-    structural_nodes = ["coordinator", "vli_coordinator", "vli_spine", "system", "vli_parser", "parser"]
+    # Nodes whose messages should be ignored in final narrative synthesis EXCEPT when they hold result logic
+    structural_nodes = ["vli_spine", "system", "vli_parser", "parser"]
+    
+    # [HARDENING] We keep 'coordinator' and 'vli_coordinator' if they were the final node or contain _finalize suffix
+    # because they often hold the entire analytical payload in Fast-Path scenarios.
     
     for m in messages:
-        if hasattr(m, "name") and m.name in structural_nodes:
+        name = getattr(m, "name", "") or ""
+        
+        # 1. Skip strictly structural nodes
+        if name in structural_nodes:
             continue
+            
+        # 2. Skip 'coordinator' if it's just a planning stage and NOT a finalization
+        if name in ["coordinator", "vli_coordinator"]:
+            content = str(getattr(m, "content", ""))
+            # If it's the very last message in the set, we must keep it (it's the answer)
+            if m == messages[-1]:
+                 pass # Keep
+            # If it looks like a planning object (contains internal braces or keys), skip it
+            elif "{" in content and "steps" in content:
+                 continue
+            
         compacted.append(m)
     return compacted
 
