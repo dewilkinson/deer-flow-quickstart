@@ -19,7 +19,7 @@ def _sanitize_final_content(text: str) -> str:
     t = text.strip()
     # If it looks like raw JSON or a failing sentinel, it's NOT a narrative
     # More specific JSON markers to avoid false positives with common words like 'locale' or 'title'
-    leak_markers = ["\"expected_dict\":", "\"current_plan\":", "\"steps_completed\":", "RESOURCE_EXHAUSTED", "has_enough_context"]
+    leak_markers = ["\"expected_dict\":", "\"current_plan\":", "\"steps_completed\":", "RESOURCE_EXHAUSTED", "\"has_enough_context\":"]
     triggered_keys = [m for m in leak_markers if m in t]
     
     if (t.startswith("{") and t.endswith("}")) or triggered_keys:
