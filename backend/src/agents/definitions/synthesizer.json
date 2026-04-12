@@ -1,6 +1,6 @@
 {
     "type": "synthesizer",
-    "name": "The Synthesizer",
+    "name": "Synthesizer",
     "prompt_file": "synthesizer",
     "tools": [
         "web_search", 

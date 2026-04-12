@@ -58,14 +58,41 @@ async def _run_node_with_tiered_fallback(agent_type, state, config, tools=None, 
 
         # Execution
         t0 = time.time()
-        # [PERFORMANCE] Set aggressive timeouts to survive reasoning stalls and force basic/legacy rotation
+        
+        # [DYNAMIC BUDGET] Calculate remaining global time relative to 115s server limit
+        configurable = config.get("configurable", {})
+        execution_start_time = configurable.get("execution_start_time", t0)
+        elapsed_global = time.time() - execution_start_time
+        remaining_global = 110.0 - elapsed_global # Use 110s to leave buffer
+        
         tier_timeouts = {
-            "reasoning": 110.0,
-            "basic": 110.0,
-            "legacy": 110.0
+            "reasoning": 40.0,
+            "basic": 35.0,
+            "legacy": 30.0
         }
-        tier_timeout = tier_timeouts.get(tier, 110.0)
-        logger.info(f"[TIMING] Tier {tier} ({agent_type}) started (Internal Timeout: {tier_timeout}s).")
+        
+        # [ADAPTIVE SKIP] If reasoning is requested but we have < 30s left, skip to basic
+        if tier == "reasoning" and remaining_global < 30.0:
+            logger.warning(f"[BUDGET_ENFORCEMENT] Skipping Reasoning tier (Remaining: {remaining_global:.1f}s < 30s).")
+            # Inject Adaptive Verbosity logic into the prompt history for the fallback model
+            if messages is not None:
+                from langchain_core.messages import SystemMessage
+                if is_structured:
+                    # For structured output (like Phase B Coordinator), avoid narrative instructions which break JSON parsing
+                    messages.append(SystemMessage(content="[BUDGET_CONSTRAINED]: Maintain valid JSON Plan output, but ensure the 'thought' and 'description' fields are highly detailed."))
+                else:
+                    # For text/graph nodes (Synthesizer, Reporter), go full depth
+                    messages.append(SystemMessage(content="[BUDGET_RECOVERY_MODE]: You have been promoted to the immediate execution tier due to time constraints. You MUST provide a full, high-fidelity institutional answer immediately. Do NOT sacrifice depth for brevity."))
+            continue
+            
+        # Hard-cap the tier timeout by the remaining global budget
+        static_timeout = tier_timeouts.get(tier, 110.0)
+        tier_timeout = min(static_timeout, max(5.0, remaining_global))
+        
+        # [TRACE] High-fidelity diagnostic probe
+        state_size = len(str(state))
+        msgs_size = len(str(messages)) if messages is not None else 0
+        logger.info(f"[TRACE_START] Tier: {tier} | Agent: {agent_type} | State: {state_size} | Msgs: {msgs_size} | Timeout: {tier_timeout:.1f}s (Global Remaining: {remaining_global:.1f}s)")
         
         try:
             if messages is not None:
@@ -97,8 +124,10 @@ async def _run_node_with_tiered_fallback(agent_type, state, config, tools=None, 
                         is_leak = True
                         break
             
+            duration = time.time() - t0
+            logger.info(f"[TRACE_END] Tier: {tier} | Status: {'LEAK' if is_leak else 'OK'} | Duration: {duration:.2f}s")
+            
             if (is_structured and isinstance(result, list)) or is_leak:
-                logger.error(f"[VLI_INTEGRITY_FAIL] Tier {tier} for {agent_type} returned malformed output or prompt leakage. Forcing rotation.")
                 if i < len(tiers) - 1:
                     next_tier = tiers[i+1]
                     msg = f"[SYSTEM]: Integrity check failed on {tier} (Instruction Leak). Falling back to {next_tier}..."
@@ -115,6 +144,16 @@ async def _run_node_with_tiered_fallback(agent_type, state, config, tools=None, 
             if isinstance(e, asyncio.TimeoutError):
                 logger.error(f"[VLI_TIER_FAIL] Tier {tier} timed out after {tier_timeout:.2f}s")
                 fallback_messages.append(SystemMessage(content=f"[TIER_{tier.upper()}_TIMEOUT] Try a fallback reasoning strategy."))
+                
+                # [NEW] Telemetry Injection for Visibility
+                try:
+                    telemetry_file = get_vli_path("VLI_Raw_Telemetry.md")
+                    timestamp = datetime.now().strftime("[%H:%M:%S]")
+                    with open(telemetry_file, "a", encoding="utf-8") as tf:
+                        tf.write(f"\n{timestamp} **TIER_STALL:** Tier `{tier.upper()}` timed out ({tier_timeout}s). Rotating to next availability.\n")
+                        tf.flush()
+                except:
+                    pass
             else:
                 logger.error(f"[VLI_TIER_FAIL] Tier {tier} failed after {time.time() - t0:.2f}s: {e}")
                 logger.error("".join(traceback.format_tb(e.__traceback__)))
@@ -243,11 +282,42 @@ async def _setup_and_execute_agent_step(state, config, agent_type, tools, agent_
             new_messages[-1] = AIMessage(content=last_msg.content, name=f"{agent_type}_finalize")
         elif hasattr(last_msg, "content"):
             content = last_msg.content
-            new_messages[-1] = AIMessage(content=content if isinstance(content, list) else str(content), name=f"{agent_type}_finalize")
+            if (isinstance(content, (dict, list))) and not isinstance(content, list):
+                 import json
+                 content_str = f"```json\n{json.dumps(content, indent=2)}\n```"
+            elif isinstance(content, list):
+                 # Flatten list of content blocks if needed
+                 content_parts = []
+                 for item in content:
+                     if isinstance(item, dict) and "text" in item:
+                         content_parts.append(str(item["text"]))
+                     else:
+                         content_parts.append(str(item))
+                 content_str = "\n".join(content_parts)
+            else:
+                 content_str = str(content)
+            
+            new_messages[-1] = AIMessage(content=content_str, name=f"{agent_type}_finalize")
         else:
             new_messages.append(AIMessage(content="Step complete.", name=f"{agent_type}_finalize"))
 
     return {"messages": fallback_messages + new_messages, "observations": observations, "current_plan": current_plan}
+
+
+def _compact_history(messages: list) -> list:
+    """
+    Compacts message history for synthesis.
+    Filters out structural planning messages to provide a clean context for the reporter.
+    """
+    compacted = []
+    # Nodes whose messages should be ignored in final narrative synthesis
+    structural_nodes = ["coordinator", "vli_coordinator", "vli_spine", "system", "vli_parser", "parser"]
+    
+    for m in messages:
+        if hasattr(m, "name") and m.name in structural_nodes:
+            continue
+        compacted.append(m)
+    return compacted
 
 
 # Orchestrator Fast Bypass Tools

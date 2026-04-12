@@ -34,7 +34,7 @@ _GLOBAL_RESOURCE_CONTEXT = GLOBAL_CONTEXT
 async def coordinator_node(state: State, config: RunnableConfig) -> dict[str, Any]:
     """Coordinator node - Detailed multi-step planning."""
     logger.info("VLI Coordinator is planning execution.")
-    analyst_keywords = ", ".join(get_analyst_keywords())
+    analyst_keywords = ", ".join([str(k) for k in get_analyst_keywords()])
 
     # [NEW] Inject Daily Action Plan into GLOBAL_CONTEXT
     vault_path = os.environ.get("OBSIDIAN_VAULT_PATH")
@@ -86,13 +86,13 @@ async def coordinator_node(state: State, config: RunnableConfig) -> dict[str, An
     state_for_prompt = state.copy()
     state_for_prompt.update({
         "ANALYST_KEYWORDS": analyst_keywords,
-        "MACRO_INDICATORS": ", ".join(list(GLOBAL_CONTEXT.keys())),
-        "CACHED_TICKERS": ", ".join(sorted(list(cached_tickers_set))) if cached_tickers_set else "None (Data Store Empty)",
+        "MACRO_INDICATORS": ", ".join([str(k) for k in list(GLOBAL_CONTEXT.keys())]),
+        "CACHED_TICKERS": ", ".join([str(t) for t in sorted(list(cached_tickers_set))]) if cached_tickers_set else "None (Data Store Empty)",
         "DAILY_ACTION_PLAN": GLOBAL_CONTEXT.get("daily_action_plan", "No daily instructions provided."),
         "metadata": {
             "analyst_keywords": analyst_keywords,
-            "cached_tickers": list(cached_tickers_set),
-            "macro_labels": ", ".join(list(GLOBAL_CONTEXT.keys())),
+            "cached_tickers": [str(t) for t in list(cached_tickers_set)],
+            "macro_labels": ", ".join([str(k) for k in list(GLOBAL_CONTEXT.keys())]),
         }
     })
     

@@ -163,7 +163,7 @@ async def fetch_finviz_quotes(symbols: list[str]) -> dict[str, Any]:
         if missing:
             try:
                 # Use wait_until="commit" for maximum speed on the table extraction
-                await page.goto(f"https://finviz.com/screener.ashx?v=152&t={','.join(missing)}", wait_until="commit", timeout=15000)
+                await page.goto(f"https://finviz.com/screener.ashx?v=152&t={','.join([str(m) for m in missing])}", wait_until="commit", timeout=15000)
                 rows = await page.query_selector_all("table.screener-table tr.screener-row")
                 for row in rows:
                     cells = await row.query_selector_all("td")

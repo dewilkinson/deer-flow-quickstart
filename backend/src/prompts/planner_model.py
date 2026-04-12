@@ -42,6 +42,7 @@ class Plan(BaseModel):
     has_enough_context: bool
     thought: str
     title: str
+    intent: str | None = Field(default=None, description="The classified intent: MARKET_INSIGHT, TACTICAL_EXECUTION, or EXECUTE_DIRECT")
     direct_response: str | None = Field(default=None, description="The direct response content if enough context is available")
     steps: list[Step] = Field(
         default_factory=list,

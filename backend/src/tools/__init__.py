@@ -12,7 +12,7 @@ from .ema import get_ema_analysis
 from .finance import clear_vli_diagnostic, get_cache_heat_map, get_stock_quote, get_symbol_history_data, vli_cache_tick, get_macro_symbols
 from .datastore_tools import invalidate_market_cache, simulate_cache_volatility
 from .indicators import get_bollinger_bands, get_macd_analysis, get_rsi_analysis, get_sharpe_ratio, get_sortino_ratio, get_volatility_atr, get_volume_profile
-from .journal import get_journal_folder, list_journal_entries, read_journal_entry, set_journal_folder, write_daily_journal
+from .journal import get_journal_folder, list_journal_entries, read_journal_entry, set_journal_folder, write_daily_journal, log_feedback
 from .macros import fetch_market_macros, get_macro_data
 from .portfolio import get_portfolio_balance_report, swap_watchlist_item, update_portfolio_ledger, update_watchlist
 from .python_repl import python_repl_tool
@@ -67,4 +67,5 @@ __all__ = [
     "get_portfolio_balance_report",
     "swap_watchlist_item",
     "get_macro_symbols",
+    "log_feedback",
 ]

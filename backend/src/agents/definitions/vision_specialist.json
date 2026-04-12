@@ -1,6 +1,6 @@
 {
   "type": "vision_specialist",
-  "name": "vision_specialist",
+  "name": "Vision",
   "description": "High-Fidelity Vision Specialist: Analyzes technical charts, price lists, and portfolio snapshots. Specializes in SMC (Smart Money Concepts), EMA color schemas, and multi-panel chart layouts.",
   "llm_config": {
     "provider": "google",

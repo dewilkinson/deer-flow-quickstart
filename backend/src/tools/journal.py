@@ -208,3 +208,43 @@ def read_journal_entry(filename: str, config: RunnableConfig):
     except Exception as e:
         logger.error(f"Failed to read journal: {e}")
         return f"[ERROR]: Failed to read journal: {e}"
+
+
+@tool
+def log_feedback(previous_command: str, note: str, config: RunnableConfig = None):
+    """
+    Appends execution feedback/bugs to a centralized Feedback.md file in the Obsidian vault.
+    This is triggered when the user starts a request with "Note:".
+
+    Args:
+        previous_command: The exact string instruction the user previously typed.
+        note: The feedback provided by the user (minus the "Note:" prefix).
+    """
+    vault_path, _ = _get_obsidian_config(config)
+
+    if not vault_path:
+        return "[ERROR]: Obsidian vault path is not configured."
+
+    file_path = os.path.join(vault_path, "Feedback.md")
+    
+    # Define table structure
+    header = "| Previous Command | Note |\n| :--- | :--- |\n"
+    
+    # Escape pipes to avoid breaking MD table syntax
+    safe_command = previous_command.replace("|", "\\|")
+    safe_note = note.replace("|", "\\|")
+    new_row = f"| {safe_command} | {safe_note} |"
+
+    try:
+        if not os.path.exists(file_path):
+            with open(file_path, "w", encoding="utf-8") as f:
+                f.write(header + new_row + "\n")
+            return f"Created Feedback.md and logged entry: {new_row}"
+        else:
+            # Append to existing table
+            with open(file_path, "a", encoding="utf-8") as f:
+                f.write(new_row + "\n")
+            return f"Successfully logged feedback to Feedback.md: {new_row}"
+    except Exception as e:
+        logger.error(f"Failed to log feedback: {e}")
+        return f"[ERROR]: Failed to log feedback: {e}"

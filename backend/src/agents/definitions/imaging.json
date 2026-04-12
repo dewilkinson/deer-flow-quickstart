@@ -1,6 +1,6 @@
 {
     "type": "imaging",
-    "name": "Imaging Agent",
+    "name": "Imager",
     "prompt_file": "imaging",
     "tools": [
         "get_image_from_url",

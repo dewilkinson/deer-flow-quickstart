@@ -8,7 +8,7 @@ from typing import Any
 
 from langchain_core.runnables import RunnableConfig
 
-from src.tools import get_daily_blotter, get_journal_folder, get_stock_quote, list_journal_entries, read_journal_entry, set_journal_folder, write_daily_journal
+from src.tools import get_daily_blotter, get_journal_folder, get_stock_quote, list_journal_entries, read_journal_entry, set_journal_folder, write_daily_journal, log_feedback
 from src.tools.shared_storage import GLOBAL_CONTEXT, JOURNALER_CONTEXT
 
 from ..types import State
@@ -29,6 +29,6 @@ _GLOBAL_RESOURCE_CONTEXT = GLOBAL_CONTEXT
 async def journaler_node(state: State, config: RunnableConfig):
     """Journaler node implementation."""
     logger.info("Journaler Node: Documenting vibes and trades.")
-    tools = [write_daily_journal, list_journal_entries, read_journal_entry, get_journal_folder, set_journal_folder, get_daily_blotter, get_stock_quote]
+    tools = [write_daily_journal, list_journal_entries, read_journal_entry, get_journal_folder, set_journal_folder, get_daily_blotter, get_stock_quote, log_feedback]
 
     return await _setup_and_execute_agent_step(state, config, "journaler", tools)

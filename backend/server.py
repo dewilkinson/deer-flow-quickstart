@@ -110,6 +110,26 @@ if __name__ == "__main__":
         # This will now succeed because BSON has ObjectId.
         from src.server.app import app
 
+        # [NEW] Pre-flight check: ensure the port is completely unbound, terminating ghost instances
+        import socket
+        import subprocess
+        import time
+
+        def is_port_in_use(port):
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                return s.connect_ex(('localhost', port)) == 0
+
+        if is_port_in_use(args.port):
+            logger.warning(f"Port {args.port} is already in use. Attempting to kill the occupying process...")
+            if os.name == "nt":
+                subprocess.run(["powershell", "-Command", f"Stop-Process -Id (Get-NetTCPConnection -LocalPort {args.port}).OwningProcess -Force"], capture_output=True, check=False)
+            else:
+                subprocess.run(["fuser", "-k", f"{args.port}/tcp"], capture_output=True, check=False)
+            time.sleep(1.5)
+            if is_port_in_use(args.port):
+                logger.error(f"Failed to free port {args.port}. Cannot start server.")
+                sys.exit(1)
+
         logger.info(f"Starting Cobalt Multiagent API server on {args.host}:{args.port}")
 
         # 3. USE DIRECT APP OBJECT INSTEAD OF STRING: No more context-less re-imports

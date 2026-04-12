@@ -254,7 +254,7 @@ def get_attribution_summary(config: RunnableConfig):
         for sym, val in sorted_pnl[-5:]:
             summary.append(f" - {sym}: ${val:,.2f}")
 
-    return "\n".join(summary)
+    return "\n".join([str(s) for s in summary])
 
 
 @tool
@@ -281,7 +281,7 @@ def get_personal_risk_metrics(config: RunnableConfig):
         "- Max Drawdown Alert: Within normal technical bounds.",
     ]
 
-    return "\n".join(buf)
+    return "\n".join([str(l) for l in buf])
 
 
 @tool
@@ -308,7 +308,7 @@ def get_daily_blotter(config: RunnableConfig):
     if not recent_trades:
         return "No trades executed in the last 48 hours."
 
-    return "Recent Executions:\n" + "\n".join(recent_trades)
+    return "Recent Executions:\n" + "\n".join([str(t) for t in recent_trades])
 
 
 @tool

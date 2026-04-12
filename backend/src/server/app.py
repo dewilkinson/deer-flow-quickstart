@@ -148,6 +148,7 @@ _vli_active_task = None
 _vli_fast_path_cooldown_until = datetime.now()
 _vli_last_inbox_action = None
 _vli_rules_active_since = datetime.now()
+_vli_last_thread_id = None
 
 # [NEW] Decoupled VLI Macro Integration
 # Ensuring the path is relative to the backend workspace root
@@ -212,6 +213,33 @@ def _persist_vli_report(request_text: str, content: str):
     except Exception as e:
         logger.error(f"VLI_SYSTEM: Failed to persist report '{filename}': {e}")
         return None
+
+
+def _get_vli_intent(text: str) -> str:
+    """Standardized intent classification for Market Awareness vs Tactical Execution."""
+    text_trim = text.strip()
+    text_upper = text_trim.upper()
+    is_smc = "SMC" in text_upper
+    
+    # [NEW] Question & General Detection: Expanded triggers
+    question_starters = ["WHAT", "HOW", "WHY", "WHEN", "WHICH", "IS", "CAN", "WHO", "WHOSE", "WHOM", "ARE", "DIFFERENCE", "WILL", "DOES", "COULD", "SHOULD"]
+    is_question = any(text_upper.startswith(qs) for qs in question_starters) or text_trim.endswith("?") or text_trim.endswith("!")
+    
+    # [HEURISTIC] Default to MARKET_AWARENESS unless explicit "Tactical Triggers" are found.
+    tactical_triggers = ["ANALYZE", "ANALYSIS", "STRIKE", "SIGNAL", "SMC", "ENTRY", "SCAN", "SWORD", "SHIELD", "SETUP", "TRADE", "EXECUTE"]
+    educational_markers = ["LEARN", "EDUCATION", "EXPLAIN", "CONCEPT", "VS", "COMPARE", "PERFORMANCE", "KEEP UP", "YTD", "YEAR", "GIVEN", "OUTLOOK", "SCENARIO", "RECOMMEND", "SUGGEST", "DOES"]
+    
+    is_tactical = any(kw in text_upper for kw in tactical_triggers) or is_smc
+    is_educational = any(kw in text_upper for kw in educational_markers)
+    
+    # Questions and general queries are always Market Awareness
+    if is_question:
+        return "MARKET_AWARENESS"
+    
+    # Robustness: Comparison queries or general checks without "Analyze" are always MARKET_AWARENESS
+    if is_tactical and not is_educational:
+        return "TACTICAL_EXECUTION"
+    return "MARKET_AWARENESS"
 
 
 def create_futures_watchlist_panel():
@@ -377,6 +405,7 @@ class VLIActionPlanRequest(BaseModel):
     reporter_llm_type: str = "reasoning"
     vli_llm_type: str = "core"
     background_synthesis: bool = False
+    thread_id: str | None = None
 
 
 # --- VLI CONSOLIDATED STATE ENDPOINT ---
@@ -675,7 +704,7 @@ async def _invoke_vli_agent(
     reporter_llm_type: str = "reasoning",
     vli_llm_type: str = "reasoning",
     thread_id: str | None = None,
-) -> str:
+) -> tuple[str, dict]:
     logger.info(f"[VLI_TRACE] _invoke_vli_agent called with text: '{text}' (thread_id: {thread_id})")
     """Invoke the agent graph in a non-streaming way for the VLI dashboard."""
     global _vli_session_id
@@ -694,6 +723,9 @@ async def _invoke_vli_agent(
     except ImportError:
         get_stock_quote = None
         log_vli_metric = lambda *args, **kwargs: None
+    # [NEW] Standardized Intent classification
+    intent_mode = _get_vli_intent(text)
+
     # [FAST-PATH TRIGGERS] Deterministic bypass for low-latency situation awareness
     is_smc = "SMC" in text.upper()
     is_fast_override = any(kw in text.upper() for kw in ["FAST", "QUICK", "HIGH-LEVEL", "SHORTCUT", "RAPID"])
@@ -705,14 +737,6 @@ async def _invoke_vli_agent(
     is_macro = "MACRO" in text.upper() and any(kw in text.upper() for kw in ["LIST", "PRICE", "SYMBOLS", "ENVIRONMENT", "OVERVIEW"])
     is_price_list = ("SYMBOL" in text.upper() or "PORTFOLIO" in text.upper()) and "PRICE" in text.upper()
     is_vix = "VIX" in text.upper() and len(text) < 30
-
-    # [NEW] INTENT CLASSIFICATION: MARKET_AWARENESS vs TACTICAL_EXECUTION
-    # Educational mode is triggered for macro, general queries, or purely informational requests.
-    educational_keywords = ["LEARN", "EDUCATION", "EXPLAIN", "MACRO", "ECONOMY", "CONCEPT"]
-    tactical_keywords = ["ANALYZE", "STRIKE", "ENTRY", "RISK", "SORTINO", "SHARPE", "SCAN", "SWORD", "SHIELD", "SETUP", "TRADE"]
-    
-    is_tactical = any(kw in text.upper() for kw in tactical_keywords) or is_smc
-    intent_mode = "MARKET_AWARENESS" if (is_macro or any(kw in text.upper() for kw in educational_keywords)) and not is_tactical else "TACTICAL_EXECUTION"
 
     # 2. Refined Ticker Query: Qualified vs Unqualified vs Analyze
     qualifiers = ["PRICE", "VOLUME", "OHLC", "VALUE", "MA", "RSI", "MACD"]
@@ -986,6 +1010,9 @@ async def _invoke_vli_agent(
         # [DIAGNOSTIC] Starting Graph Execution
         logger.info(f"VLI Agent: Launching Graph traversal for directive: '{text[:50]}'")
         start_exec = time.time()
+        
+        # [DYNAMIC BUDGET] Inject absolute start time for per-node adaptive fallbacks
+        workflow_config["configurable"]["execution_start_time"] = start_exec
 
         # Run the graph and get the final state with an aggressive timeout (115s to respect AsyncRetries safely)
         final_state = await asyncio.wait_for(graph.ainvoke(workflow_input, config=workflow_config), timeout=115.0)
@@ -1016,6 +1043,11 @@ async def _invoke_vli_agent(
                     break
         
         final_output = fr if fr else res
+        
+        # [NEW] Persist the thread_id for global feedback tracking
+        global _vli_last_thread_id
+        _vli_last_thread_id = thread_id
+        
         return scrub_vli_output(final_output), final_state
 
     except asyncio.TimeoutError:
@@ -1097,7 +1129,10 @@ async def post_vli_action_plan(request: VLIActionPlanRequest, background_tasks: 
             f.write(request.text)
         return {"response": "Plan captured. Vault updated. Session Monitor is analyzing directives...", "status": "OK", "error_details": None}
 
-    # [NEW] Check Durable Action Cache
+    # [NEW] Check Durable Action Cache (Conditional on Intent)
+    intent_mode = _get_vli_intent(request.text)
+    is_note = request.text.strip().upper().startswith("NOTE:")
+    
     clean_req_text = request.text.strip().upper()
     import os, json, hashlib, time
     cache_dir = os.path.join(os.getcwd(), "data", "artifacts", "vli_cache")
@@ -1105,35 +1140,47 @@ async def post_vli_action_plan(request: VLIActionPlanRequest, background_tasks: 
     cache_key = hashlib.md5(clean_req_text.encode()).hexdigest()
     cache_file = os.path.join(cache_dir, f"{cache_key}.json")
 
-    if not request.background_synthesis and os.path.exists(cache_file):
+    # [HARDENING] Bypass cache lookup for Market Awareness or Notes to ensure real-time data
+    if not request.background_synthesis and not is_note and intent_mode == "TACTICAL_EXECUTION" and os.path.exists(cache_file):
         try:
             with open(cache_file, "r", encoding="utf-8") as cf:
                 cached_data = json.load(cf)
             if (time.time() - cached_data["timestamp"]) < 300: # 5 min TTL
-                logger.info(f"VLI Agent: Cache hit for '{clean_req_text}'")
-                try:
-                    from src.config.vli import get_vli_path
-                    telemetry_file = get_vli_path("VLI_Raw_Telemetry.md")
-                    timestamp = datetime.now().strftime("[%H:%M:%S]")
-                    with open(telemetry_file, "a", encoding="utf-8") as tf:
-                        tf.write(f"\n{timestamp} **CACHE HIT (Graph Bypassed)**\n")
-                        tf.write(f"- **Directive**: `{request.text[:40]}...`\n")
-                        tf.write(f"- **Action**: Retrieved from durable short-term cache (TTL 300s).\n\n---\n")
-                except:
-                    pass
-                return {"response": cached_data["response_text"], "status": "OK", "error_details": None}
-        except:
-            pass
+                response_text = cached_data["response_text"]
+                status_code = "OK"
+                with open(telemetry_file, "a", encoding="utf-8") as tf:
+                    tf.write(f"\n{timestamp} **CACHE HIT (Graph Bypassed)**\n")
+                    tf.write(f"- **Intent**: `{intent_mode}`\n")
+                    tf.write(f"- **Directive**: `{request.text[:40]}...`\n")
+                    tf.write(f"- **Response Size**: {len(response_text)} chars\n\n---\n")
+                return {"response": response_text, "status": status_code, "error_details": None, "thread_id": transaction_id}
+        except Exception as e:
+            logger.error(f"VLI: Cache read failure: {e}")
+    else:
+        # [NEW] Explicit Cache Deletion for bypass hits (Prevent ghost hits if intent logic fluctuates)
+        if (is_note or intent_mode == "MARKET_AWARENESS") and os.path.exists(cache_file):
+            try:
+                os.remove(cache_file)
+                logger.info(f"[VLI_CACHE] Purged stale cache entry for Market Awareness hash: {cache_key}")
+            except Exception:
+                pass
 
     # Real Agent Routing for Chat/Directives
     logger.info(f"VLI: Routing directive to Gemini Agent: {request.text[:50]}...")
     final_vli_state = {}  # Ensure initialization
 
-    # [BUGFIX: STATE POLLUTION] Explicitly generate a fresh Thread ID for every action plan request to prevent cross-contamination
-    # between separate ticker queries (e.g. NVDA picking up AMZN history).
-    import uuid
-
-    transaction_id = f"vli_action_{uuid.uuid4().hex[:8]}"
+    # [BUGFIX: STATE POLLUTION] Explicitly generate a fresh Thread ID for every action plan request ONLY IF one isn't provided.
+    # We allow the dashboard to pass a thread_id to maintain history for "Note:" feedback.
+    transaction_id = request.thread_id
+    if not transaction_id:
+        # High-Priority: If this is a Note:, try to recover the last active thread
+        if request.text.strip().startswith("Note:") and _vli_last_thread_id:
+            transaction_id = _vli_last_thread_id
+            logger.info(f"VLI: Feedback detected. Reusing last active thread: {transaction_id}")
+        else:
+            import uuid
+            transaction_id = f"vli_action_{uuid.uuid4().hex[:8]}"
+            logger.info(f"VLI: Fresh transaction initialized: {transaction_id}")
 
     # [NEW] ASYNC SYNTHESIS BYPASS
     wants_background = request.background_synthesis or "--BACKGROUND" in request.text.upper()
@@ -1290,8 +1337,8 @@ async def post_vli_action_plan(request: VLIActionPlanRequest, background_tasks: 
         hierarchy_md = "\n".join(hier_lines)
 
         if isinstance(response_text, list):
-            # Flatten LangChain multi-modal message content arrays
-            response_text = " ".join([item.get("text", "") if isinstance(item, dict) else str(item) for item in response_text])
+            # [ROBUSTNESS] Flatten multi-modal message arrays safely
+            response_text = " ".join([str(item.get("text", "")) if isinstance(item, dict) else str(item) for item in response_text])
 
         preview = str(response_text)[:100].strip().replace("\n", " ")
 
@@ -1323,14 +1370,15 @@ async def post_vli_action_plan(request: VLIActionPlanRequest, background_tasks: 
     if response_text and len(response_text) > 50:
         _persist_vli_report(request.text, response_text)
         
-        # [NEW] Save to durable cache
-        try:
-            with open(cache_file, "w", encoding="utf-8") as cf:
-                json.dump({"timestamp": time.time(), "response_text": response_text}, cf)
-        except Exception as ce:
-            logger.error(f"VLI: Failed to write cache: {ce}")
+        # [NEW] Save to durable cache (TACTICAL ONLY)
+        if intent_mode == "TACTICAL_EXECUTION":
+            try:
+                with open(cache_file, "w", encoding="utf-8") as cf:
+                    json.dump({"timestamp": time.time(), "response_text": response_text}, cf)
+            except Exception as ce:
+                logger.error(f"VLI: Failed to write cache: {ce}")
 
-    return {"response": response_text, "status": "OK", "error_details": None}
+    return {"response": response_text, "status": "OK", "error_details": None, "thread_id": transaction_id}
 
 
 # --- VLI REACTIVE PIPELINE (INBOX WATCHER & ARCHIVER) ---

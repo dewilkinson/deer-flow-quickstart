@@ -45,7 +45,7 @@ def apply_prompt_template(prompt_name: str, state: AgentState, configurable: Con
     Apply template variables and inject the modular Trader Profile.
     """
     is_test = os.environ.get("VLI_TEST_MODE", "").lower() in ("true", "1", "yes") or state.get("test_mode", False)
-    intent_mode = state.get("intent_mode", "TACTICAL_EXECUTION")
+    intent_mode = state.get("intent") or state.get("intent_mode") or "TACTICAL_EXECUTION"
 
     state_vars = {
         "CURRENT_TIME": datetime.now().strftime("%a %b %d %Y %H:%M:%S %z"),

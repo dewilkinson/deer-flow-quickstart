@@ -23,6 +23,8 @@ class State(MessagesState):
     steps_completed: int = 0
     is_plan_approved: bool = False
     plan_iterations: int = 0
+    intent: str = "MARKET_INSIGHT"
+    directive: str = ""
 
     # Reports & Persistence
     final_report: str = ""

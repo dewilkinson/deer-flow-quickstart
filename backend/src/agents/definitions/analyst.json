@@ -1,6 +1,6 @@
 {
     "type": "analyst",
-    "name": "The Analyst",
+    "name": "Analyst",
     "prompt_file": "analyst",
     "tools": [
         "get_smc_analysis",

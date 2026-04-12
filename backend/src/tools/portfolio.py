@@ -71,7 +71,7 @@ def update_watchlist(tickers: list[str], name: str = "Tactical", action: str = "
                 current_watchlist = [line.strip().replace("- ", "") for line in content.splitlines() if line.startswith("- ")]
 
     if action == "list":
-        return f"Watchlist [{name}]: {', '.join(current_watchlist)}" if current_watchlist else f"Watchlist [{name}] is empty."
+        return f"Watchlist [{name}]: {', '.join([str(t) for t in current_watchlist])}" if current_watchlist else f"Watchlist [{name}] is empty."
 
     # Normalize tickers
     tickers = [t.upper().strip() for t in tickers]
@@ -79,10 +79,10 @@ def update_watchlist(tickers: list[str], name: str = "Tactical", action: str = "
     if action == "add":
         new_tickers = [t for t in tickers if t not in current_watchlist]
         current_watchlist.extend(new_tickers)
-        msg = f"Added: {', '.join(new_tickers)}" if new_tickers else "No new tickers to add."
+        msg = f"Added: {', '.join([str(t) for t in new_tickers])}" if new_tickers else "No new tickers to add."
     elif action == "remove":
         current_watchlist = [t for t in current_watchlist if t not in tickers]
-        msg = f"Removed: {', '.join(tickers)}"
+        msg = f"Removed: {', '.join([str(t) for t in tickers])}"
     elif action == "clear":
         current_watchlist = []
         msg = f"Watchlist [{name}] cleared."
@@ -188,7 +188,7 @@ def get_portfolio_balance_report(config: RunnableConfig = None):
     if not reports:
         return "No portfolio data or watchlists found in the vault."
 
-    return "\n\n".join(reports)
+    return "\n\n".join([str(r) for r in reports])
 
 
 @tool

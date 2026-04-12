@@ -76,7 +76,7 @@ async def parser_node(state: State, config: RunnableConfig) -> Command[Literal["
                     relevant_rules = [r for r in rules if any(word in r.lower() for word in query.split())]
                     if not relevant_rules:
                         relevant_rules = rules[:3]  # Fallback
-                    messages.append(HumanMessage(content="[SYSTEM OVERRIDE]: Relevant Heuristics Injected:\n" + "\n".join(relevant_rules[:3])))
+                    messages.append(HumanMessage(content="[SYSTEM OVERRIDE]: Relevant Heuristics Injected:\n" + "\n".join([str(r) for r in relevant_rules[:3]])))
         except Exception as e:
             logger.warning(f"Failed to inject heuristic swap: {e}")
 

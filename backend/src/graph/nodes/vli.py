@@ -7,8 +7,8 @@ import logging
 import os
 import time
 import asyncio
+import re
 from typing import Any, Literal, cast
-
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.types import Command
@@ -47,7 +47,7 @@ async def vli_node(
 
     # 0. Configuration & Model Selection
     configurable = Configuration.from_runnable_config(config)
-    llm_type = "core"  # [NEW] Default to Gemma 4 (core) as requested
+    llm_type = "basic"  # [REVERTED] Default to basic (Gemini Flash)
     if hasattr(configurable, "vli_llm_type"):
         llm_type = getattr(configurable, "vli_llm_type")
     elif "vli_llm_type" in config.get("configurable", {}):
@@ -62,6 +62,32 @@ async def vli_node(
     current_plan = state.get("current_plan")
     steps_completed = state.get("steps_completed", 0)
     raw_messages = state.get("messages", [])
+
+    # Layer 0: Zero-LLM Math Interceptor & --DIRECT Flag Manual Override
+    user_query = str(raw_messages[-1].content).lower() if raw_messages else ""
+    force_direct_exit = "--direct" in user_query
+    if force_direct_exit:
+        # Strip the flag for the downstream models/tools
+        stripped_query = user_query.replace("--direct", "").strip()
+        user_query = stripped_query
+        
+    is_arithmetic = bool(re.match(r'^[\d\s\+\-\*\/\(\)\.]+$', user_query.strip()))
+    is_algebra = "solve for" in user_query or "calculate" in user_query or "=" in user_query
+    
+    if is_arithmetic and not is_algebra and not force_direct_exit:
+        try:
+            safe_query = re.sub(r'[^0-9\+\-\*\/\(\)\s\.]', '', user_query)
+            result = eval(safe_query, {"__builtins__": None}, {})
+            logger.info(f"[VLI_SPINE] Layer 0 Math Interceptor triggered: {result}")
+            return Command(
+                update={
+                    "messages": raw_messages + [AIMessage(content=f"Result: {result}", name="math_interceptor")],
+                    "intent": "EXECUTE_DIRECT"
+                },
+                goto="reporter"
+            )
+        except:
+            pass
 
     # [COORDINATION LOGIC] Check if returning from a specialist
     if raw_messages:
@@ -78,8 +104,8 @@ async def vli_node(
                 return Command(update={"steps_completed": steps_completed}, goto="reporter" if not state.get("raw_data_mode") else "__end__")
 
     # 2. Workspace & Metadata Synchronization
-    analyst_keywords = ", ".join(get_analyst_keywords())
-    macro_labels = ", ".join(list(macro_registry.get_macros().keys()))
+    analyst_keywords = ", ".join([str(k) for k in get_analyst_keywords()])
+    macro_labels = ", ".join([str(k) for k in list(macro_registry.get_macros().keys())])
 
     # Inject Daily Action Plan from Obsidian
     vault_path = os.environ.get("OBSIDIAN_VAULT_PATH")
@@ -96,15 +122,15 @@ async def vli_node(
     artifacts_dir = os.path.join(os.getcwd(), "data", "artifacts")
     available_artifacts = ""
     if os.path.exists(artifacts_dir):
-        available_artifacts = ", ".join(os.listdir(artifacts_dir))
+        available_artifacts = ", ".join([str(a) for a in os.listdir(artifacts_dir)])
 
     state_for_prompt = {
         **state,
         "ANALYST_KEYWORDS": analyst_keywords,
         "MACRO_INDICATORS": macro_labels,
         "DAILY_ACTION_PLAN": _GLOBAL_RESOURCE_CONTEXT.get("daily_action_plan", "No daily instructions."),
-        "CACHED_TICKERS": ", ".join(sorted(list(_GLOBAL_RESOURCE_CONTEXT.get("cached_tickers", set())))) or "None",
-        "SYMBOL_ARTIFACTS": available_artifacts or "None",
+        "CACHED_TICKERS": ", ".join([str(t) for t in sorted(list(_GLOBAL_RESOURCE_CONTEXT.get("cached_tickers", set())))]) or "None",
+        "SYMBOL_ARTIFACTS": str(available_artifacts) if available_artifacts else "None",
     }
 
     # 3. Context Horizon Management (TPM Mitigation)
@@ -143,7 +169,8 @@ async def vli_node(
     logger.info(f"[VLI_SPINE] Tools loaded: {len(tools)}. Binding to LLM...")
     llm_with_tools = llm.bind_tools(tools)
 
-    messages = apply_prompt_template("parser", state_for_prompt)  # Use parser template for intent
+
+    messages = apply_prompt_template("parser", state_for_prompt)
 
     # Heuristic Rule Injection (Institutional Stability)
     core_logic_path = os.path.join(os.path.dirname(__file__), "..", "..", "..", "CORE_LOGIC.md")
@@ -152,19 +179,31 @@ async def vli_node(
             with open(core_logic_path, "r", encoding="utf-8") as f:
                 rules = [l.strip() for l in f.readlines() if l.strip().startswith(("-", "*"))]
                 if rules:
-                    messages.append(HumanMessage(content="[SYSTEM OVERRIDE]: Guardrail Heuristics:\n" + "\n".join(rules[:3])))
+                    messages.append(HumanMessage(content="[SYSTEM OVERRIDE]: Guardrail Heuristics:\n" + "\n".join([str(r) for r in rules[:3]])))
         except:
             pass
 
     # First Invoke to check for immediate tool calls
     from src.graph.nodes.common_vli import _run_node_with_tiered_fallback
+    from src.prompts.planner_model import Plan as PlanSchema
 
     logger.info("[VLI_SPINE] Initiating Phase A Tiered Fallback Invocation...")
     fallback_msgs_all = []
     response = None
     try:
-        response, fb_msgs1 = await _run_node_with_tiered_fallback("coordinator", state_for_prompt, config, tools=tools, messages=messages)
+        # Phase A: Initial Parsing (Strict Direct Response check)
+        # We use is_structured=True to easily check has_enough_context
+        plan_obj_a, fb_msgs1 = await _run_node_with_tiered_fallback(
+            "parser", 
+            state_for_prompt, 
+            config, 
+            tools=tools, 
+            messages=messages,
+            is_structured=True,
+            structured_schema=PlanSchema
+        )
         fallback_msgs_all.extend(fb_msgs1)
+        response = AIMessage(content=str(plan_obj_a.direct_response), name="parser_logic")
         
         # If we got a terminal error, we must explain it but keep the UI clean
         # [HARDENING] Check for 'Agent Intelligence Failure' or prompt leakage
@@ -182,9 +221,55 @@ async def vli_node(
         raise e
 
     # Fast-Path Check
-    tech_keywords = ["analyze", "analysis", "smc", "sortino", "sharpe", "report"]
-    user_query = str(raw_messages[-1].content).lower() if raw_messages else ""
+    tech_keywords = ["analyze", "analysis", "smc", "sortino", "sharpe", "report", "markets", "outlook", "geopolitical", "likely", "happen", "explain", "recommend", "suggest", "does"]
     is_technical = any(kw in user_query for kw in tech_keywords)
+    
+    # Layer 1: Parser Early-Exit (Math / Admin / --DIRECT Override)
+    # Whitelist of administrative tools that skip Phase B synthesis (One-sentence direct status)
+    ADMIN_DIRECT_TOOLS = ["vli_cache_tick", "clear_vli_diagnostic", "invalidate_market_cache"]
+    
+    if is_algebra or force_direct_exit or (not is_technical and getattr(plan_obj_a, 'intent', '') == 'EXECUTE_DIRECT'):
+        # check if it's a tool-based admin command
+        is_admin_tool = False
+        if response.tool_calls:
+            is_admin_tool = all(tc["name"] in ADMIN_DIRECT_TOOLS for tc in response.tool_calls)
+
+        # [MATH HARDENING V2] Force bypass for ALL algebra
+        should_bypass = plan_obj_a.has_enough_context or force_direct_exit or is_admin_tool or is_algebra
+        if is_algebra:
+            should_bypass = True # Hard-Force
+            logger.info("[VLI_SPINE] Hard-forcing algebra bypass to EXECUTE_DIRECT.")
+
+        if should_bypass:
+            logger.info(f"[VLI_SPINE] Layer 1 Direct Exit triggered. Force: {force_direct_exit}, Admin: {is_admin_tool}, AlgebraForce: {is_algebra}")
+            # Determine intent based on refactored names
+            final_intent = plan_obj_a.intent or "MARKET_INSIGHT"
+            if "direct" in str(final_intent).lower() or is_algebra or force_direct_exit or is_admin_tool:
+                final_intent = "EXECUTE_DIRECT"
+            
+            # If it's a tool-based admin command, we MUST execute it before returning
+            final_msgs = fb_msgs1
+            if response.tool_calls and (force_direct_exit or is_admin_tool):
+                name_to_tool = {t.name: t for t in tools}
+                for tc in response.tool_calls:
+                    t = name_to_tool.get(tc["name"])
+                    if t:
+                        res = await t.ainvoke(tc["args"], config)
+                        final_msgs.append(ToolMessage(content=str(res), tool_call_id=tc["id"], name=tc["name"]))
+                
+                # If we executed tools, we might need a brief status as the final AI message
+                direct_res = plan_obj_a.direct_response or "Command executed successfully (Direct Sync)."
+            else:
+                direct_res = plan_obj_a.direct_response
+
+            return Command(
+                update={
+                    "messages": final_msgs + [AIMessage(content=direct_res, name="parser_finalize")], 
+                    "intent": final_intent,
+                    "directive": "Provide ONLY the final direct calculation or status result. NO NARRATIVE."
+                },
+                goto="reporter"
+            )
 
     if response.tool_calls and not is_technical:
         logger.info("[VLI_SPINE] Fast-Path Bypass triggered.")
@@ -215,18 +300,28 @@ async def vli_node(
              return Command(update={"final_report": final_report_text}, goto=END)
 
         # [NEW] Prepend fallback warnings to chat answer
-        fallback_prefix = "\n".join([f"**{m.content}**" for m in fb_msgs1 + fb_msgs2 if m.name == "system_fallback"])
+        fallback_prefix = "\n".join([f"**{str(m.content)}**" for m in fb_msgs1 + fb_msgs2 if m.name == "system_fallback"])
         final_answer = f"{fallback_prefix}\n\n{final_synth.content}" if fallback_prefix else str(final_synth.content)
 
         return Command(
-            update={"final_report": final_answer, "messages": fb_msgs1 + [response] + t_msgs + fb_msgs2 + [AIMessage(content=final_answer, name="vli")]}, 
-            goto=END
+            update={"messages": fb_msgs1 + [response] + t_msgs + fb_msgs2 + [AIMessage(content=final_answer, name="vli_coordinator")]}, 
+            goto="reporter" if not state.get("raw_data_mode") else END
         )
 
     # 5. Phase B: Planning & Coordination
     # If not fast-path, we need a Plan
     from src.prompts.planner_model import Plan as PlanSchema
     messages_coord = apply_prompt_template("coordinator", state_for_prompt)
+
+    # [NEW] Immediate Telemetry Injection for Visibility during long planning stalls
+    try:
+        telemetry_file = get_vli_path("VLI_Raw_Telemetry.md")
+        timestamp = datetime.now().strftime("[%H:%M:%S]")
+        with open(telemetry_file, "a", encoding="utf-8") as tf:
+            tf.write(f"\n{timestamp} **PHASE_B_EXECUTION:** Coordinator triggered. Model: `{llm_type.upper()}`. Context: {len(str(messages_coord))} chars.\n")
+            tf.flush()
+    except:
+        pass
 
     try:
         plan_obj, fb_msgs3 = await _run_node_with_tiered_fallback("coordinator", state_for_prompt, config, tools=tools, is_structured=True, structured_schema=PlanSchema, messages=messages_coord)
@@ -258,51 +353,48 @@ async def vli_node(
             return cmd
             
     except Exception as e:
-        logger.error(f"[VLI_SPINE] Structural Parsing Failure: {e}. Falling back to default analyst plan.")
-        # [RECOVERY] If JSON schema fails, force a safe default technical plan
+        logger.error(f"[VLI_SPINE] Structural Parsing Failure: {e}. Falling back to high-fidelity research plan.")
+        # [RECOVERY] If JSON schema fails, force a safe default but HIGH-DEPTH research plan
         plan_obj = PlanSchema(
-            locale="en-US",
-            has_enough_context=False,
-            thought=f"Structural Failure Recovery: Execution continuity maintained.",
-            title="Institutional Audit (Managed Recovery)",
-            steps=[Step(need_search=False, title="Technical Analysis", description=f"Recovering analysis for: {user_query}", step_type=StepType.ANALYST)],
+            locale="en-US", 
+            has_enough_context=False, 
+            thought=f"Structural Failure Recovery: Execution continuity maintained despite parsing error: {e}", 
+            title="Managed Processing Recovery: Institutional Depth Maintained",
+            steps=[Step(
+                need_search=True, 
+                title="Institutional Research Recovery", 
+                description=f"Generate a COMPREHENSIVE institutional report for: {user_query}. You MUST provide a full, multiple paragraph analysis.", 
+                step_type=StepType.SYNTHESIZER
+            )],
         )
 
-    # Guardrail: Force technical nodes if the model tries to answer deep questions directly
+    # Guardrail: Force specialist nodes if the model tries to answer deep questions directly
     if (not plan_obj.steps or plan_obj.has_enough_context) and is_technical:
-        logger.warning("[VLI_SPINE] Guardrail: Forcing specialist step for technical query.")
+        # Check if this is a narrow technical query or a broad geopolitical scenario
+        geopolitical_keywords = ["peace talks", "failed", "war", "tension", "election", "geopolitical", "outlook", "behavior next week", "macro", "scenario"]
+        is_geo = any(kw in user_query for kw in geopolitical_keywords)
+        
+        logger.warning(f"[VLI_SPINE] Guardrail: Forcing {'Research Synthesizer' if is_geo else 'Technical Analyst'} for technical query.")
         plan_obj.has_enough_context = False
         plan_obj.direct_response = ""
-        plan_obj.steps = [Step(need_search=False, title="Institutional Audit", description=f"Extract metrics for {user_query}", step_type=StepType.ANALYST)]
+        
+        target_step_type = StepType.SYNTHESIZER if is_geo else StepType.ANALYST
+        plan_obj.steps = [Step(
+            need_search=is_geo, 
+            title="Institutional Macro Insight" if is_geo else "Institutional Technical Audit", 
+            description=f"Generate a COMPREHENSIVE institutional report for: {user_query}", 
+            step_type=target_step_type
+        )]
 
     # Handle direct response from plan
     if plan_obj.has_enough_context or plan_obj.direct_response:
         resp = plan_obj.direct_response or f"Understood: {plan_obj.title}"
         
         # [NEW] Prepend fallback warnings
-        fallback_prefix = "\n".join([f"**{m.content}**" for m in fallback_msgs_all if getattr(m, 'name', '') == "system_fallback"])
+        fallback_prefix = "\n".join([f"**{str(m.content)}**" for m in fallback_msgs_all if getattr(m, 'name', '') == "system_fallback"])
         final_answer = f"{fallback_prefix}\n\n{resp}" if fallback_prefix else resp
         
-        return Command(update={"current_plan": plan_obj, "final_report": final_answer, "messages": fallback_msgs_all + [AIMessage(content=final_answer, name="vli")]}, goto=END)
-
-
-
-    # Guardrail: Force technical nodes if the model tries to answer deep questions directly
-    if (not plan_obj.steps or plan_obj.has_enough_context) and is_technical:
-        logger.warning("[VLI_SPINE] Guardrail: Forcing specialist step for technical query.")
-        plan_obj.has_enough_context = False
-        plan_obj.direct_response = ""
-        plan_obj.steps = [Step(need_search=False, title="Institutional Audit", description=f"Extract metrics for {user_query}", step_type=StepType.ANALYST)]
-
-    # Handle direct response from plan
-    if plan_obj.has_enough_context or plan_obj.direct_response:
-        resp = plan_obj.direct_response or f"Understood: {plan_obj.title}"
-        
-        # [NEW] Prepend fallback warnings
-        fallback_prefix = "\n".join([f"**{m.content}**" for m in fallback_msgs_all if getattr(m, 'name', '') == "system_fallback"])
-        final_answer = f"{fallback_prefix}\n\n{resp}" if fallback_prefix else resp
-        
-        return Command(update={"current_plan": plan_obj, "final_report": final_answer, "messages": fallback_msgs_all + [AIMessage(content=final_answer, name="vli")]}, goto=END)
+        return Command(update={"current_plan": plan_obj, "messages": fallback_msgs_all + [AIMessage(content=final_answer, name="vli_coordinator")]}, goto="reporter" if not state.get("raw_data_mode") else END)
 
     # 6. Dispatch to Router Logic
     logger.info(f"[VLI_SPINE] Dispatching Plan: {plan_obj.title} ({len(plan_obj.steps)} steps)")

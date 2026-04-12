@@ -329,7 +329,7 @@ async def get_symbol_history_data(symbols: list[str], period: str = "1d", interv
                 results.append(f"### {others}\n- [ERROR]: {str(e)}")
 
     report = f"# Stock History Report\nGenerated at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
-    report += "\n".join(results)
+    report += "\n".join([str(r) for r in results])
     return report.strip()
 
 
@@ -431,7 +431,7 @@ async def get_cache_heat_map() -> str:
 
         lines.append(f"| {sym} | {heat} | `{bar}` | {status} |")
 
-    return "\n".join(lines)
+    return "\n".join([str(l) for l in lines])
 
 
 @tool
@@ -483,7 +483,7 @@ async def vli_cache_tick(iteration: int) -> str:
 
     import json
 
-    report = "\n".join(traces) + "\n\n```json\n" + json.dumps(table_json) + "\n```"
+    report = "\n".join([str(t) for t in traces]) + "\n\n```json\n" + json.dumps(table_json) + "\n```"
     return report
 
 
@@ -783,7 +783,7 @@ async def run_smc_analysis(ticker: str, interval: str = "auto") -> str:
             report.append(f"- **Order Blocks**: {ob_count} mapped.")
             report.append(f"- **FVGs**: {fvg_count} mapped.")
             report.append(f"\n**Current Price**: `${df['close'].iloc[-1]:.2f}`")
-            return "\n".join(report)
+            return "\n".join([str(r) for r in report])
         except Exception as e:
             return f"[ERROR]: Single-pass failed: {e}"
 
@@ -926,7 +926,7 @@ async def run_smc_analysis(ticker: str, interval: str = "auto") -> str:
     else:
         report.append("- **Status**: **[FAIL]** Trigger does not align with Macro trend, or missing tactical structural zones.")
 
-    final_report = "\n".join(report)
+    final_report = "\n".join([str(r) for r in report])
     
     # Phase 3 Integration: Store the analysis in the persistent cache
     # We use the macro timeframe's last price as the reference for drift monitoring
@@ -1096,7 +1096,7 @@ async def get_macro_symbols() -> str:
         table = "# Macro Stocks State\n\n"
         table += "| Asset | Ticker | Price | Change | Volume |\n"
         table += "| :--- | :--- | :--- | :--- | :--- |\n"
-        table += "\n".join(rows)
+        table += "\n".join([str(r) for r in rows])
         table += f"\n\n> [!NOTE]\n> Analysis posted to Reports window (get_macro_symbols.json)."
 
         return table

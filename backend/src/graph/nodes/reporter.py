@@ -1,12 +1,12 @@
 import logging
-import os
 from datetime import datetime
+from typing import Any
 
-from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
-
-from src.config.agents import AGENT_LLM_MAP
-from src.llms.llm import get_llm_by_type
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
+
+from src.graph.nodes.common_vli import _compact_history
+from src.llms.llm import get_llm_by_type
 from src.prompts.template import apply_prompt_template
 
 from ..types import State
@@ -14,11 +14,31 @@ from ..types import State
 logger = logging.getLogger(__name__)
 
 
-async def reporter_node(state: State, config: RunnableConfig):
-    # 2. Dynamic Synthesis
-    if state.get("final_report"):
-        return {"messages": []}
+def _sanitize_final_content(text: str) -> str:
+    """Detects and cleans raw structural data leakage in reports."""
+    t = text.strip()
+    # If it looks like raw JSON or a failing sentinel, it's NOT a narrative
+    # More specific JSON markers to avoid false positives with common words like 'locale' or 'title'
+    leak_markers = ["\"expected_dict\":", "\"current_plan\":", "\"steps_completed\":", "RESOURCE_EXHAUSTED", "has_enough_context"]
+    triggered_keys = [m for m in leak_markers if m in t]
+    
+    if (t.startswith("{") and t.endswith("}")) or triggered_keys:
+        if triggered_keys:
+            logger.warning(f"[VLI_LEAK_GUARD] Triggered by internal keys: {triggered_keys}")
+        else:
+            logger.warning("[VLI_LEAK_GUARD] Triggered by raw JSON structure detection.")
+        logger.warning(f"[REPORTER_GUARDRAIL] Caught structural leakage in output: {t[:100]}...")
+        # Clean it: Try to extract only the text if embedded, or return a failure sentinel
+        return ""
+    return text
 
+
+async def reporter_node(state: State, config: RunnableConfig):
+    """
+    Final synthesis node for VLI reports.
+    Ensures Specialist findings are compiled into a professional Markdown narrative.
+    """
+    # 1. Resource Exhaustion Check
     raw_messages = state.get("messages", [])
     if raw_messages:
         last_msg_content = str(getattr(raw_messages[-1], "content", ""))
@@ -35,105 +55,30 @@ async def reporter_node(state: State, config: RunnableConfig):
         llm_type = "reasoning"
         if hasattr(configurable, "reporter_llm_type"):
             llm_type = getattr(configurable, "reporter_llm_type")
-        elif "reporter_llm_type" in config.get("configurable", {}):
-            llm_type = config["configurable"]["reporter_llm_type"]
-        else:
-            llm_type = AGENT_LLM_MAP.get("reporter", "reasoning")
-
+        
         llm = get_llm_by_type(llm_type)
-
-        raw_messages = state.get("messages", [])
-
-        # [ANTI-ROT] Stateless Transaction Model:
-        # Context window expanded to 12 to ensure all Specialist turns are visible for synthesis.
-        MAX_HISTORY = 12
-        if len(raw_messages) > MAX_HISTORY:
-            target_idx = len(raw_messages) - MAX_HISTORY
-            while target_idx > 0 and not isinstance(raw_messages[target_idx], HumanMessage):
-                target_idx -= 1
-            raw_messages = raw_messages[target_idx:]
-
         start_time = datetime.now()
 
-        logger.info(f"Reporter: Compacting and sanitizing history ({len(raw_messages)} messages) for synthesis.")
-        compacted = []
+        # 2. Compact history for synthesis (Skip coordinator planning stages / intermediate tool dumps)
+        state_to_synthesize = state.copy()
+        state_to_synthesize["messages"] = _compact_history(state.get("messages", []))
+        
+        # Use the standard template applicator (returns a list of messages)
+        # Note: apply_prompt_template appends .md internally
+        messages = apply_prompt_template("reporter", state_to_synthesize)
+        
+        # Add the explicit directive
+        messages.append(HumanMessage(content=f"DIRECTIVE: {state.get('directive', 'Generate summary report.')}"))
 
-        for m in raw_messages:
-            m_type = getattr(m, "type", m.get("type", "")) if isinstance(m, dict) else getattr(m, "type", "")
-            if not m_type and isinstance(m, HumanMessage):
-                m_type = "human"
-            elif not m_type and isinstance(m, AIMessage):
-                m_type = "ai"
-            elif not m_type and isinstance(m, ToolMessage):
-                m_type = "tool"
+        # Compact the history to remove structural overhead
+        final_compacted = _compact_history(state.get("messages", []))
+        
+        # Format the history for the LLM to understand the trajectory
+        final_vli_history = "\n\n".join([f"**{m.name if hasattr(m, 'name') and m.name else m.type.upper()}**: {m.content}" for m in final_compacted])
 
-            if m_type == "human" or isinstance(m, HumanMessage):
-                content = str(m.get("content", "")) if isinstance(m, dict) else str(getattr(m, "content", ""))
-                compacted.append(HumanMessage(content=content))
-
-            elif m_type == "ai" or isinstance(m, AIMessage):
-                if isinstance(m, dict):
-                    raw_content = m.get("content", "")
-                    tool_calls = m.get("tool_calls", [])
-                else:
-                    raw_content = getattr(m, "content", "")
-                    tool_calls = getattr(m, "tool_calls", [])
-
-                if isinstance(raw_content, list):
-                    content = " ".join([item.get("text", "") if isinstance(item, dict) else str(item) for item in raw_content])
-                else:
-                    content = str(raw_content)
-
-                if not content.strip() and tool_calls:
-                    content = f"[Agent invoked tool(s): {', '.join(tc.get('name', 'unknown') for tc in tool_calls)}]"
-
-                logger.debug(f"[VLI_REPORTER] Compacting AIMessage of len {len(content)}: {content[:100]}...")
-                if len(content) > 10000:
-                    content = content[:10000] + "\n... [Content Truncated]"
-
-                if content.strip():
-                    compacted.append(AIMessage(content=content))
-
-            elif m_type == "tool" or isinstance(m, ToolMessage):
-                content = str(m.get("content", "")) if isinstance(m, dict) else str(getattr(m, "content", ""))
-                name = m.get("name", "unknown") if isinstance(m, dict) else getattr(m, "name", "unknown")
-
-                try:
-                    # Attempt to compress raw JSON arrays into flattened mathematical summaries if massive
-                    import json
-
-                    parsed = json.loads(content)
-                    if isinstance(parsed, list) and len(parsed) > 500:
-                        content = f"[Truncated JSON List of {len(parsed)} items. Keys: {str(list(parsed[0].keys()))[:200]} if mapping]."
-                    elif isinstance(parsed, dict) and len(str(parsed)) > 25000:
-                        content = f"[Compressed JSON Object. Keys: {list(parsed.keys())}]"
-                except:
-                    pass
-
-                if len(content) > 40000:
-                    content = content[:40000] + "\n... [Large Dataset Pruned (SDK Validation Threshold Reached)]"
-                compacted.append(HumanMessage(content=f"[System: Tool '{name}' Returned]:\n{content}"))
-            else:
-                # Fallback for generic/unknown messages
-                content = str(m.get("content", "")) if isinstance(m, dict) else str(getattr(m, "content", ""))
-                if content:
-                    compacted.append(HumanMessage(content=content))
-
-        # [STABILITY] Google Gemini SDK requires strict alternating turns.
-        # To completely bypass internal protobuf/conversational turn rejection for multi-agent loops,
-        # we squash the ENTIRE context payload into a SINGLE HumanMessage for the Reporter.
-        synthesized_history = "\n\n==== CONTEXTUAL DATA ====\n\n".join([m.content for m in compacted if hasattr(m, "content") and m.content.strip()])
-
-        # Guardrail against entirely empty history
-        if not synthesized_history.strip():
-            synthesized_history = "No specialist data generated. Produce a default blank analysis."
-
-        final_compacted = [HumanMessage(content=synthesized_history)]
-
-        state_to_synthesize = {**state, "messages": final_compacted}
-
-        # Invoke LLM for synthesis
-        messages = apply_prompt_template("reporter", state_to_synthesize, configurable=configurable)
+        # State to synthesize includes the human request and the compacted analyst findings
+        state_to_synthesize = state.copy()
+        state_to_synthesize["messages"] = final_compacted
         
         from src.graph.nodes.common_vli import _run_node_with_tiered_fallback
 
@@ -156,7 +101,7 @@ async def reporter_node(state: State, config: RunnableConfig):
             final_report_text = response.content
         elif isinstance(response.content, list):
             try:
-                final_report_text = "".join([c.get("text", "") if isinstance(c, dict) else str(c) for c in response.content])
+                final_report_text = "".join([str(c.get("text", "")) if isinstance(c, dict) else str(c) for c in response.content])
             except Exception as e:
                 logger.error(f"List parse error: {e}")
                 final_report_text = str(response.content)
@@ -166,9 +111,20 @@ async def reporter_node(state: State, config: RunnableConfig):
         if not final_report_text.strip() or final_report_text.strip() == "[]":
             logger.error(f"[VLI_REPORTER] Empty string/bracket returned. Metadata: {getattr(response, 'response_metadata', 'None')}")
             final_report_text = "Analysis completed. (Synthesis pipeline returned an empty payload. Deep evaluation was successfully processed but blocked natively by SDK context/safety rendering)."
+        
+        # [NEW] Final Sanitization & Re-synthesis Guardrail
+        sanitized_text = _sanitize_final_content(final_report_text)
+        if not sanitized_text:
+            logger.info("Reporter: Structural data leak detected in final output. Forcing narrative recovery.")
+            recovery_prompt = "MANDATORY: Your previous response contained raw JSON/data structures (expected_dict, etc). Rewrite this IMMEDIATELY as a professional Markdown narrative. NO raw braces, NO JSON tags."
+            # Reuse the compacted history plus the correction demand
+            recovery_response = await llm.ainvoke(final_compacted + [HumanMessage(content=recovery_prompt)])
+            final_report_text = str(recovery_response.content)
+        else:
+            final_report_text = sanitized_text
 
     except Exception as e:
-        logger.error(f"Reporter Synthesis Error: {str(e)}")
+        logger.error(f"Reporter Synthesis Error: {str(e)}", exc_info=True)
         final_report_text = "Analysis completed. (PHASE_SYNTHESIS_RECOVERY): The system has transitioned to a managed reporting baseline due to model constraints."
         fb_msgs = []
 

@@ -41,7 +41,7 @@ async def get_ticker_news(ticker: str) -> str:
             report.append(f"- **{title}** ({publisher})")
             report.append(f"  [Read More]({link})")
 
-        full_report = "\n".join(report)
+        full_report = "\n".join([str(r) for r in report])
         
         # 3. Categorization & Contradiction Resolution (Phase 5 Logic)
         impact_data = await _analyze_news_impact(t, headlines)
@@ -66,7 +66,7 @@ async def _analyze_news_impact(ticker: str, headlines: list[str]) -> dict[str, A
     Categorizes news into impact levels for dynamic TTL.
     FLASH (60s), DAILY (24h), STRUCTURAL (30d)
     """
-    text = " ".join(headlines).upper()
+    text = " ".join([str(h) for h in headlines]).upper()
     
     # Priority 1: FLASH (Immediate volatility)
     if any(k in text for k in ["BREAKING", "FLASH", "HALTED", "SPIKE", "CRASH"]):

@@ -11,14 +11,10 @@ LLMType = Literal["basic", "reasoning", "vision", "code", "core", "legacy"]
 # 1. Base dictionary for explicit mappings
 _BASE_AGENT_LLM_MAP: dict[str, LLMType] = {
     "coordinator": "reasoning",
-    "parser": "reasoning",
+    "parser": "basic",           # [REVERTED] Use standard Gemini 3 Flash
     "planner": "reasoning",
     "synthesizer": "basic",
     "coder": "basic",
-    # [BUGFIX: ANTI-ROT]
-    # The reporter was previously 'reasoning' to handle massive SMC payloads, but Gemini 3.1 Pro
-    # frequently fails to export text outside of <think> blocks on complex state. As payloads
-    # are now aggressively pruned to 10k max length, 'basic' (Flash) handles synthesis flawlessly.
     "reporter": "basic",
     "podcast_script_writer": "basic",
     "ppt_composer": "basic",
@@ -26,8 +22,8 @@ _BASE_AGENT_LLM_MAP: dict[str, LLMType] = {
     "prompt_enhancer": "basic",
     "scout": "basic",
     "journaler": "basic",
-    "portfolio_manager": "reasoning",
-    "risk_manager": "reasoning",
+    "portfolio_manager": "basic", # [DOWNGRADE] Save reasoning quota
+    "risk_manager": "basic",      # [DOWNGRADE] Save reasoning quota
     "analyst": "reasoning",
     "smc_analyst": "reasoning",
     "imaging": "vision",

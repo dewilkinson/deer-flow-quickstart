@@ -9,6 +9,7 @@
         "get_journal_folder",
         "set_journal_folder",
         "get_daily_blotter",
-        "get_stock_quote"
+        "get_stock_quote",
+        "log_feedback"
     ]
 }

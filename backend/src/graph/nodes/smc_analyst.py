@@ -33,7 +33,7 @@ async def smc_analyst_node(state: State, config: RunnableConfig):
     SMC Analyst node implementation.
     Specializes in Inner Circle Trader (ICT) concepts: FVG, Order Blocks, BOS, ChoCh.
     """
-    cached_list = ", ".join(sorted(list(GLOBAL_CONTEXT.get("cached_tickers", set()))))
+    cached_list = ", ".join([str(t) for t in sorted(list(GLOBAL_CONTEXT.get("cached_tickers", set())))])
     logger.info(f"SMC Analyst Node: Executing ICT Structural Analysis. GLOBAL_CACHE_VISIBILITY=[{cached_list}]")
 
     tools = [run_smc_analysis, get_raw_smc_tables, get_stock_quote, get_volume_profile, get_volatility_atr, get_sortino_ratio, get_sharpe_ratio, read_session_artifact]
