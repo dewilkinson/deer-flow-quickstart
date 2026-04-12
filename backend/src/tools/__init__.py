@@ -9,7 +9,7 @@ from .bash_shell import bash_shell_tool
 from .broker import get_brokerage_accounts, get_brokerage_balance, get_brokerage_statements, get_attribution_summary, get_personal_risk_metrics, get_daily_blotter
 from .crawl import crawl_tool
 from .ema import get_ema_analysis
-from .finance import clear_vli_diagnostic, get_cache_heat_map, get_stock_quote, get_symbol_history_data, vli_cache_tick
+from .finance import clear_vli_diagnostic, get_cache_heat_map, get_stock_quote, get_symbol_history_data, vli_cache_tick, get_macro_symbols
 from .datastore_tools import invalidate_market_cache, simulate_cache_volatility
 from .indicators import get_bollinger_bands, get_macd_analysis, get_rsi_analysis, get_sharpe_ratio, get_sortino_ratio, get_volatility_atr, get_volume_profile
 from .journal import get_journal_folder, list_journal_entries, read_journal_entry, set_journal_folder, write_daily_journal
@@ -66,4 +66,5 @@ __all__ = [
     "update_portfolio_ledger",
     "get_portfolio_balance_report",
     "swap_watchlist_item",
+    "get_macro_symbols",
 ]

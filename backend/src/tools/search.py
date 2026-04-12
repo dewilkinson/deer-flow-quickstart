@@ -71,56 +71,45 @@ def _ensure_default_project():
         return 1
 
 
-class PersistedSearchWrapper:
-    """Wraps a search tool to persist its results to the Research Database."""
+def _persist_results(query: str, results: Any):
+    """Internal helper to save search results to DB."""
+    try:
+        project_id = _ensure_default_project()
+        content = str(results)
+        # Create a ResearchDocument for the search result
+        research_db.create_research_document(
+            project_id=project_id,
+            title=f"Web Search: {query[:50]}...",
+            content=content,
+            source_url="web_search_tool",
+            document_type="search_results"
+        )
+        logger.info(f"[SEARCH_PERSISTENCE] Saved search results for query: {query}")
+    except Exception as e:
+        logger.error(f"[SEARCH_PERSISTENCE] Error saving results: {e}")
+
+
+def patch_tool_with_persistence(tool_instance):
+    """Patches a search tool to persist its results to the Research Database without changing its type."""
     
-    def __init__(self, tool_instance):
-        self.tool_instance = tool_instance
-        self.name = tool_instance.name
-        self.description = tool_instance.description
-        self.args_schema = getattr(tool_instance, "args_schema", None)
-        
-        # Intercept the run methods
-        self._original_run = tool_instance._run
-        self._original_arun = tool_instance._arun
-        tool_instance._run = self._run_with_persistence
-        tool_instance._arun = self._arun_with_persistence
+    original_run = tool_instance._run
+    original_arun = tool_instance._arun
 
-    def _persist_results(self, query: str, results: Any):
-        """Internal helper to save search results to DB."""
-        try:
-            project_id = _ensure_default_project()
-            content = str(results)
-            # Create a ResearchDocument for the search result
-            research_db.create_research_document(
-                project_id=project_id,
-                title=f"Web Search: {query[:50]}...",
-                content=content,
-                source_url="web_search_tool",
-                document_type="search_results"
-            )
-            logger.info(f"[SEARCH_PERSISTENCE] Saved search results for query: {query}")
-        except Exception as e:
-            logger.error(f"[SEARCH_PERSISTENCE] Error saving results: {e}")
-
-    def _run_with_persistence(self, query: str, *args, **kwargs):
-        result = self._original_run(query, *args, **kwargs)
-        self._persist_results(query, result)
+    def _run_with_persistence(query: str, *args, **kwargs):
+        result = original_run(query, *args, **kwargs)
+        _persist_results(query, result)
         return result
 
-    async def _arun_with_persistence(self, query: str, *args, **kwargs):
-        result = await self._original_arun(query, *args, **kwargs)
-        self._persist_results(query, result)
+    async def _arun_with_persistence(query: str, *args, **kwargs):
+        result = await original_arun(query, *args, **kwargs)
+        _persist_results(query, result)
         return result
 
-    def __getattr__(self, name):
-        return getattr(self.tool_instance, name)
-
-    def invoke(self, *args, **kwargs):
-        return self.tool_instance.invoke(*args, **kwargs)
-
-    async def ainvoke(self, *args, **kwargs):
-        return await self.tool_instance.ainvoke(*args, **kwargs)
+    tool_instance._run = _run_with_persistence
+    tool_instance._arun = _arun_with_persistence
+    
+    logger.info(f"[SEARCH_HARDENING] Patched tool '{tool_instance.name}' with persistence logic.")
+    return tool_instance
 
 
 # Get the selected search tool
@@ -143,13 +132,13 @@ def get_web_search_tool(max_search_results: int):
             include_domains=include_domains,
             exclude_domains=exclude_domains,
         )
-        return PersistedSearchWrapper(tool)
+        return patch_tool_with_persistence(tool)
     elif SELECTED_SEARCH_ENGINE == SearchEngine.DUCKDUCKGO.value:
         tool = LoggedDuckDuckGoSearch(
             name="web_search",
             num_results=max_search_results,
         )
-        return PersistedSearchWrapper(tool)
+        return patch_tool_with_persistence(tool)
     elif SELECTED_SEARCH_ENGINE == SearchEngine.BRAVE_SEARCH.value:
         tool = LoggedBraveSearch(
             name="web_search",
@@ -158,7 +147,7 @@ def get_web_search_tool(max_search_results: int):
                 search_kwargs={"count": max_search_results},
             ),
         )
-        return PersistedSearchWrapper(tool)
+        return patch_tool_with_persistence(tool)
     elif SELECTED_SEARCH_ENGINE == SearchEngine.ARXIV.value:
         tool = LoggedArxivSearch(
             name="web_search",
@@ -168,7 +157,7 @@ def get_web_search_tool(max_search_results: int):
                 load_all_available_meta=True,
             ),
         )
-        return PersistedSearchWrapper(tool)
+        return patch_tool_with_persistence(tool)
     elif SELECTED_SEARCH_ENGINE == SearchEngine.WIKIPEDIA.value:
         wiki_lang = search_config.get("wikipedia_lang", "en")
         wiki_doc_content_chars_max = search_config.get("wikipedia_doc_content_chars_max", 4000)
@@ -181,6 +170,6 @@ def get_web_search_tool(max_search_results: int):
                 doc_content_chars_max=wiki_doc_content_chars_max,
             ),
         )
-        return PersistedSearchWrapper(tool)
+        return patch_tool_with_persistence(tool)
     else:
         raise ValueError(f"Unsupported search engine: {SELECTED_SEARCH_ENGINE}")

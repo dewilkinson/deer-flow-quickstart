@@ -143,7 +143,7 @@
             max-width: 95%; 
             padding: 18px; 
             border-radius: 8px; 
-            font-size: 16px; 
+            font-size: 14px; 
             line-height: 1.6; 
             position: relative;
             box-shadow: 0 4px 15px rgba(0,0,0,0.2);
@@ -169,7 +169,7 @@
             border-bottom: 1px solid rgba(63, 185, 80, 0.15);
             padding-bottom: 4px;
         }
-        .msg-ai strong { color: var(--emerald-green); font-weight: 700; }
+        .msg-ai strong { color: var(--emerald-green); font-weight: 400; }
         .msg-ai code { background: rgba(255,255,255,0.05); padding: 2px 5px; border-radius: 4px; color: var(--emerald-green); }
         .msg-ai ul { margin-left: 20px; margin-bottom: 10px; list-style-type: square; }
         .msg-ai li { margin-bottom: 4px; font-weight: 400; }
@@ -179,7 +179,7 @@
             color: var(--text-muted); 
             align-self: flex-end; 
             border-right: 2px solid rgba(255,255,255,0.1);
-            font-size: 15px;
+            font-size: 13px;
         }
         
         .analysis-report pre {
@@ -789,13 +789,13 @@
                     } else if (sign === '-') {
                         color = '#d73a49'; // darker red
                     }
-                    return `${prefix}<span style="color: ${color}; font-weight: 700;">${sign}${val}</span>`;
+                    return `${prefix}<span style="color: ${color}; font-weight: 400;">${sign}${val}</span>`;
                 });
                 
                 // Status Keywords
-                text = text.replace(/\b(HALT|DENIED|STOP|REJECTED|ABORT|FAILED)\b/g, '<span style="color: var(--ruby-red); font-weight: 800;">$&</span>');
-                text = text.replace(/\b(WAIT|HOLD|PENDING|WARNING)\b/g, '<span style="color: var(--amber-gold); font-weight: 800;">$&</span>');
-                text = text.replace(/\b(APPROVED|PROCEED|AUTHORIZE|GO|SUCCESS|RESOLVED|PASSED)\b/g, '<span style="color: var(--emerald-green); font-weight: 800;">$&</span>');
+                text = text.replace(/\b(HALT|DENIED|STOP|REJECTED|ABORT|FAILED)\b/g, '<span style="color: var(--ruby-red); font-weight: 400;">$&</span>');
+                text = text.replace(/\b(WAIT|HOLD|PENDING|WARNING)\b/g, '<span style="color: var(--amber-gold); font-weight: 400;">$&</span>');
+                text = text.replace(/\b(APPROVED|PROCEED|AUTHORIZE|GO|SUCCESS|RESOLVED|PASSED)\b/g, '<span style="color: var(--emerald-green); font-weight: 400;">$&</span>');
                 
                 return `>${text}<`;
             });

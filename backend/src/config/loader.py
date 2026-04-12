@@ -11,8 +11,9 @@ from typing import Any
 import yaml
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
-load_dotenv(override=True)
+# Load environment variables from .env file (Absolute Pathing to prevent Monorepo collisions)
+env_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".env"))
+load_dotenv(dotenv_path=env_path, override=True)
 
 
 def get_bool_env(name: str, default: bool = False) -> bool:

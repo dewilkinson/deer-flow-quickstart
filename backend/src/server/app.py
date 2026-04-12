@@ -699,12 +699,20 @@ async def _invoke_vli_agent(
     is_fast_override = any(kw in text.upper() for kw in ["FAST", "QUICK", "HIGH-LEVEL", "SHORTCUT", "RAPID"])
 
     # Exclusion: Technical keywords (Sortino, Sharpe, etc.) should use the full agent graph
-    tech_keywords = ["SORTINO", "SHARPE", "RISK", "VOLATILITY", "ANALYSIS", "REPORT", "ANALYZE"]
+    tech_keywords = ["SORTINO", "SHARPE", "RISK", "VOLATILITY", "ANALYSIS", "REPORT", "ANALYZE", "EXPLAIN"]
     is_technical = any(kw in text.upper() for kw in tech_keywords) and not (is_smc and is_fast_override)
 
-    is_macro = "MACRO" in text.upper() and ("LIST" in text.upper() or "PRICE" in text.upper())
+    is_macro = "MACRO" in text.upper() and any(kw in text.upper() for kw in ["LIST", "PRICE", "SYMBOLS", "ENVIRONMENT", "OVERVIEW"])
     is_price_list = ("SYMBOL" in text.upper() or "PORTFOLIO" in text.upper()) and "PRICE" in text.upper()
     is_vix = "VIX" in text.upper() and len(text) < 30
+
+    # [NEW] INTENT CLASSIFICATION: MARKET_AWARENESS vs TACTICAL_EXECUTION
+    # Educational mode is triggered for macro, general queries, or purely informational requests.
+    educational_keywords = ["LEARN", "EDUCATION", "EXPLAIN", "MACRO", "ECONOMY", "CONCEPT"]
+    tactical_keywords = ["ANALYZE", "STRIKE", "ENTRY", "RISK", "SORTINO", "SHARPE", "SCAN", "SWORD", "SHIELD", "SETUP", "TRADE"]
+    
+    is_tactical = any(kw in text.upper() for kw in tactical_keywords) or is_smc
+    intent_mode = "MARKET_AWARENESS" if (is_macro or any(kw in text.upper() for kw in educational_keywords)) and not is_tactical else "TACTICAL_EXECUTION"
 
     # 2. Refined Ticker Query: Qualified vs Unqualified vs Analyze
     qualifiers = ["PRICE", "VOLUME", "OHLC", "VALUE", "MA", "RSI", "MACD"]
@@ -759,44 +767,82 @@ async def _invoke_vli_agent(
                     break
 
         if is_macro:
-            if "PRICE" in text.upper():
-                # [BATCH FAST-PATH] Parallel Metric Retrieval
-                tickers = ["VIX", "DXY", "TNX", "CL=F"]
+            # [CRITICAL] Macro Institutional Intercept
+            from src.tools.finance import get_macro_symbols
+            start_time = datetime.now()
+            try:
+                # Call the high-fidelity macro symbols tool
+                report = await get_macro_symbols()
+                duration = (datetime.now() - start_time).total_seconds()
+                
+                # Persist the artifact
+                _persist_vli_report(text, report)
+                
+                # Convergence history update
+                _vli_convergence_history.append({
+                    "timestamp": datetime.now().strftime("%H:%M:%S"),
+                    "iteration": 1,
+                    "latency": duration,
+                    "accuracy": 100.0,
+                    "status": "pass"
+                })
+                
+                return report, {}
+            except Exception as me:
+                logger.error(f"VLI Fast-Path: Macro symbols tool failed: {me}")
+                # Fallback to the text-based list below if the tool fails
+            from src.services.macro_registry import macro_registry
+            start_time = datetime.now()
+            try:
+                # [BATCH FAST-PATH] Comprehensive Metric Retrieval
+                registry_macros = macro_registry.get_macros()
+                # Limit to core set for Fast-Path responsiveness
+                target_keys = ["SPY", "QQQ", "VIX", "DXY", "TNX", "CL", "GLD", "BTC"]
+                tickers = [registry_macros.get(k, k) for k in target_keys if k in registry_macros]
+                
                 results = []
-                start_time = datetime.now()
-                try:
-                    # [FIX] Call the underlying tool function directly for high-fidelity dict responses
-                    q_func = getattr(get_stock_quote, "coroutine", getattr(get_stock_quote, "func", None))
-                    if not q_func:
-                        raise TypeError("VLI Fast-Path: Tool not correctly configured.")
+                # [FIX] Call the underlying tool function directly for high-fidelity dict responses
+                q_func = getattr(get_stock_quote, "coroutine", getattr(get_stock_quote, "func", None))
+                if not q_func:
+                    raise TypeError("VLI Fast-Path: Tool not correctly configured.")
 
-                    # Fetch top 4 in parallel for the macro list
-                    tasks = [asyncio.wait_for(q_func(ticker=t, use_fast_path=True), timeout=5.0) for t in tickers]
-                    quotes = await asyncio.gather(*tasks, return_exceptions=True)
+                # Fetch in parallel
+                tasks = [asyncio.wait_for(q_func(ticker=t, use_fast_path=True), timeout=5.0) for t in tickers]
+                quotes = await asyncio.gather(*tasks, return_exceptions=True)
 
-                    for i, q in enumerate(quotes):
-                        t = tickers[i]
-                        # Handle results with normalization (VIX -> ^VIX)
-                        if isinstance(q, dict) and "price" in q:
-                            p, c = q.get("price", 0), q.get("change", 0)
-                            # Display original ticker for UI clarity
-                            results.append(f"- **{t}**: `${p:.2f}` ({'+' if c >= 0 else ''}{c:.2f}%)")
-                        elif isinstance(q, str) and "$" in q:
-                            results.append(f"- **{t}**: {q}")
+                for i, q in enumerate(quotes):
+                    t = target_keys[i]
+                    # Handle results with normalization
+                    if isinstance(q, dict) and "price" in q:
+                        p, c = q.get("price", 0), q.get("change", 0)
+                        # [FIX] Yield formatting: TNX/TYX should be % not $
+                        if t.upper() in ["TNX", "TYX", "FVX"]:
+                            results.append(f"- **{t}**: `{p:.2f}%` ({'+' if c >= 0 else ''}{c:.2f}%)")
                         else:
-                            # Log the error but keep the UI stable
-                            logger.error(f"VLI Fast-Path: Failed to fetch {t}: {q}")
-                            results.append(f"- **{t}**: `N/A` (Timeout/Error)")
+                            results.append(f"- **{t}**: `${p:.2f}` ({'+' if c >= 0 else ''}{c:.2f}%)")
+                    elif isinstance(q, str) and "$" in q:
+                        results.append(f"- **{t}**: {q}")
+                    else:
+                        logger.error(f"VLI Fast-Path: Failed to fetch {t}: {q}")
+                        results.append(f"- **{t}**: `N/A` (Timeout/Error)")
 
-                    duration = (datetime.now() - start_time).total_seconds()
+                duration = (datetime.now() - start_time).total_seconds()
+                
+                # Persist result
+                clean_results = [str(r) for r in results]
+                _persist_vli_report(text, "### Global Macro Tickers (Atomic Fast-Path)\n" + "\n".join(clean_results))
 
-                    # [PERFORMANCE AUDIT] Log Fast-Path batch latency
-                    log_vli_metric("fastpath_macro_batch", duration, status="pass")
-
-                    _vli_convergence_history.append({"timestamp": datetime.now().strftime("%H:%M:%S"), "iteration": 1, "latency": duration, "accuracy": 100.0, "status": "pass"})
-                    return "### Global Macro Tickers (Atomic Fast-Path)\n" + "\n".join(results), {}
-                except Exception as be:
-                    logger.warning(f"VLI Fast-Path: Batch retrieval failed: {be}")
+                _vli_convergence_history.append({
+                    "timestamp": datetime.now().strftime("%H:%M:%S"),
+                    "iteration": 1,
+                    "latency": duration,
+                    "accuracy": 100.0,
+                    "status": "pass"
+                })
+                
+                return "### Global Macro Tickers (Atomic Fast-Path)\n" + "\n".join(clean_results), {}
+            except Exception as be:
+                logger.warning(f"VLI Fast-Path: Batch retrieval failed: {be}")
                     # Fallback to text list if batch fails
 
             macro_report = (
@@ -910,6 +956,7 @@ async def _invoke_vli_agent(
         "verbosity": 1,
         "direct_mode": direct_mode,
         "raw_data_mode": raw_data_mode,
+        "intent_mode": intent_mode,
     }
 
     # [RESONANCE FLOOR] Configuration for reliable execution
@@ -923,6 +970,7 @@ async def _invoke_vli_agent(
             "direct_mode": direct_mode,
             "reporter_llm_type": reporter_llm_type,
             "vli_llm_type": vli_llm_type,
+            "intent_mode": intent_mode,
         },
         "recursion_limit": 50,
     }

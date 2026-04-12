@@ -2,13 +2,13 @@ import asyncio
 import pytest
 import os
 import json
-from src.tools.finance import get_macro_stocks
+from src.tools.finance import get_macro_symbols
 
 @pytest.mark.asyncio
 async def test_get_macro_stocks_execution():
     """Verifies that the macro tool executes, fetches data, and saves the artifact."""
     # 1. Run the tool
-    result = await get_macro_stocks.ainvoke({})
+    result = await get_macro_symbols.ainvoke({})
     
     # 2. Check result content
     assert "# Macro Stocks State" in result

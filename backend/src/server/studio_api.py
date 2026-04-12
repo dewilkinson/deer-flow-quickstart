@@ -93,12 +93,8 @@ async def get_context_memory():
             content = f.read()
 
         # 2. Get the model to count tokens
-        # We use the langchain get_num_tokens for speed and to avoid extra API calls
-        import os
-
-        from langchain_google_genai import ChatGoogleGenerativeAI
-
-        model = ChatGoogleGenerativeAI(model="gemini-1.5-flash", google_api_key=os.environ.get("BASIC_MODEL__api_key"))
+        # Utilizing the centralized factory to benefit from hardened credential mapping
+        model = get_llm_by_type("basic")
 
         token_count = model.get_num_tokens(content)
         limit = 1000000

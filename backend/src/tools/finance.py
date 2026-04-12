@@ -18,6 +18,7 @@ import yfinance
 # Use curl_cffi for industrial-strength browser spoofing
 from curl_cffi.requests import Session
 from langchain_core.tools import tool
+from src.services.datastore import DatastoreManager
 
 logger = logging.getLogger(__name__)
 
@@ -255,7 +256,6 @@ async def get_symbol_history_data(symbols: list[str], period: str = "1d", interv
         sym = sym.upper()
         # No heat tracking for Scout
 
-        from src.services.datastore import DatastoreManager
         # Refactor Phase 2: Use DatastoreManager.get_artifact
         cached_entry = DatastoreManager.get_artifact(sym, "history", interval)
         
@@ -526,7 +526,6 @@ async def get_stock_quote(ticker: str, period: str = "1d", interval: str = "1m",
 
     try:
         # 1. Warm Cache Phase: Check global scope for recent data (< 2 mins)
-        from src.services.datastore import DatastoreManager
         # Refactor Phase 2: Use DatastoreManager.get_artifact
         entry = DatastoreManager.get_artifact(norm_ticker, "history", interval)
         if entry:
@@ -1026,10 +1025,10 @@ async def get_raw_smc_tables(ticker: str, interval: str = "1d", period: str = "1
 
 
 @tool
-async def get_macro_stocks() -> str:
+async def get_macro_symbols() -> str:
     """
     Institutional Macro Registry Tool: Fetches the current states of all registered macro indicators
-    (Indices, Yields, Commodities, Crypto). Generates 'get_macro_stocks.json' for automated reporting.
+    (Indices, Yields, Commodities, Crypto). Generates 'get_macro_symbols.json' for automated reporting.
     """
     from src.services.macro_registry import macro_registry
     from datetime import datetime
@@ -1038,6 +1037,7 @@ async def get_macro_stocks() -> str:
 
     macros = macro_registry.get_macros()
     results = {}
+    rows = []
 
     # Batch fetch using the datastore infrastructure
     ticker_list = list(macros.values())
@@ -1048,9 +1048,18 @@ async def get_macro_stocks() -> str:
             timeout=15.0
         )
 
-        rows = []
         for label, ticker in macros.items():
             ticker_df = _extract_ticker_data(data, ticker)
+            
+            # Fallback: If batch fetch failed for this specific ticker, try individual fetch
+            if ticker_df.empty:
+                logger.info(f"VLI: Batch fetch missing {ticker}, falling back to individual lookup.")
+                try:
+                    ticker_df = await asyncio.to_thread(_fetch_batch_history, [ticker], "5d", "1d")
+                    ticker_df = _extract_ticker_data(ticker_df, ticker)
+                except Exception as fe:
+                    logger.error(f"VLI: Fallback fetch failed for {ticker}: {fe}")
+
             if ticker_df.empty:
                 results[label] = {"symbol": ticker, "status": "Error (No Data)"}
                 continue
@@ -1069,12 +1078,16 @@ async def get_macro_stocks() -> str:
                 "last_updated": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             }
 
+            # [NEW] Yield Formatting: Display TNX, TYX, FVX as percentages
+            is_yield = any(y in ticker.upper() for y in ["TNX", "TYX", "FVX"])
+            price_display = f"{price:.2f}%" if is_yield else f"${price:,.2f}"
+
             # Format row for Markdown table
             color = "🟢" if change >= 0 else "🔴"
-            rows.append(f"| {label} | {ticker} | {price:,.2f} | {color} {change:+.2f}% | {int(last_row['Volume']):,} |")
+            rows.append(f"| {label} | {ticker} | {price_display} | {color} {change:+.2f}% | {int(last_row['Volume']):,} |")
 
         # Create Artifact
-        artifact_path = os.path.join("data", "artifacts", "get_macro_stocks.json")
+        artifact_path = os.path.join("data", "artifacts", "get_macro_symbols.json")
         os.makedirs(os.path.dirname(artifact_path), exist_ok=True)
         with open(artifact_path, "w", encoding="utf-8") as f:
             json.dump(results, f, indent=4)
@@ -1084,7 +1097,7 @@ async def get_macro_stocks() -> str:
         table += "| Asset | Ticker | Price | Change | Volume |\n"
         table += "| :--- | :--- | :--- | :--- | :--- |\n"
         table += "\n".join(rows)
-        table += f"\n\n> [!NOTE]\n> Analysis posted to Reports window (get_macro_stocks.json)."
+        table += f"\n\n> [!NOTE]\n> Analysis posted to Reports window (get_macro_symbols.json)."
 
         return table
 
@@ -1092,9 +1105,3 @@ async def get_macro_stocks() -> str:
         logger.error(f"Macro Tool Error: {e}")
         return f"[ERROR]: Failed to fetch macro indicators: {str(e)}"
 
-# Datastore Registration
-try:
-    from src.services.datastore import DatastoreManager
-    DatastoreManager.register_fetcher(lambda tickers, period, interval: _fetch_batch_history(tickers, period, interval))
-except ImportError:
-    logger.warning("Could not register finance fetcher in DatastoreManager due to circularity or initialization order.")

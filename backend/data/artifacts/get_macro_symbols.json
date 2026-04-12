@@ -1,0 +1,114 @@
+{
+    "VIX": {
+        "symbol": "^VIX",
+        "price": 19.23,
+        "change_pct": -1.33,
+        "volume": 0,
+        "last_updated": "2026-04-11 20:26:45"
+    },
+    "DXY": {
+        "symbol": "DX-Y.NYB",
+        "price": 98.65,
+        "change_pct": -0.17,
+        "volume": 0,
+        "last_updated": "2026-04-11 20:26:45"
+    },
+    "TNX": {
+        "symbol": "^TNX",
+        "price": 4.317,
+        "change_pct": 0.56,
+        "volume": 0,
+        "last_updated": "2026-04-11 20:26:45"
+    },
+    "SPY": {
+        "symbol": "SPY",
+        "price": 679.46,
+        "change_pct": -0.07,
+        "volume": 41916700,
+        "last_updated": "2026-04-11 20:26:45"
+    },
+    "QQQ": {
+        "symbol": "QQQ",
+        "price": 611.07,
+        "change_pct": 0.14,
+        "volume": 33831300,
+        "last_updated": "2026-04-11 20:26:45"
+    },
+    "IWM": {
+        "symbol": "IWM",
+        "price": 261.3,
+        "change_pct": -0.25,
+        "volume": 22329700,
+        "last_updated": "2026-04-11 20:26:45"
+    },
+    "GLD": {
+        "symbol": "GLD",
+        "price": 437.13,
+        "change_pct": -0.18,
+        "volume": 6175600,
+        "last_updated": "2026-04-11 20:26:45"
+    },
+    "BTC": {
+        "symbol": "BTC-USD",
+        "price": 73086.7344,
+        "change_pct": 0.15,
+        "volume": 23018635264,
+        "last_updated": "2026-04-11 20:26:45"
+    },
+    "USO": {
+        "symbol": "USO",
+        "price": 124.82,
+        "change_pct": -1.69,
+        "volume": 16008700,
+        "last_updated": "2026-04-11 20:26:45"
+    },
+    "CL": {
+        "symbol": "CL=F",
+        "price": 96.57,
+        "change_pct": -1.33,
+        "volume": 427201,
+        "last_updated": "2026-04-11 20:26:45"
+    },
+    "GC": {
+        "symbol": "GC=F",
+        "price": 4761.8999,
+        "change_pct": -0.63,
+        "volume": 1277,
+        "last_updated": "2026-04-11 20:26:45"
+    },
+    "SPX": {
+        "symbol": "^GSPC",
+        "price": 6816.8901,
+        "change_pct": -0.11,
+        "volume": 4393220000,
+        "last_updated": "2026-04-11 20:26:45"
+    },
+    "NDX": {
+        "symbol": "^IXIC",
+        "price": 22902.8906,
+        "change_pct": 0.35,
+        "volume": 8700640000,
+        "last_updated": "2026-04-11 20:26:45"
+    },
+    "TYX": {
+        "symbol": "^TYX",
+        "price": 4.914,
+        "change_pct": 0.35,
+        "volume": 0,
+        "last_updated": "2026-04-11 20:26:45"
+    },
+    "EUR/USD": {
+        "symbol": "EURUSD=X",
+        "price": 1.1729,
+        "change_pct": 0.6,
+        "volume": 0,
+        "last_updated": "2026-04-11 20:26:45"
+    },
+    "TEST": {
+        "symbol": "BTC-USD",
+        "price": 73086.7344,
+        "change_pct": 0.15,
+        "volume": 23018635264,
+        "last_updated": "2026-04-11 20:26:45"
+    }
+}

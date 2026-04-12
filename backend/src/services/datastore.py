@@ -11,18 +11,6 @@ import json
 logger = logging.getLogger(__name__)
 
 
-@tool
-def invalidate_market_cache(ticker: str = "") -> str:
-    """Invalidate the cache for a specific ticker or clear all cache if none provided."""
-    return DatastoreManager.invalidate_cache(ticker)
-
-
-@tool
-def simulate_cache_volatility(force_invalid: bool = False) -> str:
-    """Simulate market volatility by tweaking cache freshness or invalidating it."""
-    DatastoreManager.simulate_volatility(force_invalid)
-    return "Simulated cache volatility applied."
-
 
 class DatastoreManager:
     _eager_worker_task = None
@@ -400,3 +388,16 @@ class DatastoreManager:
         """ Returns the drift threshold from config (cached for performance). """
         from src.config.loader import get_config
         return get_config().get("CACHE_POLICIES", {}).get("default", {}).get("drift_pct", 1.0) / 100.0
+
+
+@tool
+def invalidate_market_cache(ticker: str = "") -> str:
+    """Invalidate the cache for a specific ticker or clear all cache if none provided."""
+    return DatastoreManager.invalidate_cache(ticker)
+
+
+@tool
+def simulate_cache_volatility(force_invalid: bool = False) -> str:
+    """Simulate market volatility by tweaking cache freshness or invalidating it."""
+    DatastoreManager.simulate_volatility(force_invalid)
+    return "Simulated cache volatility applied."
