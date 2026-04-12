@@ -20,28 +20,28 @@ from src.tools import crawl_tool, get_stock_quote, get_web_search_tool, invalida
 from src.tools.artifacts import read_session_artifact
 from src.config.vli import get_vli_path
 from src.utils.vli_metrics import log_vli_metric
+from src.config.agents import AGENT_LLM_MAP
 
 logger = logging.getLogger(__name__)
+
+# [TIER_CONSTANTS] Global list of Gemini tiers for execution
+TIERS = ["reasoning", "basic", "legacy"]
 
 
 async def _run_node_with_tiered_fallback(agent_type, state, config, tools=None, is_structured=False, structured_schema=None, messages=None):
     """Universal tiered fallback executor for all VLI nodes."""
-    from src.config.agents import AGENT_LLM_MAP
-    from src.llms.llm import get_llm_by_type
-
-    tiers = ["reasoning", "basic", "legacy"]
     current_tier = AGENT_LLM_MAP.get(agent_type, "basic")
     
     try:
-        start_idx = tiers.index(current_tier)
+        start_idx = TIERS.index(current_tier)
     except ValueError:
         start_idx = 1
         
     fallback_messages = []
     result = None
 
-    for i in range(start_idx, len(tiers)):
-        tier = tiers[i]
+    for i in range(start_idx, len(TIERS)):
+        tier = TIERS[i]
         AGENT_LLM_MAP[agent_type] = tier
         
         # Re-initialize based on tier
@@ -76,7 +76,6 @@ async def _run_node_with_tiered_fallback(agent_type, state, config, tools=None, 
             logger.warning(f"[BUDGET_ENFORCEMENT] Skipping Reasoning tier (Remaining: {remaining_global:.1f}s < 30s).")
             # Inject Adaptive Verbosity logic into the prompt history for the fallback model
             if messages is not None:
-                from langchain_core.messages import SystemMessage
                 if is_structured:
                     # For structured output (like Phase B Coordinator), avoid narrative instructions which break JSON parsing
                     messages.append(SystemMessage(content="[BUDGET_CONSTRAINED]: Maintain valid JSON Plan output, but ensure the 'thought' and 'description' fields are highly detailed."))
@@ -114,23 +113,34 @@ async def _run_node_with_tiered_fallback(agent_type, state, config, tools=None, 
             
             # [PROMPT LEAKAGE GUARD] Detect if the model is echoing its own instructions/security protocol
             res_str = str(result).upper()
-            leak_keywords = ["# SECURITY OVERRIDE", "APEX 500 SYSTEM", "SYSTEM INSTRUCTION", "USER OVERRIDE DIRECTIVE", "OPERATIONAL MANDATE"]
-            is_leak = any(x in res_str for x in leak_keywords)
+            if hasattr(result, "content") and result.content:
+                res_str += " " + str(result.content).upper()
+            leak_keywords = ["# SECURITY OVERRIDE", "[APEX 500 SYSTEM]", "[SYSTEM INSTRUCTION]", "[USER OVERRIDE DIRECTIVE]", "[OPERATIONAL MANDATE]"]
+            is_leak = False
+            for x in leak_keywords:
+                if x in res_str:
+                    logger.warning(f"[LEAK_DEBUG] Detected keyword '{x}' in response context.")
+                    is_leak = True
+                    break
             
             # Deep check for list of messages
             if not is_leak and isinstance(result, list):
                 for item in result:
-                    if any(x in str(item).upper() for x in leak_keywords):
-                        is_leak = True
+                    for x in leak_keywords:
+                        if x in str(item).upper():
+                            logger.warning(f"[LEAK_DEBUG] Detected keyword '{x}' in message item.")
+                            is_leak = True
+                            break
+                    if is_leak:
                         break
             
             duration = time.time() - t0
             logger.info(f"[TRACE_END] Tier: {tier} | Status: {'LEAK' if is_leak else 'OK'} | Duration: {duration:.2f}s")
             
             if (is_structured and isinstance(result, list)) or is_leak:
-                if i < len(tiers) - 1:
-                    next_tier = tiers[i+1]
-                    msg = f"[SYSTEM]: Integrity check failed on {tier} (Instruction Leak). Falling back to {next_tier}..."
+                if i < len(TIERS) - 1:
+                    next_tier = TIERS[i+1]
+                    msg = f"STRUCTURAL_EXCEPTION: Integrity check failed on {tier} (Instruction Leak). Falling back to {next_tier}..."
                     fallback_messages.append(AIMessage(content=msg, name="system_fallback"))
                     continue
                 else:
@@ -160,7 +170,7 @@ async def _run_node_with_tiered_fallback(agent_type, state, config, tools=None, 
                 fallback_messages.append(SystemMessage(content=f"[TIER_{tier.upper()}_FAILURE] Error: {e}. Adjust approach and try fallback tier."))
             
             e_str = (str(e) + " " + e.__class__.__name__).upper()
-            is_quota = any(x in e_str for x in ["RESOURCE_EXHAUSTED", "429", "QUOTA", "LIMIT", "EXHAUSTED", "RATE_LIMIT"])
+            is_quota = any(x in e_str for x in ["RESOURCE_EXHAUSTED", "429", "QUOTA_EXHAUSTED", "RATE_LIMIT"])
             
             if is_quota:
                 try:
@@ -172,14 +182,16 @@ async def _run_node_with_tiered_fallback(agent_type, state, config, tools=None, 
                 model_str = str(actual_model).lower()
                 
                 # [UI] Prettify the model name for the dashboard warning
-                if "3" in model_str and "flash" in model_str:
+                if "gemini-3" in model_str:
+                    actual_model = "Gemini 3 Pro" if "pro" in model_str else "Gemini 3 Flash"
+                elif "3" in model_str and "flash" in model_str:
                     actual_model = "Gemini 3 Flash"
                 elif "3.1" in model_str or "pro" in model_str:
                     actual_model = "Gemini 3 Pro"
                 elif "flash" in model_str or tier in ["basic", "core", "reporter"]:
                     actual_model = "Gemini Flash"
                     
-                fail_msg = f"RESOURCE_EXHAUSTED: Quota limit reached for {actual_model}."
+                fail_msg = f"QUOTA_EXHAUSTED: Quota limit reached for {actual_model}."
                 logger.warning(fail_msg)
                 
                 # [AUDIT] Log explicit failure to active telemetry file
@@ -192,38 +204,25 @@ async def _run_node_with_tiered_fallback(agent_type, state, config, tools=None, 
                         tf.flush()
                 except:
                     pass
-
-                if is_structured:
-                    error_res = {"thought": fail_msg, "has_enough_context": True, "direct_response": fail_msg, "title": "Quota Failure", "steps": []}
+ 
+                if is_structured and structured_schema:
+                    try:
+                        error_res = structured_schema(
+                            locale="en-US",
+                            thought=fail_msg,
+                            has_enough_context=True,
+                            direct_response=fail_msg,
+                            title="Quota Failure",
+                            steps=[]
+                        )
+                    except Exception:
+                        error_res = {"thought": fail_msg, "has_enough_context": True, "direct_response": fail_msg, "title": "Quota Failure", "steps": []}
                 else:
                     error_res = AIMessage(content=fail_msg, name="system_fallback_error")
                 
                 return error_res, fallback_messages
             else:
                 # [RELIABILITY] Final tier failure sentinel
-                if is_quota:
-                     fail_msg = f"CRITICAL: All available Gemini tiers are currently exhausted (Reasoning, Basic, and Legacy). Please verify your Google Cloud Quota or wait for the reset period."
-                     fallback_messages.append(AIMessage(content=f"[SYSTEM]: Full Pipeline Quota Exhausted.", name="system_fallback"))
-                     
-                     if is_structured and structured_schema:
-                         # Return a dummy object that satisfies basic schema expectations if possible
-                         try:
-                             # Try to instantiate the Pydantic model with fallback values
-                             error_res = structured_schema(
-                                 locale="en-US",
-                                 thought=fail_msg,
-                                 has_enough_context=True,
-                                 direct_response=fail_msg,
-                                 title="Quota Failure",
-                                 steps=[]
-                             )
-                         except Exception:
-                             # Fallback to dict if Pydantic instantiation fails (e.g. schema mismatch)
-                             error_res = {"thought": fail_msg, "has_enough_context": True, "direct_response": fail_msg, "title": "Quota Failure", "steps": []}
-                     else:
-                         error_res = AIMessage(content=fail_msg, name="system_fallback_error")
-                     
-                     return error_res, fallback_messages
                 raise e
     return result, fallback_messages
 

@@ -179,7 +179,7 @@ async def vli_node(
             with open(core_logic_path, "r", encoding="utf-8") as f:
                 rules = [l.strip() for l in f.readlines() if l.strip().startswith(("-", "*"))]
                 if rules:
-                    messages.append(HumanMessage(content="[SYSTEM OVERRIDE]: Guardrail Heuristics:\n" + "\n".join([str(r) for r in rules[:3]])))
+                    messages.append(HumanMessage(content="[INSTITUTIONAL_HEURISTIC]: Guardrail Heuristics:\n" + "\n".join([str(r) for r in rules[:3]])))
         except:
             pass
 
