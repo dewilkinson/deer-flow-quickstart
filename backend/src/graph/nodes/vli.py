@@ -374,18 +374,18 @@ async def vli_node(
     is_technical = any(kw in user_query for kw in tech_keywords)
 
     if (not plan_obj.steps or plan_obj.has_enough_context) and is_technical:
-        # Check if this is a narrow technical query or a broad geopolitical scenario
-        geopolitical_keywords = ["peace talks", "war", "tension", "election", "geopolitical", "outlook", "behavior next week", "macro", "scenario", "strategy", "approach", "this week", "what would", "can i", "should i", "recommend", "what if", "how about"]
-        is_geo = any(kw in user_query for kw in geopolitical_keywords)
+        # Check if this is a narrow technical query or a broad macro/strategy scenario
+        broad_strategy_keywords = ["peace talks", "war", "tension", "election", "geopolitical", "outlook", "behavior next week", "macro", "scenario", "strategy", "approach", "this week", "what would", "can i", "should i", "recommend", "what if", "how about"]
+        is_broad_strategy = any(kw in user_query for kw in broad_strategy_keywords)
         
-        logger.warning(f"[VLI_SPINE] Guardrail: Forcing {'Research Synthesizer' if is_geo else 'Technical Analyst'} for technical query.")
+        logger.warning(f"[VLI_SPINE] Guardrail: Forcing {'Research Synthesizer' if is_broad_strategy else 'Technical Analyst'} for technical query.")
         plan_obj.has_enough_context = False
         plan_obj.direct_response = ""
         
-        target_step_type = StepType.SYNTHESIZER if is_geo else StepType.ANALYST
+        target_step_type = StepType.SYNTHESIZER if is_broad_strategy else StepType.ANALYST
         plan_obj.steps = [Step(
-            need_search=is_geo, 
-            title="Institutional Macro Insight" if is_geo else "Institutional Technical Audit", 
+            need_search=is_broad_strategy, 
+            title="Institutional Macro Insight" if is_broad_strategy else "Institutional Technical Audit", 
             description=f"Generate a COMPREHENSIVE institutional report for: {user_query}", 
             step_type=target_step_type
         )]
