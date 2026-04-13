@@ -369,9 +369,13 @@ async def vli_node(
         )
 
     # Guardrail: Force specialist nodes if the model tries to answer deep questions directly
+    # Add 'strategy' and 'approach' to ensure it triggers the guardrail
+    tech_keywords = ["analyze", "analysis", "smc", "sortino", "sharpe", "report", "markets", "outlook", "geopolitical", "likely", "happen", "explain", "recommend", "suggest", "does", "strategy", "approach"]
+    is_technical = any(kw in user_query for kw in tech_keywords)
+
     if (not plan_obj.steps or plan_obj.has_enough_context) and is_technical:
         # Check if this is a narrow technical query or a broad geopolitical scenario
-        geopolitical_keywords = ["peace talks", "failed", "war", "tension", "election", "geopolitical", "outlook", "behavior next week", "macro", "scenario"]
+        geopolitical_keywords = ["peace talks", "failed", "war", "tension", "election", "geopolitical", "outlook", "behavior next week", "macro", "scenario", "strategy", "approach", "this week"]
         is_geo = any(kw in user_query for kw in geopolitical_keywords)
         
         logger.warning(f"[VLI_SPINE] Guardrail: Forcing {'Research Synthesizer' if is_geo else 'Technical Analyst'} for technical query.")
