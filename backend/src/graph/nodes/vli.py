@@ -370,15 +370,15 @@ async def vli_node(
 
     # Guardrail: Force specialist nodes if the model tries to answer deep questions directly
     # Add 'strategy' and 'approach' to ensure it triggers the guardrail
-    tech_keywords = ["analyze", "analysis", "smc", "sortino", "sharpe", "report", "markets", "outlook", "geopolitical", "likely", "happen", "explain", "recommend", "suggest", "does", "strategy", "approach", "can i", "should i", "what if", "how about"]
-    is_technical = any(kw in user_query for kw in tech_keywords)
+    tech_keywords = ["analyze", "analysis", "smc", "sortino", "sharpe", "report", "markets", "outlook", "geopolitical", "likely", "happen", "explain", "recommend", "suggest", "does", "strategy", "approach", "can i", "should i", "what if", "how about", "?"]
+    is_technical = any(kw in user_query.lower() for kw in tech_keywords)
 
-    if (not plan_obj.steps or plan_obj.has_enough_context) and is_technical:
-        # Check if this is a narrow technical query or a broad macro/strategy scenario
-        broad_strategy_keywords = ["peace talks", "war", "tension", "election", "geopolitical", "outlook", "behavior next week", "macro", "scenario", "strategy", "approach", "this week", "what would", "can i", "should i", "recommend", "what if", "how about"]
-        is_broad_strategy = any(kw in user_query for kw in broad_strategy_keywords)
+    broad_strategy_keywords = ["peace talks", "war", "tension", "election", "geopolitical", "outlook", "behavior next week", "macro", "scenario", "strategy", "approach", "this week", "what would", "can i", "should i", "recommend", "what if", "how about", "?"]
+    is_broad_strategy = any(kw in user_query.lower() for kw in broad_strategy_keywords)
+
+    if ((not plan_obj.steps or plan_obj.has_enough_context) and is_technical) or is_broad_strategy:
         
-        logger.warning(f"[VLI_SPINE] Guardrail: Forcing {'Research Synthesizer' if is_broad_strategy else 'Technical Analyst'} for technical query.")
+        logger.warning(f"[VLI_SPINE] Guardrail: Forcing {'Research Synthesizer' if is_broad_strategy else 'Technical Analyst'} for technical/strategy query.")
         plan_obj.has_enough_context = False
         plan_obj.direct_response = ""
         
