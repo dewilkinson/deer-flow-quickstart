@@ -289,7 +289,15 @@ class DatastoreManager:
                 db.query(PersistentCache).delete()
                 db.commit()
                 
-            return "Datastore cache completely flushed (RAM + DB)."
+            # Phase 5: Clear secondary state
+            HeatManager.clear_heat()
+            GLOBAL_CONTEXT.get("cached_tickers", set()).clear()
+            if "ticker_metadata" in GLOBAL_CONTEXT:
+                GLOBAL_CONTEXT["ticker_metadata"].clear()
+            if "vli_cache_diag" in GLOBAL_CONTEXT:
+                GLOBAL_CONTEXT["vli_cache_diag"] = {"cache": {}, "history": []}
+                
+            return "Datastore cache completely flushed (RAM + DB + Context)."
 
         t = ticker.upper()
         for cache in caches:
@@ -302,7 +310,17 @@ class DatastoreManager:
             db.query(PersistentCache).filter(PersistentCache.ticker == t).delete()
             db.commit()
 
-        return f"Cache invalidated for {t} (RAM + DB)."
+        # Phase 5: Clear secondary state for this ticker
+        HeatManager.clear_heat(t)
+        cached_set = GLOBAL_CONTEXT.get("cached_tickers", set())
+        if t in cached_set:
+            cached_set.remove(t)
+        if "ticker_metadata" in GLOBAL_CONTEXT and t in GLOBAL_CONTEXT["ticker_metadata"]:
+            del GLOBAL_CONTEXT["ticker_metadata"][t]
+        if "vli_cache_diag" in GLOBAL_CONTEXT and t in GLOBAL_CONTEXT["vli_cache_diag"].get("cache", {}):
+            del GLOBAL_CONTEXT["vli_cache_diag"]["cache"][t]
+
+        return f"Cache invalidated for {t} (RAM + DB + Context)."
 
     @classmethod
     def simulate_volatility(cls, force_invalid: bool = False):

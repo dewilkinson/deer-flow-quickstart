@@ -39,6 +39,18 @@ class HeatManager:
         return cls._symbol_heat.copy()
 
     @classmethod
+    def clear_heat(cls, ticker: str = None):
+        """ Clears heat score for a specific ticker, or all tickers if none provided. """
+        if ticker:
+            t = ticker.upper()
+            if t in cls._symbol_heat:
+                del cls._symbol_heat[t]
+                logger.debug(f"[HEAT] {t} heat cleared.")
+        else:
+            cls._symbol_heat.clear()
+            logger.info("[HEAT_MANAGER] All heat scores have been cleared.")
+
+    @classmethod
     async def start_decay_worker(cls, interval_hours: int = 1):
         """ Starts the background task that decays heat scores hourly. """
         if cls._is_running:
