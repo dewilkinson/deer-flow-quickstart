@@ -368,24 +368,40 @@ async def vli_node(
             )],
         )
 
-    # Guardrail: Force specialist nodes if the model tries to answer deep questions directly
-    # Add 'strategy' and 'approach' to ensure it triggers the guardrail
-    tech_keywords = ["analyze", "analysis", "smc", "sortino", "sharpe", "report", "markets", "outlook", "geopolitical", "likely", "happen", "explain", "recommend", "suggest", "does", "strategy", "approach", "can i", "should i", "what if", "how about", "?"]
-    is_technical = any(kw in user_query.lower() for kw in tech_keywords)
+    # Guardrail: Intent-Based Routing Heuristics
+    # 1. Question Mark Rule: Any '?' triggers a Query (Synthesizer)
+    is_query = "?" in user_query
 
-    broad_strategy_keywords = ["peace talks", "war", "tension", "election", "geopolitical", "outlook", "behavior next week", "macro", "scenario", "strategy", "approach", "this week", "what would", "can i", "should i", "recommend", "what if", "how about", "?"]
-    is_broad_strategy = any(kw in user_query.lower() for kw in broad_strategy_keywords)
+    # 2. Conceptual/Strategy Detection
+    strategy_keywords = ["outlook", "strategy", "approach", "behavior", "macro", "scenario", "this week", "next week", "recommend", "should i", "can i", "what if", "how about", "explain", "describe", "mean", "meaning", "define", "what is"]
+    is_strategy = any(kw in user_query.lower() for kw in strategy_keywords)
 
-    if ((not plan_obj.steps or plan_obj.has_enough_context) and is_technical) or is_broad_strategy:
+    # 3. Tactical/Command Detection (Imperatives)
+    tactical_keywords = ["analyze", "analysis", "smc", "sortino", "sharpe", "report", "get", "run", "scan", "check", "calculate", "audit"]
+    is_tactical = any(kw in user_query.lower() for kw in tactical_keywords)
+
+    # Route Priority: Question/Strategy (Synthesis) -> Tactical (Audit)
+    if ((not plan_obj.steps or plan_obj.has_enough_context) and (is_query or is_strategy or is_tactical)):
         
-        logger.warning(f"[VLI_SPINE] Guardrail: Forcing {'Research Synthesizer' if is_broad_strategy else 'Technical Analyst'} for technical/strategy query.")
+        logger.warning(f"[VLI_SPINE] Guardrail: Intent detected (Q: {is_query}, S: {is_strategy}, T: {is_tactical}). Forcing specialist node.")
         plan_obj.has_enough_context = False
         plan_obj.direct_response = ""
         
-        target_step_type = StepType.SYNTHESIZER if is_broad_strategy else StepType.ANALYST
+        # Priority Logic: Any '?' or strategy keyword forces Synthesizer
+        if is_query or is_strategy:
+            target_step_type = StepType.SYNTHESIZER
+            step_title = "Institutional Market Insight"
+        # If no '?' and tactical keyword is present, route to Analyst/SMC_Analyst
+        elif "smc" in user_query.lower() or "smart money" in user_query.lower():
+            target_step_type = StepType.SMC_ANALYST
+            step_title = "Institutional SMC Audit"
+        else:
+            target_step_type = StepType.ANALYST
+            step_title = "Institutional Technical Audit"
+
         plan_obj.steps = [Step(
-            need_search=is_broad_strategy, 
-            title="Institutional Macro Insight" if is_broad_strategy else "Institutional Technical Audit", 
+            need_search=(is_query or is_strategy), 
+            title=step_title, 
             description=f"Generate a COMPREHENSIVE institutional report for: {user_query}", 
             step_type=target_step_type
         )]

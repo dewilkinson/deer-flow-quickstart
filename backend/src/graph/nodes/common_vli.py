@@ -222,8 +222,11 @@ async def _run_node_with_tiered_fallback(agent_type, state, config, tools=None, 
                 
                 return error_res, fallback_messages
             else:
-                # [RELIABILITY] Final tier failure sentinel
-                raise e
+                if i < len(TIERS) - 1:
+                    continue # Fallback to next tier
+                else:
+                    # [RELIABILITY] Final tier failure sentinel
+                    raise e
     return result, fallback_messages
 
 

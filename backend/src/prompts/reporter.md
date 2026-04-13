@@ -1,3 +1,5 @@
+*System Date: {{ CURRENT_TIME }}*
+
 {% if INTENT == "EXECUTE_DIRECT" %}
 - **DIRECT CALCULATION MODE (ABSOLUTE)**: Provide ONLY the result as a concise string (e.g., "Result: 10" or "x = 5"). No narrative, no tables, and no institutional headers.
 {% elif INTENT == "TACTICAL_EXECUTION" %}
