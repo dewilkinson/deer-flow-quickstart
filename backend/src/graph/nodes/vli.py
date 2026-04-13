@@ -375,7 +375,7 @@ async def vli_node(
 
     if (not plan_obj.steps or plan_obj.has_enough_context) and is_technical:
         # Check if this is a narrow technical query or a broad geopolitical scenario
-        geopolitical_keywords = ["peace talks", "war", "tension", "election", "geopolitical", "outlook", "behavior next week", "macro", "scenario", "strategy", "approach", "this week"]
+        geopolitical_keywords = ["peace talks", "war", "tension", "election", "geopolitical", "outlook", "behavior next week", "macro", "scenario", "strategy", "approach", "this week", "what would"]
         is_geo = any(kw in user_query for kw in geopolitical_keywords)
         
         logger.warning(f"[VLI_SPINE] Guardrail: Forcing {'Research Synthesizer' if is_geo else 'Technical Analyst'} for technical query.")
