@@ -370,7 +370,7 @@ async def vli_node(
 
     # Guardrail: Force specialist nodes if the model tries to answer deep questions directly
     # Add 'strategy' and 'approach' to ensure it triggers the guardrail
-    tech_keywords = ["analyze", "analysis", "smc", "sortino", "sharpe", "report", "rsi", "macd", "sma", "volume", "liquidity", "technical", "chart", "indicator", "price action", "fvg", "support", "resistance"]
+    tech_keywords = ["analyze", "analysis", "smc", "sortino", "sharpe", "report", "markets", "outlook", "geopolitical", "likely", "happen", "explain", "recommend", "suggest", "does", "strategy", "approach", "can i", "should i", "what if", "how about", "?"]
     is_technical = any(kw in user_query.lower() for kw in tech_keywords)
 
     broad_strategy_keywords = ["peace talks", "war", "tension", "election", "geopolitical", "outlook", "behavior next week", "macro", "scenario", "strategy", "approach", "this week", "what would", "can i", "should i", "recommend", "what if", "how about", "?"]
