@@ -51,28 +51,31 @@ class HeatManager:
             logger.info("[HEAT_MANAGER] All heat scores have been cleared.")
 
     @classmethod
-    async def start_decay_worker(cls, interval_hours: int = 1):
-        """ Starts the background task that decays heat scores hourly. """
+    def start_decay_worker(cls, interval_hours: int = 1):
+        """ Registers the heat decay task with the central Cobalt Heartbeat Scheduler. """
         if cls._is_running:
             return
             
+        from src.services.scheduler import cobalt_scheduler
+        cobalt_scheduler.add_timer(
+            task_id="HEAT_DECAY",
+            name="Heat Manager Decay Worker",
+            type="REPEAT",
+            schedule=interval_hours,
+            period_unit="hours",
+            priority="LOW",
+            callback=cls._decay_tick
+        )
         cls._is_running = True
-        cls._decay_task = asyncio.create_task(cls._decay_loop(interval_hours))
-        logger.info(f"[HEAT_MANAGER] Started heat decay worker (Interval: {interval_hours}h)")
+        logger.info(f"[HEAT_MANAGER] Registered heat decay worker with Heartbeat Engine (Interval: {interval_hours}h)")
 
     @classmethod
-    async def _decay_loop(cls, hours: int):
-        """ Background loop that applies decay logic. """
-        while cls._is_running:
-            try:
-                # Wait for the next interval
-                await asyncio.sleep(hours * 3600)
-                cls._perform_decay()
-            except asyncio.CancelledError:
-                break
-            except Exception as e:
-                logger.error(f"[HEAT_MANAGER] Error in decay loop: {e}")
-                await asyncio.sleep(60) # Backoff
+    def _decay_tick(cls):
+        """ Heartbeat-triggered tick that applies decay logic. """
+        try:
+            cls._perform_decay()
+        except Exception as e:
+            logger.error(f"[HEAT_MANAGER] Error in decay tick: {e}")
 
     @classmethod
     def _perform_decay(cls, override_pct: float = None):

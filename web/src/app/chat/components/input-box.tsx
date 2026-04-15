@@ -18,6 +18,7 @@ import { Button } from "~/components/ui/button";
 import { enhancePrompt } from "~/core/api";
 import { useConfig } from "~/core/api/hooks";
 import type { Option, Resource } from "~/core/messages";
+import {
   setEnableDeepThinking,
   setEnableBackgroundInvestigation,
   setForceUseVli,

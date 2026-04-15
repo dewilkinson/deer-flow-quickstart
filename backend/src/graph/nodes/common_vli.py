@@ -55,6 +55,8 @@ async def _run_node_with_tiered_fallback(agent_type, state, config, tools=None, 
                 is_graph = True
         else:
             runnable = get_llm_by_type(tier)
+            if is_structured and structured_schema:
+                runnable = runnable.with_structured_output(structured_schema)
 
         # Execution
         t0 = time.time()
@@ -94,22 +96,21 @@ async def _run_node_with_tiered_fallback(agent_type, state, config, tools=None, 
         logger.info(f"[TRACE_START] Tier: {tier} | Agent: {agent_type} | State: {state_size} | Msgs: {msgs_size} | Timeout: {tier_timeout:.1f}s (Global Remaining: {remaining_global:.1f}s)")
         
         try:
+            # Determine appropriate input format based on whether we are calling a graph or a raw LLM
             if messages is not None:
-                if is_graph:
-                    # Agent graph needs dict payload
-                    result = await asyncio.wait_for(runnable.ainvoke({"messages": messages}), timeout=tier_timeout)
-                    if isinstance(result, dict) and "messages" in result and result["messages"]:
-                        result = result["messages"][-1]
-                else:
-                    result = await asyncio.wait_for(runnable.ainvoke(messages), timeout=tier_timeout)
+                llm_input = {"messages": messages} if is_graph else messages
             else:
-                if is_structured:
-                    st_llm = runnable.with_structured_output(structured_schema)
-                    result = await asyncio.wait_for(st_llm.ainvoke(state), timeout=tier_timeout)
-                else:
-                    result = await asyncio.wait_for(runnable.ainvoke(state), timeout=tier_timeout)
-                    if isinstance(result, dict) and "messages" in result and result["messages"]:
-                        result = result["messages"][-1]
+                # If messages is None, specialists (graphs) need the whole state, 
+                # but raw ChatModels need just the message list.
+                llm_input = state if is_graph else state.get("messages", [])
+            
+            # Execute invocation (result is an AIMessage, State dict, or Structured Pydantic object)
+            result = await asyncio.wait_for(runnable.ainvoke(llm_input), timeout=tier_timeout)
+            
+            # If we invoked a graph directly, result is a state dict; extract the last message for the unified return type
+            if not is_structured and isinstance(result, dict) and "messages" in result and result["messages"]:
+                result = result["messages"][-1]
+
             
             # [PROMPT LEAKAGE GUARD] Detect if the model is echoing its own instructions/security protocol
             res_str = str(result).upper()
@@ -313,7 +314,7 @@ def _compact_history(messages: list) -> list:
     """
     compacted = []
     # Nodes whose messages should be ignored in final narrative synthesis EXCEPT when they hold result logic
-    structural_nodes = ["vli_spine", "system", "vli_parser", "parser"]
+    structural_nodes = ["vli_spine", "vli_parser", "parser"]
     
     # [HARDENING] We keep 'coordinator' and 'vli_coordinator' if they were the final node or contain _finalize suffix
     # because they often hold the entire analytical payload in Fast-Path scenarios.
@@ -343,6 +344,7 @@ def _compact_history(messages: list) -> list:
 def get_orchestrator_tools(config: RunnableConfig):
     """Returns a list of tools available to the Orchestrator for fast bypass."""
     from src.tools import get_brokerage_accounts, get_brokerage_balance, get_attribution_summary, get_daily_blotter, get_personal_risk_metrics, get_brokerage_statements, fetch_market_macros
+    from src.tools.scheduler import manage_scheduled_tasks
 
     configurable = Configuration.from_runnable_config(config)
     return [
@@ -359,4 +361,5 @@ def get_orchestrator_tools(config: RunnableConfig):
         get_brokerage_statements,
         fetch_market_macros,
         read_session_artifact,
+        manage_scheduled_tasks,
     ]

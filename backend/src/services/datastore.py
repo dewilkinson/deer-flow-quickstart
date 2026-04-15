@@ -337,63 +337,62 @@ class DatastoreManager:
 
     @classmethod
     def ensure_worker_started(cls):
-        """Start the eager fetching worker in the background."""
+        """Register background workers with the central Cobalt Heartbeat Scheduler."""
         if cls._eager_worker_task is None:
             try:
                 # Also start the heat decay worker
-                asyncio.create_task(HeatManager.start_decay_worker())
+                HeatManager.start_decay_worker()
                 
-                loop = asyncio.get_running_loop()
-                cls._eager_worker_task = loop.create_task(cls._eager_cache_worker())
-                logger.info("DatastoreManager Background Workers (Eager + Heat) started.")
-            except RuntimeError:
-                pass
+                from src.services.scheduler import cobalt_scheduler
+                cobalt_scheduler.add_timer(
+                    task_id="EAGER_CACHE_SYNC",
+                    name="Datastore Eager Cache Worker",
+                    type="REPEAT",
+                    schedule=60,
+                    period_unit="seconds",
+                    priority="LOW",
+                    callback=cls._eager_cache_tick
+                )
+                
+                cls._eager_worker_task = True # Marker instead of asyncio.Task
+                logger.info("DatastoreManager Background Workers (Eager + Heat) registered with Heartbeat engine.")
+            except Exception as e:
+                logger.error(f"Failed to register Datastore workers: {e}")
 
     @classmethod
-    async def _eager_cache_worker(cls):
+    def _eager_cache_tick(cls):
+        """Heartbeat-triggered tick to perform eager refreshes."""
         from src.config.loader import get_int_env
         from datetime import timedelta
 
-        while True:
-            try:
-                await asyncio.sleep(60)
+        try:
+            expiry_minutes = get_int_env("CACHE_EXPIRY_MINUTES", 15)
+            eager_limit = get_int_env("EAGER_CACHE_LIMIT", 5)
 
-                expiry_minutes = get_int_env("CACHE_EXPIRY_MINUTES", 15)
-                eager_limit = get_int_env("EAGER_CACHE_LIMIT", 5)
+            if cls._fetch_callback is None:
+                return
 
-                if cls._fetch_callback is None:
+            # Use HeatManager to prioritize eager refreshes
+            top_eager = HeatManager.get_protected_symbols(eager_limit)
+            now = datetime.now()
+            refresh_threshold = timedelta(minutes=expiry_minutes * 0.8)
+
+            cache = history_cache
+
+            for sym in top_eager:
+                if sym not in cache:
                     continue
+                    
+                container = cache[sym]
+                for tf_key, entry in list(container["timeframes"].items()):
+                    last_up = entry.get("updated_at")
+                    if last_up and (now - last_up) >= refresh_threshold:
+                        logger.info(f"[CACHE_SYNC] Eager background refresh triggered for hot ticker {sym} ({tf_key})")
+                        # Callback logic remains same (needs refinement in Phase 3/4)
+                        pass
 
-                # Use HeatManager to prioritize eager refreshes
-                top_eager = HeatManager.get_protected_symbols(eager_limit)
-                now = datetime.now()
-                refresh_threshold = timedelta(minutes=expiry_minutes * 0.8)
-
-                cache = history_cache
-
-                for sym in top_eager:
-                    if sym not in cache:
-                        continue
-                        
-                    container = cache[sym]
-                    for tf_key, entry in list(container["timeframes"].items()):
-                        last_up = entry.get("updated_at")
-                        if last_up and (now - last_up) >= refresh_threshold:
-                            logger.info(f"[CACHE_SYNC] Eager background refresh triggered for hot ticker {sym} ({tf_key})")
-                            
-                            # Note: interval/period would need to be stored in the entry metadata 
-                            # if not implicitly tied to tf_key. Assuming TF key is the interval for now.
-                            try:
-                                # This callback logic will need refinement in Phase 3/4 
-                                # to handle the new nested structure correctly.
-                                pass
-                            except Exception as e:
-                                logger.error(f"[CACHE_SYNC] Eager fetch failed for {sym}: {e}")
-
-            except asyncio.CancelledError:
-                break
-            except Exception as e:
-                logger.error(f"DatastoreManager Eager worker error: {e}")
+        except Exception as e:
+            logger.error(f"DatastoreManager Eager tick error: {e}")
 
     @classmethod
     def _get_cached_limit(cls) -> int:

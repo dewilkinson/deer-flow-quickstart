@@ -132,6 +132,7 @@ _vli_convergence_history = []
 _vli_last_async_report = ""
 _vli_last_ux_card = {}
 _vli_action_cache_data = {}  # [NEW] Short-term identical query cache
+_vli_last_run_day = datetime.now().strftime("%Y-%m-%d") # Tracked for scheduler day transitions
 
 def scrub_vli_output(text) -> str:
     """Universal firewall to prevent technical instruction leakage and verbose error clusters."""
@@ -349,8 +350,23 @@ from fastapi.staticfiles import StaticFiles
 
 @app.on_event("startup")
 async def startup_event():
-    logger.info("Cobalt Multiagent: Launching VLI Reactive Pipeline (Inbox Only).")
-    asyncio.create_task(vli_inbox_watcher())
+    logger.info("Cobalt Multiagent: Launching Unified Heartbeat Engine.")
+    from src.services.scheduler import cobalt_scheduler
+    
+    # Register Internal System Tasks
+    cobalt_scheduler.add_timer(
+        task_id="INBOX_WATCHER",
+        name="VLI Inbox & Archiver Watcher",
+        type="REPEAT",
+        schedule=2,
+        period_unit="seconds",
+        priority="NORMAL",
+        callback=vli_inbox_tick
+    )
+    
+    # Start the engine
+    cobalt_scheduler.start()
+    
     # Note: Macro Sync is now handled by the standalone vli_macro_worker.py process.
 
 
@@ -447,9 +463,20 @@ async def get_active_vli_state():
             clean_a["symbol"] = a["symbol"].replace("^", "").replace("=F", "").replace("-USD", "")
             ui_alerts.append(clean_a)
 
+        # 5. Read MACRO_WATCHLIST state
+        macro_watchlist_content = {}
+        target_bucket_path = os.path.join(VAULT_ROOT, "_cobalt", "01_Transit", "Buckets", "MACRO_WATCHLIST_state.json")
+        if os.path.exists(target_bucket_path):
+            try:
+                with open(target_bucket_path, encoding="utf-8") as f:
+                    macro_watchlist_content = json.load(f)
+            except Exception as e:
+                logger.error(f"Failed to read MACRO_WATCHLIST_state.json: {e}")
+
         logger.info(f"[VLI_TRACE] State compiled for return. Telemetry size: {len(telemetry_tail)} bytes.")
         return {
             "macros": json.loads(json.dumps(_get_vli_macro_snapshot(), default=str)),
+            "macro_watchlist_content": macro_watchlist_content,
             "last_macro_update": os.path.getmtime(get_vli_path("vli_macro_snapshot.json")) if os.path.exists(get_vli_path("vli_macro_snapshot.json")) else time.time(),
             "alerts": ui_alerts or [{"symbol": "SYS", "color": "green", "label": "VLI-IDLE"}],
             "dynamic_panels": json.loads(json.dumps(_vli_dynamic_panels, default=str)),
@@ -581,6 +608,69 @@ async def report_vli_metric(metric: dict[str, Any]):
     if len(_vli_convergence_history) > 100:
         _vli_convergence_history = _vli_convergence_history[-100:]
     return {"status": "ok"}
+
+
+class RefreshRequest(BaseModel):
+    card_id: str
+
+@app.post("/api/vli/refresh-card")
+async def refresh_vli_card(req: RefreshRequest):
+    """General refresh command handler for UX cards."""
+    target = req.card_id.strip().upper()
+    try:
+        telemetry_file = get_vli_path("VLI_Raw_Telemetry.md")
+        timestamp = datetime.now().strftime("[%H:%M:%S]")
+        
+        if target == "ALL":
+            # Refresh all active buckets
+            from src.services.asset_bucket import AssetBucket
+            logger.info("VLI: Global refresh requested for all UX cards")
+            
+            with open(telemetry_file, "a", encoding="utf-8") as tf:
+                tf.write(f"\n{timestamp} ### 🔄 [GLOBAL REFRESH] Target: ALL\n> Synchronizing all active Watchlist Engines...\n")
+                tf.flush()
+            
+            # Currently only Macro Watchlist is active as a managed bucket
+            # We can expand this loop to other persistent buckets in the future
+            mw_bucket = AssetBucket("MACRO_WATCHLIST", "Macros")
+            await mw_bucket.update()
+            
+            with open(telemetry_file, "a", encoding="utf-8") as tf:
+                tf.write(f"> Global state sync complete. All frontend payloads stabilized.\n")
+                tf.flush()
+            return {"status": "success", "target": "ALL"}
+
+        if target == "MW" or "MACRO" in target:
+            from src.services.asset_bucket import AssetBucket
+            bucket = AssetBucket("MACRO_WATCHLIST", "Macros")
+            logger.info("VLI: Explicit refresh requested for MACRO_WATCHLIST")
+            
+            with open(telemetry_file, "a", encoding="utf-8") as tf:
+                tf.write(f"\n{timestamp} ### 🔄 [UX REFRESH] Target: {target}\n> Triggering forced update of Macro Watchlist Engine...\n")
+                tf.flush()
+            
+            await bucket.update()
+            
+            with open(telemetry_file, "a", encoding="utf-8") as tf:
+                tf.write(f"> Macro Watchlist states securely synced to frontend payload.\n")
+                tf.flush()
+            return {"status": "success", "target": target}
+
+            
+        with open(telemetry_file, "a", encoding="utf-8") as tf:
+            tf.write(f"\n{timestamp} ### ⚠️ [UX REFRESH ERROR]\n> Target generic card identifier `{target}` not securely mapped for forced refreshes.\n")    
+            tf.flush()
+        return {"status": "ignored", "target": target, "msg": "Card identifier not recognized."}
+    except Exception as e:
+        logger.error(f"Failed to refresh card {target}: {e}")
+        telemetry_file = get_vli_path("VLI_Raw_Telemetry.md")
+        timestamp = datetime.now().strftime("[%H:%M:%S]")
+        try:
+            with open(telemetry_file, "a", encoding="utf-8") as tf:
+                tf.write(f"\n{timestamp} ### ❌ [UX REFRESH FAILED]\n> Error resolving card '{target}': {e}\n")    
+                tf.flush()
+        except: pass
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/api/vli/reset")
@@ -734,7 +824,7 @@ async def _invoke_vli_agent(
     tech_keywords = ["SORTINO", "SHARPE", "RISK", "VOLATILITY", "ANALYSIS", "REPORT", "ANALYZE", "EXPLAIN"]
     is_technical = any(kw in text.upper() for kw in tech_keywords) and not (is_smc and is_fast_override)
 
-    is_macro = "MACRO" in text.upper() and any(kw in text.upper() for kw in ["LIST", "PRICE", "SYMBOLS", "ENVIRONMENT", "OVERVIEW"])
+    is_macro = "MACRO" in text.upper() and any(kw in text.upper() for kw in ["LIST", "PRICE", "SYMBOLS", "ENVIRONMENT"])
     is_price_list = ("SYMBOL" in text.upper() or "PORTFOLIO" in text.upper()) and "PRICE" in text.upper()
     is_vix = "VIX" in text.upper() and len(text) < 30
 
@@ -1384,8 +1474,8 @@ async def post_vli_action_plan(request: VLIActionPlanRequest, background_tasks: 
 # --- VLI REACTIVE PIPELINE (INBOX WATCHER & ARCHIVER) ---
 
 
-async def vli_inbox_watcher():
-    """Background task to watch inbox/ for drafts AND archive end-of-day plans."""
+async def vli_inbox_tick():
+    """Heartbeat-triggered tick to watch inbox/ for drafts AND archive end-of-day plans."""
     inbox = get_inbox_path()
     plan_file = get_action_plan_path()
     archive_dir = get_archive_path()
@@ -1395,98 +1485,87 @@ async def vli_inbox_watcher():
     os.makedirs(archive_dir, exist_ok=True)
     os.makedirs(plan_dir, exist_ok=True)
 
-    logger.info(f"VLI: Inbox & Archiver watcher started on {inbox}")
+    # 1. Check for Day Transition (End-of-day Archiving)
+    global _vli_last_run_day
+    current_day = datetime.now().strftime("%Y-%m-%d")
+    if current_day != _vli_last_run_day:
+        logger.info(f"VLI: Day transition detected ({_vli_last_run_day} -> {current_day}). Archiving plan.")
+        if os.path.exists(plan_file):
+            archive_file = os.path.join(archive_dir, f"Action_Plan_{_vli_last_run_day}.md")
+            try:
+                os.rename(plan_file, archive_file)
+                # Create blank new plan for the new day
+                with open(plan_file, "w", encoding="utf-8") as f:
+                    f.write(f"# Daily Action Plan - {current_day}\n- [ ] Waiting for morning session briefing...")
+            except Exception as e:
+                logger.error(f"VLI: Day transition archival failed: {e}")
 
-    # Track the current day to detect transitions
-    last_run_day = datetime.now().strftime("%Y-%m-%d")
+        _vli_last_run_day = current_day
 
-    while True:
-        try:
-            # 1. Check for Day Transition (End-of-day Archiving)
-            current_day = datetime.now().strftime("%Y-%m-%d")
-            if current_day != last_run_day:
-                logger.info(f"VLI: Day transition detected ({last_run_day} -> {current_day}). Archiving plan.")
-                if os.path.exists(plan_file):
-                    archive_file = os.path.join(archive_dir, f"Action_Plan_{last_run_day}.md")
-                    os.rename(plan_file, archive_file)
-                    # Create blank new plan for the new day
-                    with open(plan_file, "w", encoding="utf-8") as f:
-                        f.write(f"# Daily Action Plan - {current_day}\n- [ ] Waiting for morning session briefing...")
+    # 2. Check for Inbox Drafts (Automatic alert extraction)
+    try:
+        files = [f for f in os.listdir(inbox) if f.endswith(".md")]
+        global _vli_processed_draft_mtimes, _vli_rules_enabled
+        from src.config.vli import inbox_rule_engine
 
-                last_run_day = current_day
+        # Sync rule engine state with global toggle
+        inbox_rule_engine.rules_enabled = _vli_rules_enabled
 
-            # 2. Check for Inbox Drafts (Automatic alert extraction)
-            files = [f for f in os.listdir(inbox) if f.endswith(".md")]
-            global _vli_processed_draft_mtimes, _vli_rules_enabled
-            from src.config.vli import inbox_rule_engine
+        for filename in files:
+            # CRITICAL: Separate "Automation" (Drafts) from "Smart Filing" (Journals/Actions)
+            # If a file matches a rule, DO NOT process it here. Let the user approve manually.
+            if inbox_rule_engine.is_filing_candidate(filename):
+                continue
 
-            # Sync rule engine state with global toggle
-            inbox_rule_engine.rules_enabled = _vli_rules_enabled
+            filepath = os.path.join(inbox, filename)
+            try:
+                mtime = os.path.getmtime(filepath)
+            except OSError:
+                continue  # File might have been moved
 
-            for filename in files:
-                # CRITICAL: Separate "Automation" (Drafts) from "Smart Filing" (Journals/Actions)
-                # If a file matches a rule, DO NOT process it here. Let the user approve manually.
-                # Skip even if rules are OFF to prevent auto-archival of candidate files.
-                if inbox_rule_engine.is_filing_candidate(filename):
-                    # logger.info(f"VLI Watcher: Skipping '{filename}' (Matches smart filing rule)")
-                    continue
+            # Deduplicate: Skip if we've processed this specific file version
+            if filename in _vli_processed_draft_mtimes and _vli_processed_draft_mtimes[filename] == mtime:
+                continue
 
-                filepath = os.path.join(inbox, filename)
-                try:
-                    mtime = os.path.getmtime(filepath)
-                except OSError:
-                    continue  # File might have been moved
+            # Cooldown: Allow the UI to "see" the file before auto-archiving
+            import time
+            if time.time() - mtime < 10:
+                continue
 
-                # Deduplicate: Skip if we've processed this specific file version
-                if filename in _vli_processed_draft_mtimes and _vli_processed_draft_mtimes[filename] == mtime:
-                    continue
+            logger.info(f"VLI Inbox: Processing draft '{filename}' (mtime: {mtime})")
+            _vli_processed_draft_mtimes[filename] = mtime
 
-                # Cooldown: Allow the UI to "see" the file before auto-archiving
-                import time
+            with open(filepath, encoding="utf-8") as rf:
+                content = rf.read()
 
-                if time.time() - mtime < 10:
-                    # logger.info(f"VLI Inbox: Cooldown for '{filename}'")
-                    continue
+            # Extract logic and update global alerts
+            new_alerts = extract_vli_logic(content)
+            global _vli_extracted_alerts
+            _vli_extracted_alerts.extend(new_alerts)
 
-                logger.info(f"VLI Inbox: Processing draft '{filename}' (mtime: {mtime})")
-                _vli_processed_draft_mtimes[filename] = mtime
+            # Keep only unique alerts by symbol/label
+            seen = set()
+            unique_alerts = []
+            for a in _vli_extracted_alerts:
+                key = f"{a['symbol']}:{a['label']}"
+                if key not in seen:
+                    seen.add(key)
+                    unique_alerts.append(a)
+            _vli_extracted_alerts = unique_alerts
 
-                with open(filepath, encoding="utf-8") as rf:
-                    content = rf.read()
+            # Append to active plan
+            with open(plan_file, "a", encoding="utf-8") as af:
+                af.write(f"\n\n### Batch Update: {filename}\n{content}")
 
-                # Extract logic and update global alerts
-                new_alerts = extract_vli_logic(content)
-                global _vli_extracted_alerts
-                _vli_extracted_alerts.extend(new_alerts)
+            # Success Archival
+            archive_path = os.path.join(archive_dir, f"Draft_{datetime.now().strftime('%H%M%S')}_{filename}")
+            try:
+                os.rename(filepath, archive_path)
+            except Exception as e:
+                logger.error(f"VLI: Error archiving draft: {e}")
 
-                # Keep only unique alerts by symbol/label
-                seen = set()
-                unique_alerts = []
-                for a in _vli_extracted_alerts:
-                    key = f"{a['symbol']}:{a['label']}"
-                    if key not in seen:
-                        seen.add(key)
-                        unique_alerts.append(a)
-                _vli_extracted_alerts = unique_alerts
-
-                # Append to active plan (dynamic date-based filename)
-                with open(plan_file, "a", encoding="utf-8") as af:
-                    af.write(f"\n\n### Batch Update: {filename}\n{content}")
-
-                # Optional: Success Archival
-                archive_path = os.path.join(archive_dir, f"Draft_{datetime.now().strftime('%H%M%S')}_{filename}")
-                # os.rename(filepath, archive_path) # COMMENTED OUT: Use Manual Moving instead?
-                # Actually, the user might want drafts moved to keep the inbox clean.
-                # I'll keep it but ensure it doesn't loop.
-                try:
-                    os.rename(filepath, archive_path)
-                except Exception as e:
-                    logger.error(f"VLI: Error archiving draft: {e}")
-
-        except Exception as e:
-            logger.error(f"VLI Reactive Pipeline Error: {e}")
-
-        await asyncio.sleep(2.0)  # Reduced frequency to 2s to prevent race conditions
+    except Exception as e:
+        logger.error(f"VLI Reactive Pipeline Error: {e}")
 
 
 # Redundant startup event removed (now merged at top)

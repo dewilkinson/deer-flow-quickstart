@@ -72,9 +72,9 @@ export default function StudioDashboard() {
   const [credits, setCredits] = useState<CreditData | null>(null);
   const [memory, setMemory] = useState<{used: number, limit: number, percent: number} | null>(null);
   const [loading, setLoading] = useState(true);
-  const [refreshProgress, setRefreshProgress] = useState(0);
   const [lastSync, setLastSync] = useState<Date | null>(null);
   const [isOpening, setIsOpening] = useState(false);
+  const [countdown, setCountdown] = useState(60); // 60s Institutional Refresh Cycle
 
   const fetchCredits = async () => {
     setLoading(true);
@@ -94,7 +94,6 @@ export default function StudioDashboard() {
       }
 
       setLastSync(new Date());
-      setRefreshProgress(0);
     } catch (err) {
       console.error(err);
       setCredits(prev => ({ 
@@ -122,21 +121,62 @@ export default function StudioDashboard() {
   useEffect(() => {
     void fetchCredits();
     
-    // 15 minute refresh loop (900,000 ms)
-    const interval = setInterval(() => {
-      void fetchCredits();
-    }, 900000);
-
-    // Progress bar animation interval (update every 1s for better performance over long periods)
-    const progressInterval = setInterval(() => {
-      setRefreshProgress(prev => (prev < 100 ? prev + (100 / 900) : 100)); // Update every 1000ms (100 / 900 steps in 15 mins)
-    }, 100); // Back to 100ms for smooth bar move, but math is for 15m
+    // 1s Heartbeat for Countdown & Auto-refresh (60s Cycle)
+    const timer = setInterval(() => {
+      setCountdown(prev => {
+        if (prev <= 1) {
+          void fetchCredits();
+          return 60;
+        }
+        return prev - 1;
+      });
+    }, 1000);
 
     return () => {
-      clearInterval(interval);
-      clearInterval(progressInterval);
+      clearInterval(timer);
     };
   }, []);
+
+  const RefreshCountdownRing = ({ value }: { value: number }) => {
+    const size = 24;
+    const stroke = 2;
+    const center = size / 2;
+    const radius = (size - stroke) / 2;
+    const circumference = 2 * Math.PI * radius;
+    const progress = (value / 60) * circumference;
+
+    return (
+      <div className="relative flex items-center justify-center w-6 h-6" title={`Next refresh in ${value}s`}>
+        <svg width={size} height={size} className="transform -rotate-90">
+          <circle
+            cx={center}
+            cy={center}
+            r={radius}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={stroke}
+            className="text-white/5"
+          />
+          <motion.circle
+            cx={center}
+            cy={center}
+            r={radius}
+            fill="none"
+            stroke="#60a5fa"
+            strokeWidth={stroke}
+            strokeDasharray={circumference}
+            initial={{ strokeDashoffset: circumference }}
+            animate={{ strokeDashoffset: circumference - progress }}
+            transition={{ duration: 1, ease: "linear" }}
+            strokeLinecap="round"
+          />
+        </svg>
+        <span className="absolute text-[8px] font-black text-blue-400 font-mono tracking-tighter">
+          {value}
+        </span>
+      </div>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-[#020202] text-slate-200 p-6 md:p-12 font-sans selection:bg-indigo-500/30 overflow-hidden relative">
@@ -153,6 +193,13 @@ export default function StudioDashboard() {
               animate={{ opacity: 1, x: 0 }}
               className="flex items-center gap-3"
             >
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-full border border-indigo-500/50 flex items-center justify-center text-[10px] font-black text-indigo-300 bg-indigo-500/10 shadow-[0_0_10px_rgba(99,102,241,0.2)]">
+                  V1
+                </div>
+                <RefreshCountdownRing value={countdown} />
+              </div>
+              <div className="w-px h-4 bg-white/10 mx-1" />
               <div className="p-2 rounded-xl bg-indigo-500/20 text-indigo-400">
                 <Cpu className="w-5 h-5" />
               </div>
@@ -195,13 +242,16 @@ export default function StudioDashboard() {
               <div className={`w-1.5 h-1.5 rounded-full ${loading ? 'bg-indigo-400 animate-pulse' : 'bg-emerald-400'}`} />
               {loading ? 'Analyzing Session Logs' : 'Stream Ready'}
             </div>
-            <div>Next Refresh in {Math.max(0, 15 - Math.floor((refreshProgress / 100) * 15))}m</div>
+            <div className="flex items-center gap-2">
+               <Clock className="w-3 h-3 text-indigo-400" />
+               Next Refresh in {countdown}s
+            </div>
           </div>
           <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden">
             <motion.div 
               className="h-full bg-gradient-to-r from-indigo-500 to-purple-500"
               initial={{ width: 0 }}
-              animate={{ width: `${refreshProgress}%` }}
+              animate={{ width: `${( (60 - countdown) / 60) * 100}%` }}
               transition={{ ease: "linear" }}
             />
           </div>

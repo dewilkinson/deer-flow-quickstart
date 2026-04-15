@@ -7,6 +7,7 @@
 # SPDX-License-Identifier: MIT
 
 import asyncio
+import json
 import logging
 from typing import Any
 
@@ -192,8 +193,9 @@ async def get_bollinger_bands(ticker: str, period: str = "60d", interval: str = 
 @tool
 async def get_volume_profile(ticker: str, period: str = "60d", interval: str = "1d") -> str:
     """
-    Primitive: Simplified Volume-at-Price profile.
-    Identifies high-volume nodes where price is likely to find support/resistance.
+    Primitive: Institutional-grade Volume-at-Price (VP) profile.
+    Calculates Point of Control (POC) and Value Area (VAH/VAL) containing 70% of total volume.
+    Returns a structured JSON with metadata and 24-node distribution.
     """
 
     def compute_vp(symbol: str, p: str, i: str):
@@ -202,14 +204,100 @@ async def get_volume_profile(ticker: str, period: str = "60d", interval: str = "
             return f"### Volume Profile: {symbol.upper()}\nError: No data for p={p}, i={i}\n"
 
         df.columns = [str(c).lower() for c in df.columns]
-        # Bins for price levels
-        bins = np.linspace(df["low"].min(), df["high"].max(), 10)
-        df["price_bin"] = pd.cut(df["close"], bins=bins)
-        profile = df.groupby("price_bin")["volume"].sum()
-        poc = profile.idxmax()  # Point of Control
-        return f"### Volume Profile: {symbol.upper()} ({i})\n- **Highest Volume Node (POC):** {poc}\n"
+        
+        try:
+            # 1. Base Aggregation (24 Nodes for high-fidelity)
+            bins = np.linspace(df["close"].min(), df["close"].max(), 25) # 25 edges = 24 bins
+            df["price_bin"] = pd.cut(df["close"], bins=bins, include_lowest=True)
+            
+            # Aggregate volume per bin
+            profile_df = df.groupby("price_bin", observed=True)["volume"].sum().reset_index()
+            profile_df.columns = ["bin", "volume"]
+            
+            # Convert bins to readable ranges
+            nodes = []
+            for _, row in profile_df.iterrows():
+                nodes.append({
+                    "low": float(row["bin"].left),
+                    "high": float(row["bin"].right),
+                    "volume": float(row["volume"]),
+                    "is_poc": False,
+                    "is_va": False
+                })
+
+            if not nodes:
+                return f"Error: No specific nodes could be constructed for {symbol}."
+
+            # 2. Identify Point of Control (POC)
+            total_volume = sum(n["volume"] for n in nodes)
+            poc_idx = 0
+            max_vol = -1
+            for idx, n in enumerate(nodes):
+                if n["volume"] > max_vol:
+                    max_vol = n["volume"]
+                    poc_idx = idx
+            
+            nodes[poc_idx]["is_poc"] = True
+            poc_price = (nodes[poc_idx]["low"] + nodes[poc_idx]["high"]) / 2
+
+            # 3. Calculate Value Area (70% Volume Expansion)
+            target_vol = total_volume * 0.70
+            current_vol = nodes[poc_idx]["volume"]
+            nodes[poc_idx]["is_va"] = True
+            
+            up_idx = poc_idx + 1
+            down_idx = poc_idx - 1
+            
+            while current_vol < target_vol and (up_idx < len(nodes) or down_idx >= 0):
+                up_vol = nodes[up_idx]["volume"] if up_idx < len(nodes) else -1
+                down_vol = nodes[down_idx]["volume"] if down_idx >= 0 else -1
+                
+                if up_vol >= down_vol and up_vol != -1:
+                    current_vol += up_vol
+                    nodes[up_idx]["is_va"] = True
+                    up_idx += 1
+                elif down_vol != -1:
+                    current_vol += down_vol
+                    nodes[down_idx]["is_va"] = True
+                    down_idx -= 1
+                else:
+                    break
+
+            # Identify VAH/VAL boundaries
+            va_nodes = [n for n in nodes if n["is_va"]]
+            vah = max(n["high"] for n in va_nodes)
+            val = min(n["low"] for n in va_nodes)
+
+            # 4. Final Payload Assembly
+            payload = {
+                "metadata": {
+                    "symbol": symbol.upper(),
+                    "poc": round(poc_price, 2),
+                    "vah": round(vah, 2),
+                    "val": round(val, 2),
+                    "total_volume": int(total_volume),
+                    "va_percentage": 0.70,
+                    "bin_count": len(nodes)
+                },
+                "nodes": nodes
+            }
+            
+            return json.dumps(payload)
+
+        except Exception as e:
+            logger.error(f"Enhanced VP Error for {symbol}: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return f"Error: Enhanced Volume Profile calculation failed - {str(e)}"
+
+            profile = df.groupby("price_bin", observed=True)["volume"].sum().reset_index()
+            profile.columns = ["price_range", "total_volume"]
+            profile["price_range"] = profile["price_range"].astype(str)
+            return profile.to_json(orient="records")
+
 
     return await asyncio.to_thread(compute_vp, ticker, period, interval)
+
 
 
 def calculate_downside_deviation(returns: pd.Series, risk_free_rate: float = 0.0) -> float:
@@ -269,47 +357,74 @@ async def get_sharpe_ratio(ticker: str, target_price: float = 0.0, period: str =
 
 
 @tool
-async def get_sortino_ratio(ticker: str, target_price: float = 0.0, period: str = "20d", interval: str = "1d") -> str:
+async def get_sortino_ratio(ticker: str, target_price: float = 0.0, period: str = "20d", interval: str = "1d", mode: str = "historical") -> str:
     """
     Primitive: Calculates the Sortino Ratio for a ticker using the 10Y Yield (.TNX) as the risk-free rate.
-    Uses target_price for the Expected Return if provided > 0.0, otherwise calculates historical Sortino.
+    If mode='day_trading', it uses a 0% MAR and high-frequency data for tactical assessment.
     Preferred over Sharpe as it only penalizes downside volatility.
     """
 
-    def compute(symbol, t_price, p, i):
+    def compute(symbol, t_price, p, i, m):
         try:
+            # Use day trading defaults if specified
+            if m == "day_trading":
+                # Ensure we have enough data points for a meaningful ratio
+                if p == "20d": p = "2d" 
+                if i == "1d": i = "5m"
+            
             df = _fetch_stock_history(symbol, p, i)
             if df.empty:
-                return f"Error: No data for {symbol}"
+                return {"error": f"No data for {symbol}", "sortino": 0.0}
 
-            import yfinance as yf
-
-            rf = 0.0428
-            try:
-                tnx = yf.Ticker("^TNX").history(period="1d")
-                if not tnx.empty:
-                    rf = tnx["Close"].iloc[-1] / 100.0
-            except:
-                pass
+            # 1. Determine Risk-Free Rate (MAR)
+            rf = 0.0
+            if m != "day_trading":
+                import yfinance as yf
+                rf = 0.0428 # Fallback
+                try:
+                    tnx = yf.Ticker("^TNX").history(period="1d")
+                    if not tnx.empty:
+                        rf = tnx["Close"].iloc[-1] / 100.0
+                except: pass
+            
+            # 2. Daily/Period Normalization
+            # For 1d interval, annualize by sqrt(252). 
+            # For 5m interval, annualize by sqrt(19656) -- roughly (78 bars * 252 days)
+            annualization_factor = np.sqrt(252)
+            if i == "5m":
+                annualization_factor = np.sqrt(78 * 252)
+            elif i == "15m":
+                annualization_factor = np.sqrt(26 * 252)
 
             df.columns = [str(c).lower() for c in df.columns]
             current_price = df["close"].iloc[-1]
             returns = df["close"].pct_change().dropna()
-            downside_dev = calculate_downside_deviation(returns, rf / 252.0)
+            
+            # Periodic risk-free rate
+            p_rf = rf / (252 if i == "1d" else (78 * 252 if i == "5m" else 1))
+            
+            downside_dev = calculate_downside_deviation(returns, p_rf)
 
             if t_price and t_price > 0.0:
                 # Projected Sortino
                 target_return = (t_price - current_price) / current_price
                 s = (target_return - rf) / (downside_dev if downside_dev > 0 else 0.0001)
-                return f"### Projected Sortino Ratio: {symbol.upper()}\n- Target Price: ${t_price:.2f}\n- Current: ${current_price:.2f}\n- Projected Return: {target_return * 100:.2f}%\n- Risk-Free (.TNX): {rf * 100:.2f}%\n- Downside Dev (σ_d): {downside_dev * 100:.2f}%\n- **Sortino Ratio (S_d):** {s:.2f}"
+                report = f"### Projected Sortino Ratio: {symbol.upper()}\n- Target: ${t_price:.2f}\n- Projected Return: {target_return * 100:.2f}%\n- **Sortino (S_d):** {s:.2f}"
+                return {"sortino": round(s, 2), "report": report}
             else:
-                # Historical Annualized
+                # Historical
                 avg_return = returns.mean()
-                daily_rf = rf / 252.0
-                s_historical = ((avg_return - daily_rf) / downside_dev) * np.sqrt(252) if downside_dev > 0 else 0
-                return f"### Historical Sortino Ratio: {symbol.upper()}\n- Downside Dev: {downside_dev * 100:.2f}%\n- Risk-Free (.TNX): {rf * 100:.2f}%\n- **Historical Sortino:** {s_historical:.2f}"
+                s_historical = ((avg_return - p_rf) / downside_dev) * annualization_factor if downside_dev > 0 else 0
+                
+                label = "Day Trading" if m == "day_trading" else "Historical"
+                report = f"### {label} Sortino Ratio: {symbol.upper()}\n- Downside Dev: {downside_dev * 100:.2f}%\n- **{label} Sortino:** {s_historical:.2f}"
+                return {"sortino": round(s_historical, 2), "report": report}
 
         except Exception as e:
-            return f"Error computing Sortino for {symbol}: {e}"
+            logger.error(f"Sortino Error for {symbol}: {e}")
+            return {"error": str(e), "sortino": 0.0}
 
-    return await asyncio.to_thread(compute, ticker, target_price, period, interval)
+    res = await asyncio.to_thread(compute, ticker, target_price, period, interval, mode)
+    # ALWAYS return string for the tool infrastructure, but internal callers can json.loads
+    return json.dumps(res)
+

@@ -9,6 +9,7 @@ from src.graph.nodes.common_vli import _compact_history
 from src.llms.llm import get_llm_by_type
 from src.prompts.template import apply_prompt_template
 
+from src.prompts.planner_model import Plan
 from ..types import State
 
 logger = logging.getLogger(__name__)
@@ -38,6 +39,14 @@ async def reporter_node(state: State, config: RunnableConfig):
     Final synthesis node for VLI reports.
     Ensures Specialist findings are compiled into a professional Markdown narrative.
     """
+    # 0. State Normalization (Plan reconstruction from checkpointer dicts)
+    current_plan = state.get("current_plan")
+    if isinstance(current_plan, dict):
+        try:
+            current_plan = Plan(**current_plan)
+        except Exception as e:
+            logger.error(f"[VLI_REPORTER] Failed to reconstruct Plan object: {e}")
+            
     # 1. Resource Exhaustion Check
     raw_messages = state.get("messages", [])
     if raw_messages:
@@ -61,7 +70,19 @@ async def reporter_node(state: State, config: RunnableConfig):
 
         # 2. Compact history for synthesis (Skip coordinator planning stages / intermediate tool dumps)
         state_to_synthesize = state.copy()
-        state_to_synthesize["messages"] = _compact_history(state.get("messages", []))
+        final_compacted = _compact_history(state.get("messages", []))
+        state_to_synthesize["messages"] = final_compacted
+
+        # [NEW] Admin Fast-Path Bypass (Hardened for Dictionary Serialization)
+        plan_intent = getattr(current_plan, "intent", "") if isinstance(current_plan, Plan) else current_plan.get("intent", "")
+        state_intent = state.get("intent", "")
+        
+        if (plan_intent == "EXECUTE_DIRECT") or (state_intent == "EXECUTE_DIRECT"):
+            logger.info("Reporter: Admin Fast-Path detected. Bypassing narrative synthesis.")
+            # Use the last message content directly (the tool result)
+            if final_compacted:
+                final_report_text = str(final_compacted[-1].content)
+                return {"final_report": final_report_text, "messages": [AIMessage(content=final_report_text, name="reporter_finalize")]}
         
         # Use the standard template applicator (returns a list of messages)
         # Note: apply_prompt_template appends .md internally

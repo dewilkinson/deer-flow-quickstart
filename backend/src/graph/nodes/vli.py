@@ -60,19 +60,36 @@ async def vli_node(
 
     # 1. Turn Awareness & Execution Tracking
     current_plan = state.get("current_plan")
+    if isinstance(current_plan, dict):
+        try:
+            current_plan = Plan(**current_plan)
+        except Exception as e:
+            logger.error(f"[VLI_SPINE] Failed to reconstruct Plan object from dict: {e}")
+            # [RECOVERY] Initialize a safe fallback plan to prevent AttributeError downstream
+            current_plan = Plan(
+                locale="en-US",
+                has_enough_context=False,
+                thought=f"Reconstruction Failure Recovery: {e}",
+                title="System Recovery Plan",
+                steps=[]
+            )
+            
     steps_completed = state.get("steps_completed", 0)
     raw_messages = state.get("messages", [])
 
-    # Layer 0: Zero-LLM Math Interceptor & --DIRECT Flag Manual Override
-    user_query = str(raw_messages[-1].content).lower() if raw_messages else ""
-    force_direct_exit = "--direct" in user_query
-    if force_direct_exit:
-        # Strip the flag for the downstream models/tools
-        stripped_query = user_query.replace("--direct", "").strip()
-        user_query = stripped_query
-        
-    is_arithmetic = bool(re.match(r'^[\d\s\+\-\*\/\(\)\.]+$', user_query.strip()))
-    is_algebra = "solve for" in user_query or "calculate" in user_query or "=" in user_query
+    # Layer 0: High-Priority Intent Tracking (Admin/Math/Direct)
+    user_query = str(raw_messages[-1].content) if raw_messages else ""
+    force_direct_exit = "--direct" in user_query.lower()
+    
+    stripped_query = user_query.lower().replace("--direct", "").strip()
+    is_admin = any(kw in stripped_query for kw in ["invalidate", "clear cache", "vli tick", "reset diagnostic", "heat map"])
+    
+    is_arithmetic = bool(re.match(r'^[\d\s\+\-\*\/\(\)\.]+$', stripped_query))
+    is_algebra = "solve for" in stripped_query or "calculate" in stripped_query or "=" in stripped_query
+    
+    # State Synchronization for routing stability
+    state_intent = state.get("intent", "")
+    is_direct = is_admin or force_direct_exit or (state_intent == "EXECUTE_DIRECT")
     
     if is_arithmetic and not is_algebra and not force_direct_exit:
         try:
@@ -84,7 +101,7 @@ async def vli_node(
                     "messages": raw_messages + [AIMessage(content=f"Result: {result}", name="math_interceptor")],
                     "intent": "EXECUTE_DIRECT"
                 },
-                goto="reporter"
+                goto=END
             )
         except:
             pass
@@ -96,12 +113,29 @@ async def vli_node(
         # If msg came from a specialist, increment completion
         if msg_name and msg_name not in ["vli", "vli_spine", "vli_parser", "vli_coordinator", "assistant", "Assistant"]:
             steps_completed += 1
-            logger.info(f"[VLI_SPINE] Returning from specialist '{msg_name}'. Completion: {steps_completed}/{len(current_plan.steps if current_plan else [])}")
+            # If plan is finished, route to reporter (unless direct admin status is required)
+            plan_steps = current_plan.steps if isinstance(current_plan, Plan) else current_plan.get("steps", [])
+            plan_len = len(plan_steps)
+            
+            logger.info(f"[VLI_SPINE] Returning from specialist '{msg_name}'. Completion: {steps_completed}/{plan_len}")
 
-            # If plan is finished, route to reporter
-            if current_plan and steps_completed >= len(current_plan.steps):
-                logger.info("[VLI_SPINE] Plan complete. Routing to synthesis.")
-                return Command(update={"steps_completed": steps_completed}, goto="reporter" if not state.get("raw_data_mode") else "__end__")
+            if current_plan and steps_completed >= plan_len:
+                logger.info(f"[VLI_SPINE] Plan complete ({steps_completed}/{plan_len}). Routing to termination/synthesis.")
+                
+                # Use centralized Layer 0 intent detection for consistency
+                plan_intent = getattr(current_plan, "intent", "") if isinstance(current_plan, Plan) else current_plan.get("intent", "")
+                is_direct_final = is_direct or (plan_intent == "EXECUTE_DIRECT")
+                
+                logger.info(f"[VLI_SPINE] Final Intent Audit: is_direct={is_direct}, plan_intent={plan_intent}, final={is_direct_final}")
+                
+                return Command(
+                    update={
+                        "steps_completed": steps_completed, 
+                        "intent": "EXECUTE_DIRECT" if is_direct_final else state_intent,
+                        "current_plan": current_plan
+                    }, 
+                    goto=END if is_direct_final or state.get("raw_data_mode") else "reporter"
+                )
 
     # 2. Workspace & Metadata Synchronization
     analyst_keywords = ", ".join([str(k) for k in get_analyst_keywords()])
@@ -203,7 +237,19 @@ async def vli_node(
             structured_schema=PlanSchema
         )
         fallback_msgs_all.extend(fb_msgs1)
-        response = AIMessage(content=str(plan_obj_a.direct_response), name="parser_logic")
+        
+        if plan_obj_a is None:
+            plan_obj_a = PlanSchema(
+                locale="en-US", 
+                has_enough_context=False, 
+                thought="Parser returned None. Falling back to default plan.", 
+                title="Parser Fallback",
+                steps=[],
+                direct_response=""
+            )
+            
+        dr = getattr(plan_obj_a, "direct_response", "") or ""
+        response = AIMessage(content=str(dr), name="parser_logic")
         
         # If we got a terminal error, we must explain it but keep the UI clean
         # [HARDENING] Check for 'Agent Intelligence Failure' or prompt leakage
@@ -268,7 +314,7 @@ async def vli_node(
                     "intent": final_intent,
                     "directive": "Provide ONLY the final direct calculation or status result. NO NARRATIVE."
                 },
-                goto="reporter"
+                goto=END if (final_intent == "EXECUTE_DIRECT" or is_direct) else "reporter"
             )
 
     if response.tool_calls and not is_technical:
@@ -303,9 +349,15 @@ async def vli_node(
         fallback_prefix = "\n".join([f"**{str(m.content)}**" for m in fb_msgs1 + fb_msgs2 if m.name == "system_fallback"])
         final_answer = f"{fallback_prefix}\n\n{final_synth.content}" if fallback_prefix else str(final_synth.content)
 
+        # Check for admin/direct intent (Hardened to use centralized Layer 0 flag)
+        should_bypass_reporter = is_direct or "direct" in str(state.get("intent", "")).lower()
+        
         return Command(
-            update={"messages": fb_msgs1 + [response] + t_msgs + fb_msgs2 + [AIMessage(content=final_answer, name="vli_coordinator")]}, 
-            goto="reporter" if not state.get("raw_data_mode") else END
+            update={
+                "messages": fb_msgs1 + [response] + t_msgs + fb_msgs2 + [AIMessage(content=final_answer, name="vli_coordinator")],
+                "intent": "EXECUTE_DIRECT" if should_bypass_reporter else state.get("intent", "MARKET_INSIGHT")
+            }, 
+            goto=END if should_bypass_reporter else "reporter"
         )
 
     # 5. Phase B: Planning & Coordination
@@ -326,6 +378,9 @@ async def vli_node(
     try:
         plan_obj, fb_msgs3 = await _run_node_with_tiered_fallback("coordinator", state_for_prompt, config, tools=tools, is_structured=True, structured_schema=PlanSchema, messages=messages_coord)
         fallback_msgs_all.extend(fb_msgs3)
+        
+        if plan_obj is None:
+            raise ValueError("Coordinator returned None")
         
         # [BUGFIX: QUOTA PROPAGATION] Safe exit on quota failure instead of downstream exception
         is_quota_failure = False
@@ -380,10 +435,14 @@ async def vli_node(
     tactical_keywords = ["analyze", "analysis", "smc", "sortino", "sharpe", "report", "get", "run", "scan", "check", "calculate", "audit"]
     is_tactical = any(kw in user_query.lower() for kw in tactical_keywords)
 
-    # Route Priority: Question/Strategy (Synthesis) -> Tactical (Audit)
-    if ((not plan_obj.steps or plan_obj.has_enough_context) and (is_query or is_strategy or is_tactical)):
+    # 4. Admin/Fast-Path Detection (Diagnostics/Sync)
+    # [v3 Hardening] is_admin is now detected at Layer 0 to fix scoping
+
+    # Route Priority: Admin (Direct) -> Question/Strategy (Synthesis) -> Tactical (Audit)
+    # [HARDENING] is_admin always forces specialist override to ensure correct tool access
+    if ((not plan_obj.steps or plan_obj.has_enough_context or is_admin) and (is_query or is_strategy or is_tactical or is_admin)):
         
-        logger.warning(f"[VLI_SPINE] Guardrail: Intent detected (Q: {is_query}, S: {is_strategy}, T: {is_tactical}). Forcing specialist node.")
+        logger.warning(f"[VLI_SPINE] Guardrail: Intent detected (Q: {is_query}, S: {is_strategy}, T: {is_tactical}, A: {is_admin}). Forcing specialist node.")
         plan_obj.has_enough_context = False
         plan_obj.direct_response = ""
         
@@ -391,6 +450,10 @@ async def vli_node(
         if is_query or is_strategy:
             target_step_type = StepType.SYNTHESIZER
             step_title = "Institutional Market Insight"
+        # Admin commands force the System node in Fast-Path mode
+        elif is_admin:
+            target_step_type = StepType.SYSTEM
+            step_title = "System Administrative Sync"
         # If no '?' and tactical keyword is present, route to Analyst/SMC_Analyst
         elif "smc" in user_query.lower() or "smart money" in user_query.lower():
             target_step_type = StepType.SMC_ANALYST
@@ -402,9 +465,13 @@ async def vli_node(
         plan_obj.steps = [Step(
             need_search=(is_query or is_strategy), 
             title=step_title, 
-            description=f"Generate a COMPREHENSIVE institutional report for: {user_query}", 
+            description=f"FAST_PATH_ADMIN: {user_query}" if is_admin else f"Generate a COMPREHENSIVE institutional report for: {user_query}", 
             step_type=target_step_type
         )]
+        
+        # Inject admin intent to the plan for the reporter to see
+        if is_admin:
+            plan_obj.intent = "EXECUTE_DIRECT"
 
     # Handle direct response from plan
     if plan_obj.has_enough_context or plan_obj.direct_response:
@@ -414,7 +481,19 @@ async def vli_node(
         fallback_prefix = "\n".join([f"**{str(m.content)}**" for m in fallback_msgs_all if getattr(m, 'name', '') == "system_fallback"])
         final_answer = f"{fallback_prefix}\n\n{resp}" if fallback_prefix else resp
         
-        return Command(update={"current_plan": plan_obj, "messages": fallback_msgs_all + [AIMessage(content=final_answer, name="vli_coordinator")]}, goto="reporter" if not state.get("raw_data_mode") else END)
+        # Robust Intent Check
+        plan_intent = getattr(plan_obj, "intent", "") if isinstance(plan_obj, Plan) else plan_obj.get("intent", "")
+        state_intent = state.get("intent", "")
+        is_direct = (plan_intent == "EXECUTE_DIRECT") or (state_intent == "EXECUTE_DIRECT")
+        
+        return Command(
+            update={
+                "current_plan": plan_obj, 
+                "intent": "EXECUTE_DIRECT" if is_direct else state_intent, # Propagate to top-level
+                "messages": fallback_msgs_all + [AIMessage(content=final_answer, name="vli_coordinator")]
+            }, 
+            goto=END if is_direct or state.get("raw_data_mode") else "reporter"
+        )
 
     # 6. Dispatch to Router Logic
     logger.info(f"[VLI_SPINE] Dispatching Plan: {plan_obj.title} ({len(plan_obj.steps)} steps)")
@@ -428,6 +507,7 @@ async def vli_node(
     cmd = Command(
         update={
             "current_plan": plan_obj, 
+            "intent": "EXECUTE_DIRECT" if is_admin else state.get("intent", "MARKET_INSIGHT"),
             "steps_completed": 0, 
             "research_topic": plan_obj.title, 
             "locale": plan_obj.locale,

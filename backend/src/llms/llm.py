@@ -18,6 +18,7 @@ from langchain_openai import AzureChatOpenAI, ChatOpenAI
 from src.config import load_yaml_config
 from src.config.agents import LLMType
 from src.llms.providers.dashscope import ChatDashscope
+from src.llms.llm_shield import QuotaProtectedLLM
 
 # Cache for LLM instances
 _llm_cache: dict[LLMType, BaseChatModel] = {}
@@ -216,8 +217,12 @@ def get_llm_by_type(llm_type: LLMType) -> BaseChatModel:
 
     conf = load_yaml_config(_get_config_file_path())
     llm = _create_llm_use_conf(llm_type, conf)
-    _llm_cache[llm_type] = llm
-    return llm
+    
+    # [SAFETY] Wrap the LLM in the Quota Shield
+    protected_llm = QuotaProtectedLLM(llm, llm_type)
+    
+    _llm_cache[llm_type] = protected_llm
+    return protected_llm
 
 
 def get_configured_llm_models() -> dict[str, list[str]]:

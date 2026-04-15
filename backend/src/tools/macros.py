@@ -15,6 +15,7 @@ from langchain_core.tools import tool
 
 from src.services.macro_registry import macro_registry
 
+from src.config.vli import get_vli_path
 from .finance import _extract_ticker_data, _fetch_batch_history, get_symbol_history_data
 from .shared_storage import ANALYST_CONTEXT, GLOBAL_CONTEXT
 
@@ -51,9 +52,10 @@ MACRO_NAMES = {
     "SPY": "S&P 500 Trust ETF",
     "QQQ": "Nasdaq 100 ETF",
     "IWM": "Russell 2000 ETF",
-    "GLD": "SPDR Gold ETF",
+    "SI": "Silver Futures",
     "BTC": "Bitcoin (USD)",
     "USO": "United States Oil Fund",
+    "WTI": "WTI Crude Oil",
 }
 
 TIMEFRAMES = ["1h", "1d"]
@@ -63,23 +65,82 @@ TIMEFRAMES = ["1h", "1d"]
 async def fetch_market_macros() -> str:
     """
     Fetch comprehensive market macro data for key global indices and assets.
-    Provides price, trend, and stability (SMC/Sortino) analysis for major indices.
+    Utilizes the Ground Truth Macro Watchlist state for consistency with the dashboard.
+    Provides price, trend, volume, and regime analysis.
     """
+    import json
+    import os
+    
+    # 1. Try to load Ground Truth from the Macro Watchlist Bucket
+    state_path = get_vli_path("01_Transit/Buckets/MACRO_WATCHLIST_state.json")
+    bucket_data = {}
+    if os.path.exists(state_path):
+        try:
+            with open(state_path, "r", encoding="utf-8") as f:
+                state = json.load(f)
+                bucket_data = state.get("data", {})
+                logger.info(f"[MACRO_TOOL] Ingested ground truth for {len(bucket_data)} symbols from {state.get('last_updated')}")
+        except Exception as e:
+            logger.error(f"Failed to read Macro Watchlist state: {e}")
+
+    # 2. Fetch live/structured data as fallback or for missing symbols
     data = await get_macro_data()
-    if not data:
+    if not data and not bucket_data:
         return "Error: Unable to synthesize macro market data at this time."
 
-    report = "## Market Macros - High Fidelity Stock Analysis\n\n"
+    report = "## [GROUND_TRUTH]: Macro Market Environment Report\n"
+    report += f"Source: VLI Persistent Bucket Engine | Sync Time: {datetime.now().strftime('%H:%M:%S')}\n\n"
 
-    for item in data:
-        # User requested cleaner format without '^', '=F' tokens
-        display_label = item["label"]
+    # Merge logic: Prioritize Bucket Data (includes Regime, Volume, and high-fidelity price changes)
+    all_labels = set(bucket_data.keys()) | {item["label"] for item in data}
+    
+    for label in sorted(list(all_labels)):
+        name = MACRO_NAMES.get(label, "Index")
+        
+        # Prefer bucket data as it contains finalized Regimes from the specialized tool
+        if label in bucket_data:
+            item = bucket_data[label]
+            price = item.get("Price", 0.0)
+            change = item.get("Change %", 0.0)
+            volume = item.get("Volume", "N/A")
+            regime = item.get("Regime", "UNKNOWN")
+            sortino = item.get("Sortino", 0.0)
+            
+            # Format report for the specialist
+            report += f"### {label} ({name})\n"
+            report += f"- **Current Price**: ${price:,.2f} ({change:+.2f}%)\n"
+            report += f"- **Regime Status**: {regime}\n"
+            
+            # Add Sortino (Risk-Adjusted Consistency)
+            if sortino:
+                report += f"- **Sortino Ratio (Day Trading)**: {sortino:.2f} (Consistency Score)\n"
+            
+            # Add Volume Profile Node Analysis
+            vp = item.get("Volume_Profile", {})
+            if isinstance(vp, dict) and "metadata" in vp:
+                meta = vp["metadata"]
+                report += f"- **Volume Profile Nodes**: POC at ${meta.get('poc')}, Value Area [${meta.get('val')} - ${meta.get('vah')}]\n"
+            
+            # SMC / Trend
+            smc = item.get("SMC_Raw", "")
+            if smc:
+                # Truncate raw SMC for report brevity if it's too long
+                smc_summary = str(smc)[:200] + "..." if len(str(smc)) > 200 else str(smc)
+                report += f"- **SMC/Trend Context**: {smc_summary}\n"
+            
+            report += f"- **Volume Activity**: {volume}\n\n"
 
-        report += f"### {display_label} ({item['name']})\n"
-        report += f"- **Price**: {item['price']:.2f}\n"
-        report += f"- **Change**: {item['change']:.2f}%\n\n"
+        else:
+            # Fallback to get_macro_data results if not in bucket
+            item = next((i for i in data if i["label"] == label), None)
+            if item:
+                report += f"### {label} ({name})\n"
+                report += f"- **Price**: ${item['price']:,.2f}\n"
+                report += f"- **Change**: {item['change']:+.2f}%\n"
+                report += "- **Status**: Retaining session parity...\n\n"
 
     return report
+
 
 
 _LOOKBACK = 10

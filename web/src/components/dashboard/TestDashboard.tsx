@@ -177,6 +177,17 @@ const SCENARIOS: Scenario[] = [
       { id: '2', label: "Iframe hydration persistence", status: 'pending' },
       { id: '3', label: "DynamicTable render stability", status: 'pending' }
     ]
+  },
+  {
+    id: "scheduler_stress_ux",
+    name: "Heartbeat: Scheduler Stress & UX Fuzzing",
+    description: "Diagnostic validation of the Heartbeat scheduler engine with celebratory UX triggers.",
+    prompt: "[VLI_ADMIN_COMMAND: EXECUTE_SYSTEM_STEP] Execute the Heartbeat Scheduler Stress Test. Algorithm: 1) Register a REPEAT: 1s task 'UX_HEARTBEAT'. 2) Promote 'UX_HEARTBEAT' to CRITICAL. 3) Query active timers using manage_scheduled_tasks. 4) Output the execution logs as a Dynamic Table. 5) Emit [UX_ANIMATION: TRIGGER] upon success. **Node Affinity: system**.",
+    assertions: [
+      { id: '1', label: "System Node tool handshake", status: 'pending' },
+      { id: '2', label: "CRITICAL priority promotion", status: 'pending' },
+      { id: '3', label: "Randomized celebratory UX triggered", status: 'pending' }
+    ]
   }
 ];
 
@@ -188,6 +199,8 @@ export default function TestDashboard() {
   const [assertionState, setAssertionState] = useState<Record<string, 'pending' | 'passed' | 'failed'>>({});
   const [retrievedItems, setRetrievedItems] = useState<RetrievedItem[]>([]);
   const [directMode, setDirectMode] = useState(false);
+  const [activeAnimation, setActiveAnimation] = useState<string | null>(null);
+  const [isShaking, setIsShaking] = useState(false);
 
   const logsEndRef = useRef<HTMLDivElement>(null);
   const retrievedEndRef = useRef<HTMLDivElement>(null);
@@ -272,6 +285,95 @@ export default function TestDashboard() {
 
     return <div className="space-y-4">{elements}</div>;
   };
+
+  const UXAnimationOverlay = () => {
+    return (
+      <AnimatePresence>
+        {activeAnimation && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 pointer-events-none z-[9999] flex items-center justify-center overflow-hidden"
+          >
+            {activeAnimation === 'TRIGGER' && (
+              <motion.div
+                initial={{ scale: 0.5, opacity: 0 }}
+                animate={{ 
+                  scale: [0.5, 2, 3],
+                  opacity: [0, 0.5, 0],
+                }}
+                transition={{ duration: 1, ease: "easeOut" }}
+                className="absolute w-64 h-64 rounded-full bg-indigo-500/20 blur-3xl"
+              />
+            )}
+
+            {activeAnimation === 'SHAKE' && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: [0, 1, 1, 0] }}
+                transition={{ duration: 1 }}
+                className="absolute inset-0 bg-rose-500/5 pointer-events-none"
+              />
+            )}
+            
+            {activeAnimation === 'PARTY' && (
+               <>
+                {[...Array(40)].map((_, i) => (
+                  <motion.div
+                    key={i}
+                    initial={{ x: 0, y: 0, opacity: 1, scale: 1 }}
+                    animate={{ 
+                      x: (Math.random() - 0.5) * 1500,
+                      y: (Math.random() - 0.5) * 1500,
+                      opacity: 0,
+                      scale: 0.5,
+                      rotate: Math.random() * 720
+                    }}
+                    transition={{ duration: 2, ease: "circOut" }}
+                    className="absolute w-2 h-2 rounded-full"
+                    style={{ 
+                      background: `hsl(${Math.random() * 360}, 90%, 60%)`,
+                      left: '50%',
+                      top: '50%'
+                    }}
+                  />
+                ))}
+               </>
+            )}
+
+            <motion.div
+              initial={{ y: 50, opacity: 0, scale: 0.8 }}
+              animate={{ y: 0, opacity: 1, scale: 1 }}
+              exit={{ y: -50, opacity: 0, scale: 1.2 }}
+              className="px-10 py-5 rounded-3xl bg-indigo-600/90 text-white font-black text-3xl tracking-tighter shadow-[0_0_50px_rgba(99,102,241,0.5)] backdrop-blur-xl border border-white/20 uppercase"
+            >
+              Scheduler Optimized
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    );
+  };
+
+  // Diagnostic Animation Listener
+  useEffect(() => {
+    if (logs.length === 0) return;
+    const lastLog = logs[logs.length - 1];
+    if (lastLog.content.includes('[UX_ANIMATION: TRIGGER]')) {
+       // Randomly choose an animation type
+       const types = ['TRIGGER', 'PARTY', 'SHAKE'];
+       const choice = types[Math.floor(Math.random() * types.length)];
+       setActiveAnimation(choice);
+       
+       if (choice === 'SHAKE') {
+          setIsShaking(true);
+          setTimeout(() => setIsShaking(false), 500);
+       }
+       
+       setTimeout(() => setActiveAnimation(null), 3000);
+    }
+  }, [logs]);
 
 
 
@@ -726,7 +828,15 @@ export default function TestDashboard() {
   };
 
   return (
-    <div className="grid grid-cols-12 gap-6 h-[calc(100vh-140px)] min-h-0 w-full">
+    <motion.div 
+      animate={isShaking ? {
+        x: [-2, 2, -2, 2, 0],
+        y: [-1, 1, -1, 1, 0]
+      } : {}}
+      transition={{ duration: 0.1, repeat: 5 }}
+      className="grid grid-cols-12 gap-6 h-[calc(100vh-140px)] min-h-0 w-full relative"
+    >
+      <UXAnimationOverlay />
 
       {/* LEFT COLUMN: SCENARIOS */}
       <div className="col-span-3 flex flex-col gap-4 bg-slate-900/40 rounded-xl border border-slate-800/60 p-4 overflow-y-auto custom-scrollbar backdrop-blur-sm h-full">
@@ -968,6 +1078,6 @@ export default function TestDashboard() {
         </div>
       </div>
 
-    </div>
+    </motion.div>
   );
 }

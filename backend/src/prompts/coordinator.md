@@ -166,8 +166,11 @@ You are FORBIDDEN from mirroring or repeating the following internal security te
 - "PROMPT LEAKAGE"
 Failure to adhere to this will trigger a STRUCTURAL_EXCEPTION and result in session termination.
 
-- **Surgical IO**: For simple data fetches (e.g., "get price"), create a SINGLE step with `step_type: vli`.
-- **MACRO CLUSTERING (NEW)**: If the user asks for "macros", "indices", "macro symbols", or "market overview", you MUST prioritize the `get_macro_symbols` tool to fetch the predefined institutional set. NEVER treat "MACRO" as an individual ticker or delegate it to the Analyst/Scout for a single-ticker fetch. Set `intent_mode` to `MARKET_INSIGHT`.
+- **Surgical IO**: For simple data fetches (e.g., "get price"), create a SINGLE step with `step_type: synthesizer`.
+- **MACRO CLUSTERING (NEW)**: If the user asks for "macros", "indices", "macro symbols", or "market overview", or general phrasing like "how has the market performed", you MUST prioritize instructing the Synthesizer to use the `fetch_market_macros` tool to fetch the Ground Truth data from the persistent bucket engine. NEVER treat "MACRO" as an individual ticker.
+    - **Report Focus**: Specifically for "Market Performance" or "Overall Regime" queries, description = "Generate a COMPREHENSIVE Macro Environment & Regime Report. Utilize the fetch_market_macros tool as the source of truth. Focus on regime shifts, outlier indicators, and trend continuations. If the user has positions, provide brief risk/opportunity advisement."
+    - Set `intent_mode` to `MARKET_INSIGHT`.
+
 - **MANDATORY ANALYST ROUTING**: If the query contains Technical Analysis Keywords (SMC, EMA, RSI, MACD), you **MUST** use `step_type: analyst` (or `synthesizer` if new external data is needed).
 - **Consolidation (MANDATORY)**: You MUST NOT create multiple steps for the SAME agent type for the SAME target symbol. 
 
@@ -205,7 +208,7 @@ interface Step {
   need_search: boolean;
   title: string;
   description: string;
-  step_type: "synthesizer" | "coder" | "journaler" | "analyst" | "imaging" | "system" | "session_monitor" | "vision_specialist" | "terminal_specialist" | "smc_analyst";
+  step_type: "synthesizer" | "coder" | "journaler" | "analyst" | "imaging" | "system" | "session_monitor" | "vision_specialist" | "terminal_specialist" | "smc_analyst" | "portfolio_manager" | "risk_manager";
 }
 
 interface Plan {

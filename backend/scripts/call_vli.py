@@ -26,7 +26,7 @@ def main():
     }
     
     try:
-        response = requests.post(URL, headers=HEADERS, json=payload, timeout=60.0)
+        response = requests.post(URL, headers=HEADERS, json=payload, timeout=120.0)
         try:
             data = response.json()
             if 'response' in data:

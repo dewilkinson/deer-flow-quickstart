@@ -16,6 +16,8 @@ PREFERRED_EDITOR = os.environ.get("VLI_PREFERRED_EDITOR", "notepad.exe")
 # --- Filenames ---
 ACTION_PLAN_DIR = "action_plans"
 SPECIALIZATION_FILE = "Vision_Analyst_Specialization.md"
+SCHEDULER_JSON = "06_Resources/Scheduler/scheduler.json"
+SCHEDULER_LOG = "04_Archive/Logs/Scheduler.log"
 
 
 def get_vli_path(subpath: str = "") -> str:
@@ -55,6 +57,16 @@ def get_journals_path() -> str:
 def get_action_plan_archive_path() -> str:
     """Get the full path to the action plan archive."""
     return get_vli_path(ACTION_PLAN_ARCHIVE_DIR)
+
+
+def get_scheduler_json_path() -> str:
+    """Get the full path to the scheduler registry."""
+    return os.path.join(VAULT_ROOT, SCHEDULER_JSON)
+
+
+def get_scheduler_log_path() -> str:
+    """Get the full path to the scheduler audit log."""
+    return os.path.join(VAULT_ROOT, SCHEDULER_LOG)
 
 
 # --- Singleton Rule Engine ---

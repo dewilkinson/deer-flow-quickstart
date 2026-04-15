@@ -121,3 +121,4 @@ langchain-core>=0.2.0
 langchain>=0.2.0
 pydantic-settings>=2.2.0
 pydantic>=2.7.0
+apscheduler>=3.10.0

@@ -30,7 +30,7 @@ class Step(BaseModel):
     need_search: bool = Field(..., description="Must be explicitly set for each step")
     title: str
     description: str = Field(..., description="Specify exactly what data to collect")
-    step_type: StepType = Field(..., description="Must be one of: synthesizer, analyst, smc_analyst, risk_manager, coder, journaler, imaging, system, session_monitor, vision_specialist, terminal_specialist")
+    step_type: StepType = Field(..., description="Must be one of: synthesizer, analyst, smc_analyst, risk_manager, portfolio_manager, coder, journaler, imaging, system, session_monitor, vision_specialist, terminal_specialist")
     execution_res: str | None = Field(default=None, description="The Step execution result")
 
 

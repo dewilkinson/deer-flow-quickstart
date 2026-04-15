@@ -451,12 +451,36 @@
                 </div>
             </div>
 
-            <div class="card" style="grid-column: 1 / span 2;">
+            <div class="card" style="grid-column: 1;">
                 <div class="card-header">
                     <div>RAW TELEMETRY TAIL <span class="live-badge">LIVE</span></div>
                     <span class="descriptor" id="rt-btn" onclick="resetVLI()" title="Reset Session (Hard Kill)">RT</span>
                 </div>
                 <div class="card-body terminal" id="telemetry-body"></div>
+            </div>
+
+            <!-- New Macro Watchlist Transit Card -->
+            <div class="card" style="grid-column: 2;">
+                <div class="card-header">
+                    <div>MACRO WATCHLIST <span class="live-badge">LIVE</span></div>
+                    <span class="descriptor">MW</span>
+                </div>
+                <div class="card-body">
+                    <table class="macro-table" style="width: 100%; height: 100%;">
+                        <thead>
+                            <tr style="font-size: 14px; letter-spacing: 2px;">
+                                <th style="padding-bottom: 15px; text-align: left;">TICKER</th>
+                                <th style="padding-bottom: 15px; text-align: left;">PRICE</th>
+                                <th style="padding-bottom: 15px; text-align: left;">CHANGE</th>
+                                <th style="padding-bottom: 15px; text-align: left;">VOLUME</th>
+                                <th style="padding-bottom: 15px; text-align: left;">REGIME</th>
+                            </tr>
+                        </thead>
+                        <tbody id="macro-watchlist-body" style="font-size: 20px;">
+                            <tr><td colspan="4" style="text-align:center; color:var(--text-muted); padding:30px;">Awaiting Data</td></tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
 
             <!-- 3. Analysis Report (Technical Document Viewer) -->
@@ -685,6 +709,70 @@
                     });
                 }
 
+                // 1b. Macro Watchlist Content
+                if (data.macro_watchlist_content && data.macro_watchlist_content.data) {
+                    if (!window.lastMacroWatchlistState) window.lastMacroWatchlistState = {};
+                    const tbody = document.getElementById('macro-watchlist-body');
+                    const items = Object.values(data.macro_watchlist_content.data);
+                    
+                    if (items.length > 0) {
+                        tbody.innerHTML = '';
+                        items.forEach(item => {
+                            const ticker = item.Ticker || "N/A";
+                            const price = parseFloat(item.Price) || 0;
+                            const volume = item.Volume || 0;
+                            const regime = item.Regime || "UNKNOWN";
+                            
+                            const pctChange = parseFloat(item['Change %']) || 0;
+                            const prevPrice = price / (1 + pctChange / 100);
+                            const absChange = price - prevPrice;
+                            
+                            let triangle = '';
+                            let changeString = '';
+                            if (pctChange > 0) {
+                                triangle = '▲ ';
+                                changeString = `${triangle}+$${absChange.toFixed(2)} (+${pctChange.toFixed(2)}%)`;
+                            } else if (pctChange < 0) {
+                                triangle = '▼ ';
+                                changeString = `${triangle}-$${Math.abs(absChange).toFixed(2)} (${pctChange.toFixed(2)}%)`;
+                            } else {
+                                changeString = `0.00 (0.00%)`;
+                            }
+                            
+                            let color = 'var(--emerald-green)';
+                            if (window.lastMacroWatchlistState[ticker]) {
+                                const lastPrice = window.lastMacroWatchlistState[ticker].price;
+                                if (price > lastPrice) color = 'var(--price-up)';
+                                else if (price < lastPrice) color = 'var(--price-down)';
+                                else if (price === lastPrice) color = '#fff';
+                            }
+                            
+                            // Save current state for next tick
+                            window.lastMacroWatchlistState[ticker] = { price: price };
+                            
+                            let regimeColor = 'var(--text-primary)';
+                            if (regime === 'STRESS' || regime === 'BEARISH') regimeColor = 'var(--ruby-red)';
+                            if (regime === 'COMPLACENT' || regime === 'NEUTRAL') regimeColor = 'var(--cobalt-blue)';
+                            if (regime === 'NORMAL' || regime === 'BULLISH') regimeColor = 'var(--emerald-green)';
+                            
+                            const row = document.createElement('tr');
+                            row.innerHTML = `
+                                <td class="symbol-bold" style="padding: 14px 0; font-size: 18px; text-align: left;">${ticker}</td>
+                                <td class="val-mono" style="color: ${color}; font-weight:400; padding: 14px 0; font-size: 16px; text-align: left;">
+                                    $${price.toFixed(2)}
+                                </td>
+                                <td class="val-mono" style="color: ${pctChange >= 0 ? 'var(--price-up)' : 'var(--price-down)'}; font-weight:400; padding: 14px 0; font-size: 14px; text-align: left;">
+                                    ${changeString}
+                                </td>
+                                <td class="val-mono" style="color: var(--text-muted); font-weight:400; padding: 14px 0; font-size: 15px; text-align: left;">${volume.toLocaleString()}</td>
+                                <td class="val-mono" style="color: ${regimeColor}; font-weight:600; padding: 14px 0; font-size: 15px; letter-spacing: 1px; text-align: left;">${regime}</td>
+                            `;
+                            tbody.appendChild(row);
+
+                        });
+                    }
+                }
+
                 // 2. Telemetry
                 const tBody = document.getElementById('telemetry-body');
                 const logContainer = tBody.closest('.terminal');
@@ -840,6 +928,25 @@
 
             try {
                 let requestText = text;
+                
+                if (requestText.toUpperCase().startsWith("REFRESH")) {
+                    let targetCard = requestText.substring(7).trim().toUpperCase();
+                    if (!targetCard) targetCard = "ALL";
+                    console.log("[VLI_TRACE] " + new Date().toLocaleTimeString() + " - Intercepting UX refresh command for: " + targetCard);
+
+                    
+                    fetch('/api/vli/refresh-card', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({card_id: targetCard})
+                    });
+                    
+                    btn.classList.remove('processing');
+                    btn.innerText = "➤";
+                    isProcessing = false;
+                    return;
+                }
+                
                 let rawDataMode = false;
                 if (text.toUpperCase().includes("--RAW") || (text.toUpperCase().includes("RAW") && (text.toUpperCase().includes("SMC") || text.toUpperCase().includes("DATA")))) {
                     rawDataMode = true;

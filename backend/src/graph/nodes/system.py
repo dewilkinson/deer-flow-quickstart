@@ -21,6 +21,7 @@ from src.tools import (
     get_daily_blotter,
     get_personal_risk_metrics,
     get_cache_heat_map,
+    manage_scheduled_tasks,
     get_ema_analysis,
     get_image_from_local_path,
     get_image_from_url,
@@ -76,6 +77,7 @@ async def system_node(state: State, config: RunnableConfig):
         get_bollinger_bands,
         simulate_cache_volatility,  # Still included as a general tool, but restricted by prompt for this test
         get_cache_heat_map,
+        manage_scheduled_tasks,
         get_brokerage_accounts,
         get_brokerage_balance,
         get_brokerage_statements,

@@ -93,6 +93,8 @@ def _normalize_ticker(ticker: str) -> str:
         return "GC=F"
     if t == "SI" or t == "SILVER":
         return "SI=F"
+    if t == "WTI" or t == "CRUDE" or t == "OIL":
+        return "CL=F"
     if t == "EURUSD" or t == "EUR/USD":
         return "EURUSD=X"
     if t == "GBPUSD" or t == "GBP/USD":
@@ -1105,3 +1107,38 @@ async def get_macro_symbols() -> str:
         logger.error(f"Macro Tool Error: {e}")
         return f"[ERROR]: Failed to fetch macro indicators: {str(e)}"
 
+
+@tool
+async def get_macro_regime(ticker: str) -> str:
+    """
+    Evaluates the basic macro regime for a given ticker or index.
+    Currently specifically tuned for $VIX monitoring.
+    """
+    try:
+        norm_ticker = _normalize_ticker(ticker)
+        # Use fast fetch for quotes
+        data = await get_stock_quote.ainvoke({"ticker": norm_ticker, "use_fast_path": True, "force_refresh": False})
+        if isinstance(data, dict) and "price" in data:
+            price = data["price"]
+            # Visual fallback could result in 'SEE_IMAGE'
+            if isinstance(price, (int, float)):
+                if norm_ticker == "^VIX":
+                    if price > 20.0:
+                        return "STRESS"
+                    elif price < 15.0:
+                        return "COMPLACENT"
+                    else:
+                        return "NORMAL"
+                
+                # Generalized naive fallback
+                change = data.get("change", 0)
+                if isinstance(change, (int, float)):
+                    if change > 1.0:
+                        return "BULLISH"
+                    elif change < -1.0:
+                        return "BEARISH"
+                return "NEUTRAL"
+        return "UNKNOWN"
+    except Exception as e:
+        logger.error(f"Regime Tool Error: {e}")
+        return f"[ERROR]: {str(e)}"

@@ -14,10 +14,10 @@ logger = logging.getLogger("trace_diagnostics")
 
 async def run_trace():
     print("\n" + "="*50)
-    print("VLI TRACE DIAGNOSTIC: NVIDIA PERFORMANCE QUERY")
+    print("VLI TRACE DIAGNOSTIC: TIMEOUT QUERY")
     print("="*50)
-    
-    query = "how has nvidia performed this year"
+    import sys
+    query = sys.argv[1] if len(sys.argv) > 1 else "What would be a sound trading strategy to follow for this week"
     
     state = {
         "messages": [HumanMessage(content=query)],

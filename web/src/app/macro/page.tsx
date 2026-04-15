@@ -132,17 +132,27 @@ const Sparkline = ({ data, color }: { data: SparklinePoint[], color: string }) =
 
 export default function MacroDashboard() {
   const [data, setData] = useState<MacroData[]>([]);
+  const [prevPrices, setPrevPrices] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [syncCount, setSyncCount] = useState(0);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [countdown, setCountdown] = useState(60); // 60s Institutional Refresh Cycle
 
   const fetchMacros = async () => {
     setLoading(true);
+    setCountdown(60); // Reset countdown on any refresh
     try {
       const response = await fetch('http://localhost:8000/api/research/macros/data');
       if (!response.ok) throw new Error("Failed to fetch");
       const json = await response.json();
       if (Array.isArray(json)) {
+        // Save previous prices before updating state
+        const prev: Record<string, number> = {};
+        data.forEach(item => {
+          prev[item.ticker] = item.price;
+        });
+        setPrevPrices(prev);
+
         setData(json);
         setLastUpdated(new Date());
         setSyncCount(prev => prev + 1);
@@ -159,13 +169,19 @@ export default function MacroDashboard() {
   useEffect(() => {
     void fetchMacros();
 
-    // Auto-refresh every 15 minutes (900,000 ms)
-    const interval = setInterval(() => {
-      void fetchMacros();
-    }, 900000);
+    // 1s Heartbeat for Countdown & Auto-refresh
+    const timer = setInterval(() => {
+      setCountdown(prev => {
+        if (prev <= 1) {
+          void fetchMacros();
+          return 60;
+        }
+        return prev - 1;
+      });
+    }, 1000);
 
     return () => {
-      clearInterval(interval);
+      clearInterval(timer);
     };
   }, []);
 
@@ -389,6 +405,47 @@ export default function MacroDashboard() {
     return <span className="text-slate-600 text-xs">—</span>;
   };
 
+  const RefreshCountdownRing = ({ value }: { value: number }) => {
+    const size = 24;
+    const stroke = 2;
+    const center = size / 2;
+    const radius = (size - stroke) / 2;
+    const circumference = 2 * Math.PI * radius;
+    const progress = (value / 60) * circumference;
+
+    return (
+      <div className="relative flex items-center justify-center w-6 h-6" title={`Next refresh in ${value}s`}>
+        <svg width={size} height={size} className="transform -rotate-90">
+          <circle
+            cx={center}
+            cy={center}
+            r={radius}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={stroke}
+            className="text-white/5"
+          />
+          <motion.circle
+            cx={center}
+            cy={center}
+            r={radius}
+            fill="none"
+            stroke="#60a5fa"
+            strokeWidth={stroke}
+            strokeDasharray={circumference}
+            initial={{ strokeDashoffset: circumference }}
+            animate={{ strokeDashoffset: circumference - progress }}
+            transition={{ duration: 1, ease: "linear" }}
+            strokeLinecap="round"
+          />
+        </svg>
+        <span className="absolute text-[8px] font-black text-blue-400/80 font-mono tracking-tighter">
+          {value}
+        </span>
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-[#050505] text-slate-200 p-8 font-sans selection:bg-indigo-500/30">
       <div className="max-w-6xl mx-auto space-y-8">
@@ -396,7 +453,14 @@ export default function MacroDashboard() {
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
           <div className="space-y-2">
-            <div className="flex items-center gap-2 text-indigo-400 font-mono text-sm tracking-widest uppercase">
+            <div className="flex items-center gap-3 text-indigo-400 font-mono text-sm tracking-widest uppercase">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-full border border-indigo-500/50 flex items-center justify-center text-[10px] font-black text-indigo-300 bg-indigo-500/10 shadow-[0_0_10px_rgba(99,102,241,0.2)]">
+                  M6
+                </div>
+                <RefreshCountdownRing value={countdown} />
+              </div>
+              <div className="w-px h-4 bg-white/10 mx-1" />
               <Globe className="w-4 h-4" />
               Global Market Intelligence
             </div>
@@ -535,17 +599,27 @@ export default function MacroDashboard() {
                           </div>
                         </td>
                         <td className="px-6 py-4">
-                          <span className="font-mono text-slate-200 text-lg border-b border-white/5 pb-1">
+                          <span className={`font-mono text-lg border-b border-white/5 pb-1 ${
+                            (item.change ?? 0) > 0 ? 'text-emerald-400' : (item.change ?? 0) < 0 ? 'text-rose-400' : 'text-white'
+                          }`}>
                             {item.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
                           </span>
                         </td>
                         <td className="px-6 py-4">
-                          <div className={`flex items-center gap-1 font-mono font-medium ${
-                            (item.change ?? 0) > 0 ? 'text-emerald-400' : (item.change ?? 0) < 0 ? 'text-rose-400' : 'text-slate-400'
-                          }`}>
-                            {(item.change ?? 0) > 0 ? <TrendingUp className="w-4 h-4" /> : (item.change ?? 0) < 0 ? <TrendingDown className="w-4 h-4" /> : <Minus className="w-4 h-4" />}
-                            {(item.change ?? 0) > 0 ? '+' : ''}{(item.change ?? 0).toFixed(2)}%
-                          </div>
+                          {(() => {
+                             const lastPrice = prevPrices[item.ticker];
+                             const refreshDelta = lastPrice !== undefined ? item.price - lastPrice : 0;
+                             const arrowStyle = refreshDelta > 0 ? 'text-emerald-400 font-bold' : refreshDelta < 0 ? 'text-rose-400 font-bold' : 'text-white';
+                             
+                             return (
+                               <div className={`flex items-center gap-1 font-mono text-sm ${arrowStyle}`}>
+                                 {refreshDelta > 0 ? <TrendingUp className="w-4 h-4" /> : refreshDelta < 0 ? <TrendingDown className="w-4 h-4" /> : <Minus className="w-4 h-4" />}
+                                 <span className={ (item.change ?? 0) > 0 ? 'text-emerald-400/80' : (item.change ?? 0) < 0 ? 'text-rose-400/80' : 'text-slate-400' }>
+                                   {(item.change ?? 0) > 0 ? '+' : ''}{(item.change ?? 0).toFixed(2)}%
+                                 </span>
+                               </div>
+                             );
+                          })()}
                         </td>
                         <td className="px-6 py-4">
                           <span className="text-white font-bold text-lg font-mono tracking-wider">

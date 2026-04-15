@@ -20,6 +20,7 @@ from .retriever import get_retriever_tool
 from .screenshot import snapper
 from .search import get_web_search_tool
 from .smc import get_smc_analysis
+from .scheduler import manage_scheduled_tasks
 from .tts import VolcengineTTS
 from .vision import get_image_from_local_path, get_image_from_url
 
@@ -68,4 +69,5 @@ __all__ = [
     "swap_watchlist_item",
     "get_macro_symbols",
     "log_feedback",
+    "manage_scheduled_tasks",
 ]
