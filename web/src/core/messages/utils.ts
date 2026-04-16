@@ -365,9 +365,9 @@ export function parseUploadedFiles(content: string): FileInMessage[] {
 
   while ((fileMatch = fileRegex.exec(uploadedFilesContent ?? "")) !== null) {
     files.push({
-      filename: fileMatch[1].trim(),
-      size: parseInt(fileMatch[2].trim(), 10) ?? 0,
-      path: fileMatch[3].trim(),
+      filename: fileMatch[1]?.trim() || "",
+      size: parseInt(fileMatch[2]?.trim() || "0", 10) || 0,
+      path: fileMatch[3]?.trim() || "",
     });
   }
 

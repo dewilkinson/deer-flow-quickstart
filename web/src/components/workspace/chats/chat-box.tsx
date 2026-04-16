@@ -61,7 +61,7 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
     // }
 
     if (
-      env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true" &&
+      env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === true &&
       autoSelectFirstArtifact
     ) {
       if (thread?.values?.artifacts?.length > 0) {
@@ -80,7 +80,7 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
   ]);
 
   const artifactPanelOpen = useMemo(() => {
-    if (env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true") {
+    if (env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === true) {
       return artifactsOpen && artifacts?.length > 0;
     }
     return artifactsOpen;

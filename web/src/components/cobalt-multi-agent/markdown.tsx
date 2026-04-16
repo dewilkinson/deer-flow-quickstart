@@ -52,9 +52,9 @@ export function Markdown({
 
   const rehypePlugins = useMemo(() => {
     if (animated) {
-      return [rehypeKatex, rehypeSplitWordsIntoSpans];
+      return [rehypeKatex, ...rehypeSplitWordsIntoSpans(animated)] as any[];
     }
-    return [rehypeKatex];
+    return [rehypeKatex] as any[];
   }, [animated]);
   return (
     <div className={cn(className, "prose dark:prose-invert")} style={style}>

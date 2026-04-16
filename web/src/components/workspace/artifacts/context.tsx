@@ -36,7 +36,7 @@ export function ArtifactsProvider({ children }: ArtifactsProviderProps) {
   const [selectedArtifact, setSelectedArtifact] = useState<string | null>(null);
   const [autoSelect, setAutoSelect] = useState(true);
   const [open, setOpen] = useState(
-    env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true",
+    env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === true,
   );
   const [autoOpen, setAutoOpen] = useState(true);
   const { setOpen: setSidebarOpen } = useSidebar();
@@ -44,7 +44,7 @@ export function ArtifactsProvider({ children }: ArtifactsProviderProps) {
   const select = useCallback(
     (artifact: string, autoSelect = false) => {
       setSelectedArtifact(artifact);
-      if (env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY !== "true") {
+      if (env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY !== true) {
         setSidebarOpen(false);
       }
       if (!autoSelect) {

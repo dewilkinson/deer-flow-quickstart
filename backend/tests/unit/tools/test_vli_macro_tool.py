@@ -25,9 +25,9 @@ async def test_get_macro_stocks_execution(mock_extract, mock_fetch):
     # 3. Run the tool
     result = await get_macro_symbols.ainvoke({})
     
-    # 4. Check result content
-    assert "# Macro Stocks State" in result
-    assert "| SPY |" in result
+    # 4. Check result content (New JSON format)
+    assert '"type": "table"' in result
+    assert '"Asset", "Ticker", "Price"' in result
     
     # 5. Check artifact generation
     artifact_path = os.path.join("data", "artifacts", "get_macro_symbols.json")

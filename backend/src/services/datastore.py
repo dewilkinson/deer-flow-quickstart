@@ -7,6 +7,7 @@ from src.tools.shared_storage import history_cache, df_cache, analysis_cache, GL
 from src.services.heat_manager import HeatManager
 from src.config.database import PersistentCache, get_session_local
 import json
+from src.utils.temporal import get_cache_segment_suffix
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +25,8 @@ class DatastoreManager:
     @classmethod
     def _get_symbol_container(cls, cache: Any, ticker: str, create: bool = True) -> dict[str, Any]:
         """ Internal helper to get or create a nested symbol container. """
-        t = ticker.upper()
+        suffix = get_cache_segment_suffix()
+        t = ticker.upper() + suffix
         if t not in cache:
             if not create:
                 return {}

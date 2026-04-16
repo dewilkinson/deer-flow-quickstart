@@ -8,11 +8,11 @@ import { sanitizeRunStreamOptions } from "./stream-mode";
 
 function createCompatibleClient(isMock?: boolean): LangGraphClient {
   const client = new LangGraphClient({
-    apiUrl: getLangGraphBaseURL(isMock),
+    apiUrl: getLangGraphBaseURL(),
   });
 
   const originalRunStream = client.runs.stream.bind(client.runs);
-  client.runs.stream = ((threadId, assistantId, payload) =>
+  client.runs.stream = ((threadId: string, assistantId: string, payload: any) =>
     originalRunStream(
       threadId,
       assistantId,
@@ -20,7 +20,7 @@ function createCompatibleClient(isMock?: boolean): LangGraphClient {
     )) as typeof client.runs.stream;
 
   const originalJoinStream = client.runs.joinStream.bind(client.runs);
-  client.runs.joinStream = ((threadId, runId, options) =>
+  client.runs.joinStream = ((threadId: string, runId: string, options: any) =>
     originalJoinStream(
       threadId,
       runId,

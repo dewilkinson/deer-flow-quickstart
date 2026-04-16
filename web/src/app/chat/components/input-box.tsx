@@ -79,7 +79,7 @@ export function InputBox({
         // Intercept slash commands
         if (trimmed.startsWith("/")) {
           const parts = trimmed.split(/\s+/);
-          const cmd = parts[0].toLowerCase();
+          const cmd = parts[0]?.toLowerCase();
           const scope = parts[1] ?? "global";
 
           if (cmd === "/snapshot") {

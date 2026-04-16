@@ -137,12 +137,12 @@ export default function ChatPage() {
                   extraHeader={
                     isNewThread && <Welcome mode={settings.context.mode} />
                   }
-                  disabled={env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true" || isUploading}
+                  disabled={env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === true || isUploading}
                   onContextChange={(context) => setSettings("context", context)}
                   onSubmit={handleSubmit}
                   onStop={handleStop}
                 />
-                {env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true" && (
+                {env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === true && (
                   <div className="text-muted-foreground/67 w-full translate-y-12 text-center text-xs">
                     {t.common.notAvailableInDemoMode}
                   </div>

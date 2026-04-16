@@ -1,0 +1,1 @@
+**Managed Processing Recovery**: The analytical engine experienced a structural interruption or reasoning quota limit. Technical metadata has been suppressed for system integrity.

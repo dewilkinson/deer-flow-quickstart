@@ -27,7 +27,7 @@ import {
   stripUploadedFilesTag,
   type FileInMessage,
 } from "@/core/messages/utils";
-import { useRehypeSplitWordsIntoSpans } from "@/core/rehype";
+import { rehypeSplitWordsIntoSpans } from "@/core/rehype";
 import { humanMessagePlugins } from "@/core/streamdown";
 import { cn } from "@/lib/utils";
 
@@ -116,7 +116,7 @@ function MessageContent_({
   message: Message;
   isLoading?: boolean;
 }) {
-  const rehypePlugins = useRehypeSplitWordsIntoSpans(isLoading);
+  const rehypePlugins = rehypeSplitWordsIntoSpans(isLoading);
   const isHuman = message.type === "human";
   const { thread_id } = useParams<{ thread_id: string }>();
   const components = useMemo(

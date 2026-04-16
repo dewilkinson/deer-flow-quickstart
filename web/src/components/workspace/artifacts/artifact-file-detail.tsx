@@ -181,7 +181,7 @@ export function ArtifactFileDetail({
                   tooltip={t.common.install}
                   disabled={
                     isInstalling ||
-                    env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true"
+                    env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === true
                   }
                   onClick={handleInstallSkill}
                 />
@@ -274,7 +274,7 @@ export function ArtifactFilePreview({
         <Streamdown
           className="size-full"
           {...streamdownPlugins}
-          components={{ a: ArtifactLink }}
+          components={{ a: ArtifactLink as any }}
         >
           {content ?? ""}
         </Streamdown>

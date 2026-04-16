@@ -29,7 +29,7 @@ export function Header() {
           <a href="https://github.com/bytedance/deer-flow" target="_blank">
             <GitHubLogoIcon className="size-4" />
             Star on GitHub
-            {env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true" &&
+            {env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === true &&
               env.GITHUB_OAUTH_TOKEN && <StarCounter />}
           </a>
         </Button>

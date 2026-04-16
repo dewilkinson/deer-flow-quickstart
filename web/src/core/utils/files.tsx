@@ -3,7 +3,7 @@ import {
   CompassIcon,
   FileCodeIcon,
   FileCogIcon,
-  FilePlayIcon,
+  CirclePlayIcon,
   FileTextIcon,
   ImageIcon,
 } from "lucide-react";
@@ -226,7 +226,7 @@ export function getFileIcon(filepath: string, className?: string) {
     case "mp4":
     case "mov":
     case "m4v":
-      return <FilePlayIcon className={className} />;
+      return <CirclePlayIcon className={className} />;
     default:
       if (isCodeFile) {
         return <FileCodeIcon className={className} />;

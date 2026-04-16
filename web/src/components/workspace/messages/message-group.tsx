@@ -6,7 +6,7 @@ import {
   GlobeIcon,
   LightbulbIcon,
   ListTodoIcon,
-  MessageCircleQuestionMarkIcon,
+  MessageCircleQuestionIcon,
   NotebookPenIcon,
   SearchIcon,
   SquareTerminalIcon,
@@ -28,7 +28,7 @@ import {
   extractReasoningContentFromMessage,
   findToolCallResult,
 } from "@/core/messages/utils";
-import { useRehypeSplitWordsIntoSpans } from "@/core/rehype";
+import { rehypeSplitWordsIntoSpans } from "@/core/rehype";
 import { extractTitleFromMarkdown } from "@/core/utils/markdown";
 import { env } from "@/env";
 import { cn } from "@/lib/utils";
@@ -50,10 +50,10 @@ export function MessageGroup({
 }) {
   const { t } = useI18n();
   const [showAbove, setShowAbove] = useState(
-    env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true",
+    env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === true,
   );
   const [showLastThinking, setShowLastThinking] = useState(
-    env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true",
+    env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === true,
   );
   const steps = useMemo(() => convertToSteps(messages), [messages]);
   const lastToolCallStep = useMemo(() => {
@@ -76,7 +76,7 @@ export function MessageGroup({
       return filteredSteps[filteredSteps.length - 1];
     }
   }, [lastToolCallStep, steps]);
-  const rehypePlugins = useRehypeSplitWordsIntoSpans(isLoading);
+  const rehypePlugins = rehypeSplitWordsIntoSpans(isLoading);
   return (
     <ChainOfThought
       className={cn("w-full gap-2 rounded-lg border p-0.5", className)}
@@ -398,7 +398,7 @@ function ToolCall({
       <ChainOfThoughtStep
         key={id}
         label={t.toolCalls.needYourHelp}
-        icon={MessageCircleQuestionMarkIcon}
+        icon={MessageCircleQuestionIcon}
       ></ChainOfThoughtStep>
     );
   } else if (name === "write_todos") {

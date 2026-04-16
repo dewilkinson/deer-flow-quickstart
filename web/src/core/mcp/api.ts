@@ -1,13 +1,12 @@
 import { getBackendBaseURL } from "@/core/config";
 
-import type { MCPConfig } from "./types";
 
 export async function loadMCPConfig() {
   const response = await fetch(`${getBackendBaseURL()}/api/mcp/config`);
-  return response.json() as Promise<MCPConfig>;
+  return response.json() as Promise<any>;
 }
 
-export async function updateMCPConfig(config: MCPConfig) {
+export async function updateMCPConfig(config: any) {
   const response = await fetch(`${getBackendBaseURL()}/api/mcp/config`,
     {
       method: "PUT",

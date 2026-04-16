@@ -47,8 +47,17 @@ def apply_prompt_template(prompt_name: str, state: AgentState, configurable: Con
     is_test = os.environ.get("VLI_TEST_MODE", "").lower() in ("true", "1", "yes") or state.get("test_mode", False)
     intent_mode = state.get("intent") or state.get("intent_mode") or "TACTICAL_EXECUTION"
 
+    # [TEMPORAL_SYNCHRONIZATION] Adjust CURRENT_TIME if in Replay Mode
+    metadata = state.get("metadata", {})
+    replay_origin = metadata.get("replay_origin")
+    if replay_origin:
+        current_time_dt = datetime.fromisoformat(replay_origin)
+    else:
+        current_time_dt = datetime.now()
+
     state_vars = {
-        "CURRENT_TIME": datetime.now().strftime("%a %b %d %Y %H:%M:%S %z"),
+        "CURRENT_TIME": current_time_dt.strftime("%a %b %d %Y %H:%M:%S %z"),
+        "REPLAY_MODE": bool(replay_origin),
         "VLI_TEST_MODE": is_test,
         "INTENT": intent_mode,
         **state,

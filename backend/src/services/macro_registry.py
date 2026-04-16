@@ -18,24 +18,14 @@ class MacroRegistry:
 
     # Default set to fall back on if file missing
     DEFAULT_MACROS = {
-        "VIX": "^VIX",
-        "DXY": "DX-Y.NYB",
-        "TNX": "^TNX",
         "SPY": "SPY",
         "QQQ": "QQQ",
-        "DOW": "DIA",
-        "DIA": "DIA",
-        "GLD": "GLD",
-        "SI": "SI=F",
-        "BTC": "BTC-USD",
-        "USO": "USO",
-        "WTI": "CL=F",
+        "IWM": "IWM",
+        "DXY": "DX-Y.NYB",
+        "VIX": "^VIX",
+        "TNX": "^TNX",
         "CL": "CL=F",
-        "GC": "GC=F",
-        "SPX": "^GSPC",
-        "NDX": "^IXIC",
-        "TYX": "^TYX",
-        "EUR/USD": "EURUSD=X",
+        "BTC": "BTC-USD"
     }
 
     def __init__(self):
@@ -80,6 +70,11 @@ class MacroRegistry:
         if label_upper in macros:
             del macros[label_upper]
             self._save(macros)
+
+    def reset_to_defaults(self):
+        """Wipes the current registry and restores the factory DEFAULT_MACROS."""
+        logger.info("Macro Registry: Performing factory reset to defaults.")
+        self._save(self.DEFAULT_MACROS)
 
     def _save(self, macros: dict[str, str]):
         """Persists the macro set to the vault."""

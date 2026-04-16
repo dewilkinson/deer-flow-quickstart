@@ -55,3 +55,11 @@ function autoCloseTrailingLink(markdown: string): string {
 
   return fixedMarkdown;
 }
+
+export function extractTitleFromMarkdown(markdown: string): string | null {
+  const match = markdown.match(/^#\s+(.+)$/m);
+  if (match) {
+    return match[1]?.trim() ?? null;
+  }
+  return null;
+}

@@ -10,9 +10,12 @@ import asyncio
 import logging
 import threading
 import time
+import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 import pandas as pd
+import numpy as np
 import yfinance
 
 # Use curl_cffi for industrial-strength browser spoofing
@@ -26,6 +29,7 @@ from src.tools.shared_storage import GLOBAL_CONTEXT, SCOUT_CONTEXT, history_cach
 
 from .scraper import fetch_finviz_quotes
 from .screenshot import snapper
+from src.utils.temporal import get_effective_now
 
 # 1. Private context
 _NODE_RESOURCE_CONTEXT: dict[str, Any] = {}
@@ -68,7 +72,9 @@ def _get_session():
 
 def _normalize_ticker(ticker: str) -> str:
     """Consistently maps common tickers to their Yahoo Finance equivalents."""
-    t = ticker.upper().strip()
+    # Strip any existing index markers to prevent double-normalization (^VIX -> ^^VIX)
+    t = ticker.upper().strip().lstrip("^")
+    
     if t == "VIX":
         return "^VIX"
     if t == "SPX":
@@ -109,6 +115,100 @@ def _normalize_ticker(ticker: str) -> str:
     return t
 
 
+def _bucket_sparkline_data(df: pd.DataFrame, ref_time: datetime, current_price: float, num_points: int = 20, span_minutes: int = 390) -> list[float | None]:
+    """
+    High-Fidelity Resampling: Spans span_minutes ending at ref_time.
+    Defaults to 20 points over 390 minutes (9:30 AM - 4:00 PM trading session).
+    """
+    if df.empty:
+        return [round(current_price, 4)] * num_points
+
+    col = "Close" if "Close" in df.columns else "close"
+    
+    # Check for duplicated columns safely
+    target_data = df[col]
+    if isinstance(target_data, pd.DataFrame):
+        target_data = target_data.iloc[:, 0]
+    
+    # Ensure index is correctly unified to Naive EDT
+    try:
+        if getattr(df.index, 'tz', None) is not None:
+            df.index = df.index.tz_convert('America/New_York').tz_localize(None)
+        else:
+            df.index = pd.to_datetime(df.index)
+    except Exception as e:
+        pass
+    
+    temp_series = target_data.sort_index()
+    last_data_time = temp_series.index.max()
+    
+    # Calculate the exact 20-point grid spanning the window
+    start_time = ref_time - timedelta(minutes=span_minutes)
+    target_index = pd.date_range(start=start_time, end=ref_time, periods=num_points).round('s')
+    
+    values = []
+    for i, target_time in enumerate(target_index):
+        # [ROBUST_LOOKUP] Find the last price available at or before the target time
+        tt = target_time
+        if getattr(temp_series.index, 'tz', None) is not None:
+            tt = target_time.tz_localize('America/New_York').tz_convert(temp_series.index.tz)
+            
+        try:
+            val = temp_series.asof(tt)
+        except Exception as e:
+            val = None
+        
+        if pd.isna(val):
+            values.append(None)
+            continue
+            
+        # [SAME_DAY_GUARD] Strict Intra-Day Isolation
+        # Ensure the retrieved value is from the same calendar day as the target timestamp.
+        target_ts = pd.Timestamp(tt)
+        val_idx = temp_series.index.searchsorted(tt, side='right') - 1
+        
+        # [PREVENT_WRAP_AROUND]
+        if val_idx < 0:
+            if i > 0 and i < 3: print(f"{i} failed 2: val_idx < 0")
+            values.append(None)
+            continue
+            
+        same_day_val = temp_series.iloc[val_idx]
+        actual_time = temp_series.index[val_idx]
+        
+        # [TZ ALIGNMENT SAFEGUARD]
+        if actual_time.tz is not None and getattr(target_ts, 'tz', None) is not None:
+            if actual_time.tz_convert('America/New_York').date() != target_ts.tz_convert('America/New_York').date():
+                if i > 0 and i < 3: print(f"{i} failed 3: tz aware date mismatch. actual: {actual_time}, target: {target_ts}")
+                values.append(None)
+                continue
+        elif actual_time.tz is None and getattr(target_ts, 'tz', None) is None:
+            if actual_time.date() != target_ts.date():
+                if i > 0 and i < 3: print(f"{i} failed 4: tz naive date mismatch. actual: {actual_time}, target: {target_ts}")
+                values.append(None)
+                continue
+        else:
+            if i > 0 and i < 3: print(f"{i} failed 5: tz mismatch actual tz {actual_time.tz} != target tz {getattr(target_ts, 'tz', None)}")
+            values.append(None)
+            continue
+            
+        # [PREVENT_FUTURE_FLATLINE] If target time is after last known data
+        if tt > last_data_time + pd.Timedelta(minutes=5) and i < len(target_index) - 1:
+            if i > 0 and i < 3: print(f"{i} failed 6: tt > last_data_time")
+            values.append(None)
+        else:
+            final_val = val if i < len(target_index) - 1 else current_price
+            values.append(round(float(final_val), 4))
+            
+    # [STABILITY] If everything is None except the last point, return current price flatline
+    if all(v is None for v in values[:-1]):
+        return [round(current_price, 4)] * num_points
+        
+    return values
+        
+    return values
+
+
 def _fetch_batch_history(tickers: list[str], period: str = "5d", interval: str = "1d") -> pd.DataFrame:
     """
     Centralized batched fetcher for Yahoo Finance data.
@@ -116,6 +216,18 @@ def _fetch_batch_history(tickers: list[str], period: str = "5d", interval: str =
     Note: Throttling is now handled by the caller via the _YF_SEMAPHORE.
     """
     logger.info(f"Executing batched fetch for {tickers} (p={period}, i={interval})")
+    
+    # [UNIVERSAL_TEMPORAL_INSTRUMENTATION]
+    # Check if we are in Replay mode and trigger the sliding window fetcher
+    from src.utils.temporal import get_effective_now
+    ref_time = get_effective_now()
+    now = datetime.now()
+    
+    # If ref_time is more than 5 seconds away from 'now', we assume Replay Mode
+    if abs((now - ref_time).total_seconds()) > 5:
+        logger.info(f"VLI_REPLAY: Universal delegation for {tickers} (Target Origin: {ref_time})")
+        return _fetch_replay_history(tickers, period, interval, end_date=ref_time)
+
     mapped_tickers = [_normalize_ticker(t) for t in tickers]
 
     logger.debug(f"[WEB REQUEST] Yahoo Finance fetching {len(mapped_tickers)} tickers: {mapped_tickers}")
@@ -130,6 +242,8 @@ def _fetch_batch_history(tickers: list[str], period: str = "5d", interval: str =
             progress=False,
             threads=False,  # Maintain throttle integrity
             timeout=10.0,
+            auto_adjust=False, # [SPLIT_AWARENESS] Return both nominal and adjusted
+            prepost=True,      # [EXTENDED_HOURS] Support pre/post market trading
         )
         duration_ms = (time.time() - start_time) * 1000
 
@@ -147,6 +261,51 @@ def _fetch_batch_history(tickers: list[str], period: str = "5d", interval: str =
     return data
 
 
+def _fetch_replay_history(tickers: list[str], period: str = "5d", interval: str = "1d", end_date: datetime = None) -> pd.DataFrame:
+    """
+    Sub-fetcher for Replay Engine which forces a sliding window relative to a historical origin.
+    Automatically downsamples intervals if the origin is too old (e.g. 1m data limited to last 30 days).
+    """
+    # 1. Adaptive Downsampling
+    now = datetime.now()
+    if end_date and (now - end_date).days > 29:
+        if interval in ["1m", "2m", "5m"]:
+            logger.info(f"VLI_REPLAY: Auto-downsampling interval from {interval} to 1d (Origin > 30 days old)")
+            interval = "1d"
+        elif interval in ["15m", "30m", "60m", "1h"]:
+            logger.info(f"VLI_REPLAY: Auto-downsampling interval from {interval} to 1d (Origin > 730 days limit for 1h)")
+            if (now - end_date).days > 720:
+                interval = "1d"
+
+    logger.info(f"VLI_REPLAY: Fetching {tickers} (p={period}, i={interval}) ending at {end_date}")
+    mapped_tickers = [_normalize_ticker(t) for t in tickers]
+    
+    # Calculate start_date if period is given (approximate)
+    # yfinance handles 'period' internally if 'end' is provided, but 'start' is safer for specific windows
+    # Actually yfinance 0.2.x handles start/end well.
+    
+    start_time = time.time()
+    try:
+        data = yfinance.download(
+            tickers=mapped_tickers,
+            period=period,
+            end=end_date,
+            interval=interval,
+            group_by="ticker",
+            session=_get_session(),
+            progress=False,
+            threads=False,
+            timeout=10.0,
+            auto_adjust=False, # [SPLIT_AWARENESS] Maintain nominal scale for reporting
+        )
+        duration_ms = (time.time() - start_time) * 1000
+        logger.debug(f"VLI_REPLAY: fetch successful in {duration_ms:.2f}ms")
+        return data
+    except Exception as e:
+        logger.error(f"VLI_REPLAY: fetch failed: {e}")
+        raise
+
+
 def _extract_ticker_data(df: pd.DataFrame, ticker: str) -> pd.DataFrame:
     """
     Helper to extract a single ticker's dataframe from a multi-index yf.download result.
@@ -155,27 +314,44 @@ def _extract_ticker_data(df: pd.DataFrame, ticker: str) -> pd.DataFrame:
     ticker_upper = ticker.upper()
     norm_ticker = _normalize_ticker(ticker)
 
+    print(f"DEBUG _extract_ticker_data: ticker={ticker}, ticker_upper={ticker_upper}, is_multi={isinstance(df.columns, pd.MultiIndex)}, df.columns={type(df.columns)}")
+
     if isinstance(df.columns, pd.MultiIndex):
         # 1. Try original ticker
         if ticker_upper in df.columns.levels[0]:
-            return df[ticker_upper].dropna(how="all")
+            res = df[ticker_upper].dropna(how="all").copy()
+            if isinstance(res.columns, pd.MultiIndex): res.columns = [c[0] for c in res.columns]
+            return res
+        if len(df.columns.levels) > 1 and ticker_upper in df.columns.levels[1]:
+            res = df.xs(ticker_upper, level=1, axis=1).dropna(how="all").copy()
+            if isinstance(res.columns, pd.MultiIndex): res.columns = [c[0] for c in res.columns]
+            return res
 
         # 2. Try normalized ticker (VIX -> ^VIX)
         if norm_ticker in df.columns.levels[0]:
-            return df[norm_ticker].dropna(how="all")
+            res = df[norm_ticker].dropna(how="all").copy()
+            if isinstance(res.columns, pd.MultiIndex): res.columns = [c[0] for c in res.columns]
+            return res
+        if len(df.columns.levels) > 1 and norm_ticker in df.columns.levels[1]:
+            res = df.xs(norm_ticker, level=1, axis=1).dropna(how="all").copy()
+            if isinstance(res.columns, pd.MultiIndex): res.columns = [c[0] for c in res.columns]
+            return res
 
         # 3. Fallback to direct access if columns levels are flattened
         try:
-            return df[ticker_upper].dropna(how="all")
+            return df[ticker_upper].dropna(how="all").copy()
         except:
             pass
         try:
-            return df[norm_ticker].dropna(how="all")
+            return df[norm_ticker].dropna(how="all").copy()
         except:
             pass
+            
+        # [CROSS_CONTAMINATION_GUARD] Stop matching here if MultiIndex doesn't contain ticker at all
+        return pd.DataFrame()
 
     # Flat Index Case
-    return df.dropna(how="all")
+    return df.dropna(how="all").copy()
 
 
 def _get_ttl_seconds(interval: str) -> int:
@@ -205,10 +381,10 @@ def _fetch_stock_history(ticker: str, period: str = "5d", interval: str = "1d") 
     Standard single-ticker fetcher. Automatically flattens MultiIndex for the requested ticker.
     Used by all analysis nodes (Analyst, SMC, EMA, etc.). Heavily cached to prevent LangGraph sequential redundant fetching.
     """
-    from datetime import datetime
-
     norm_ticker = _normalize_ticker(ticker)
-    cache_key = f"{norm_ticker}_{period}_{interval}"
+    from src.utils.temporal import get_cache_segment_suffix
+    suffix = get_cache_segment_suffix()
+    cache_key = f"{norm_ticker}{suffix}_{period}_{interval}"
 
     df_cache = DatastoreManager.get_df_cache()
 
@@ -228,6 +404,11 @@ def _fetch_stock_history(ticker: str, period: str = "5d", interval: str = "1d") 
 
     df_cache[cache_key] = {"df": df.copy(), "last_updated": datetime.now()}
     return df.copy()
+
+
+def _fetch_stock_history_vli(ticker: str, period: str = "5d", interval: str = "1d") -> pd.DataFrame:
+    """Consolidated history fetcher with universal Replay and Cache support."""
+    return _fetch_stock_history(ticker, period, interval)
 
 
 @tool
@@ -287,7 +468,14 @@ async def get_symbol_history_data(symbols: list[str], period: str = "1d", interv
             try:
                 # Use semaphore for throttling
                 async with _get_yf_semaphore():
-                    full_df = await asyncio.wait_for(asyncio.to_thread(_fetch_batch_history, others, period, interval), timeout=15.0)
+                    # [REPLAY_INSTRUMENTATION] Check for temporal shift
+                    ref_time = get_effective_now()
+                    is_replay = (ref_time.date() < datetime.now().date())
+                    
+                    if is_replay:
+                        full_df = await asyncio.wait_for(asyncio.to_thread(_fetch_replay_history, others, period, interval, end_date=ref_time), timeout=15.0)
+                    else:
+                        full_df = await asyncio.wait_for(asyncio.to_thread(_fetch_batch_history, others, period, interval), timeout=15.0)
 
                 for sym in others:
                     ticker_df = _extract_ticker_data(full_df, sym)
@@ -535,17 +723,27 @@ async def get_stock_quote(ticker: str, period: str = "1d", interval: str = "1m",
             age_sec = (datetime.now() - entry["updated_at"]).total_seconds()
             if age_sec < 120:
                 logger.info(f"VLI Fast-Path: Warm cache hit for {norm_ticker} (Age: {age_sec:.1f}s)")
-                # Extract price from the data_str or use a fallback
+                
+                data_val = entry["data"]
+                # If data is a dict (Phase 3 storage), extract the price
+                if isinstance(data_val, dict):
+                    price_val = data_val.get("raw", {}).get("Close")
+                    if price_val:
+                        return {"symbol": norm_ticker, "price": price_val, "change": 0.0, "is_cached": True}
+                
+                # Fallback to regex for string-based cache
                 try:
-                    price_val = float(re.search(r"Close\*\*: (\d+\.?\d*)", entry["data"]).group(1))
+                    price_val = float(re.search(r"Close\*\*: (\d+\.?\d*)", str(data_val)).group(1))
                     return {"symbol": norm_ticker, "price": price_val, "change": 0.0, "is_cached": True}
                 except Exception:
                     pass  # Fall through to fetch if parse fails
 
         # 2. Fast-Fetch Phase: Bypassing the global throttle lock for single-ticker quotes
-        # 3. [Atomic Fast-Path] Lock-free fetch for sub-1s resonance
-        # Forcing Fast-Path for standard tickers to avoid system-wide hangs
-        if use_fast_path:
+        # [REPLAY_INSTRUMENTATION] Bypass Fast-Path for Replay Mode to ensure temporal sync
+        from src.utils.temporal import get_effective_now
+        is_replay = abs((datetime.now() - get_effective_now()).total_seconds()) > 5
+        
+        if use_fast_path and not is_replay:
             logger.info(f"VLI Fast-Path: Starting lock-free fast-fetch for {norm_ticker}")
             try:
                 # [STABILITY] 5s hard-timeout for all data retrieval threads
@@ -553,23 +751,22 @@ async def get_stock_quote(ticker: str, period: str = "1d", interval: str = "1m",
                 # Use faster 'fast_info' instead of full history
                 fast = t_obj.fast_info
 
-                # Check for mock data (Diagnostic check)
-                if ticker.upper().startswith(("HIGH_", "MOD_", "INACT_")) or ticker.upper() == "MOCK_TICKER":
-                    return {"symbol": ticker.upper(), "price": 100.0, "change": 0.0, "is_mock": True}
-
-                return {
-                    "symbol": norm_ticker,
-                    "price": fast.last_price,
-                    "change": ((fast.last_price / fast.previous_close) - 1) * 100 if fast.previous_close else 0.0,
-                    "volume": getattr(fast, "last_volume", 0),  # Fast retrieval
-                    "is_fast_fetch": True,
-                }
+                if fast is not None and hasattr(fast, "last_price") and fast.last_price:
+                    return {
+                        "symbol": norm_ticker,
+                        "price": fast.last_price,
+                        "change": ((fast.last_price / fast.previous_close) - 1) * 100 if hasattr(fast, "previous_close") and fast.previous_close else 0.0,
+                        "volume": getattr(fast, "last_volume", 0),
+                        "is_fast_fetch": True,
+                    }
+                else:
+                    logger.info(f"VLI: Fast-info empty for {norm_ticker}, falling back to batched history.")
             except Exception as fe:
                 logger.warning(f"Fast-fetch failed for {norm_ticker}, falling back to batched fetch: {fe}")
 
         # 3. Standard Batched Fetch (Tier 3 fallback)
-        # Consistent normalization (VIX -> ^VIX)
-        # 5-second retrieval timeout to prevent VLI session hang (Aggressive Fail-Fast)
+        # [REPLAY_INSTRUMENTATION] Expand window to 10d for Replay to survive weekends
+        period = "10d" if is_replay else period
         data = await asyncio.wait_for(asyncio.to_thread(_fetch_batch_history, [norm_ticker], period, interval), timeout=5.0)
 
         # Extract using normalized ticker to ensure level-0 match
@@ -578,10 +775,29 @@ async def get_stock_quote(ticker: str, period: str = "1d", interval: str = "1m",
         if ticker_df.empty:
             return f"[ERROR]: No data found for ticker '{ticker}' (normalized: {norm_ticker})."
 
-        last_row = ticker_df.iloc[-1]
+        # [STABILITY] Filter out "Ghost Rows" (partial NaNs at Market Close)
+        # We need at least 'Close' and 'Volume' or 'Open' to consider a row valid
+        stable_df = ticker_df.dropna(subset=[col for col in ticker_df.columns if col.lower() in ["close", "adj close", "volume", "open"]], how="all")
+        if stable_df.empty:
+            return f"[ERROR]: No stable data points found for '{ticker}'."
+            
+        last_row = stable_df.iloc[-1]
 
-        # Ensure we have a valid price (DataFrame Close works even if .info fails)
-        quote_price = float(last_row["Close"])
+        # Case-Insensitive Column Resolution
+        def _get_val(row, keys):
+            for k in keys:
+                if k in row.index: return float(row[k])
+                if k.lower() in row.index: return float(row[k.lower()])
+                if k.capitalize() in row.index: return float(row[k.capitalize()])
+            return None
+
+        quote_price = _get_val(last_row, ["Close", "Adj Close"])
+        if quote_price is None:
+            return f"[ERROR]: Could not find price column for '{ticker}'. Columns: {list(last_row.index)}"
+
+        prev_close = _get_val(last_row, ["Open"]) # Fallback for change calc if only 1 day
+        if len(stable_df) > 1:
+            prev_close = _get_val(stable_df.iloc[-2], ["Close", "Adj Close"])
 
         return {
             "symbol": norm_ticker,
@@ -754,7 +970,15 @@ async def run_smc_analysis(ticker: str, interval: str = "auto") -> str:
         logger.info(f"VLI SMC Analyst [CUSTOM OVERRIDE]: Executing {ticker} @ {interval}")
 
         try:
-            data = await asyncio.wait_for(asyncio.to_thread(_fetch_batch_history, [norm_ticker], period_needed, interval), timeout=10.0)
+            # [REPLAY_INSTRUMENTATION]
+            ref_time = get_effective_now()
+            is_replay = (ref_time.date() < datetime.now().date())
+            
+            if is_replay:
+                data = await asyncio.wait_for(asyncio.to_thread(_fetch_replay_history, [norm_ticker], period_needed, interval, end_date=ref_time), timeout=10.0)
+            else:
+                data = await asyncio.wait_for(asyncio.to_thread(_fetch_batch_history, [norm_ticker], period_needed, interval), timeout=10.0)
+            
             full_df = _extract_ticker_data(data, norm_ticker)
             if full_df.empty or len(full_df) < 10:
                 return f"### {ticker} Analysis @ {interval}\n- [ERROR]: Insufficient data."
@@ -762,10 +986,20 @@ async def run_smc_analysis(ticker: str, interval: str = "auto") -> str:
             df = full_df.tail(history_samples).copy()
             df.columns = [c.lower() for c in df.columns]
 
-            swings = smc.swing_highs_lows(df, swing_length=swing_length)
-            fvg = smc.fvg(df)
-            ob = smc.ob(df, swings)
-            structure = smc.bos_choch(df, swings)
+            # [STRUCTURAL_INTEGRITY] Use Adjusted Data for Structural Detection
+            df_calc = df.copy()
+            if "adj close" in df.columns:
+                mask = df["close"] > 0
+                df_calc.loc[mask, "adj_ratio"] = df["adj close"] / df["close"]
+                df_calc.loc[~mask, "adj_ratio"] = 1.0
+                for col in ["open", "high", "low", "close"]:
+                    df_calc[col] = df[col] * df_calc["adj_ratio"]
+            
+            # Execute on adjusted data
+            swings = smc.swing_highs_lows(df_calc, swing_length=swing_length)
+            fvg = smc.fvg(df_calc)
+            ob = smc.ob(df_calc, swings)
+            structure = smc.bos_choch(df_calc, swings)
 
             fvg_count = len(fvg[fvg["FVG"].fillna(0) != 0]) if "FVG" in fvg.columns else 0
             ob_count = len(ob[ob["OB"].fillna(0) != 0]) if "OB" in ob.columns else 0
@@ -795,29 +1029,49 @@ async def run_smc_analysis(ticker: str, interval: str = "auto") -> str:
     logger.info(f"VLI SMC Analyst [MTF AUTONOMOUS SCAN]: Executing Apex 500 Alignment for {ticker}")
     report = [f"## MTF SMC Alignment Scan: {ticker} (Apex 500 Scanner)", ""]
 
-    # 1. Macro Map (Trend Direction)
-    macro_cfg = strategy.get("macro_map", {})
-    macro_tf = macro_cfg.get("timeframes", ["1d"])[0]
-    macro_lookback = macro_cfg.get("lookback_bars", 200)
-    macro_period = "1y" if macro_tf in ("1d", "4h") else "6mo"
-
-    # Pre-parse configs for concurrent fetch
-    tactical_cfg = strategy.get("tactical_map", {})
-    tactical_tf = tactical_cfg.get("timeframes", ["1h"])[0]
-    tactical_lookback = tactical_cfg.get("lookback_bars", 100)
-
-    trigger_cfg = strategy.get("execution_trigger", {})
-    trigger_tf = trigger_cfg.get("timeframes", ["5m"])[0]
-    trigger_lookback = trigger_cfg.get("lookback_bars", 50)
-
     macro_bias = "Neutral"
+
+    # Load configurations for the scanner
+    macro_cfg = strategy.get("macro_map", {})
+    tactical_cfg = strategy.get("tactical_map", {})
+    trigger_cfg = strategy.get("execution_trigger", {})
+
+    macro_lookback = macro_cfg.get("lookback_bars", 200)
+    tactical_lookback = tactical_cfg.get("lookback_bars", 100)
+    trigger_lookback = trigger_cfg.get("execution_lookback", 50)
+
+    # [REPLAY_INSTRUMENTATION] Era-Detection & Adaptive Scaling
+    ref_time = get_effective_now()
+    is_deep_history = (datetime.now() - ref_time).days > 700
+    
+    if is_deep_history:
+        logger.info(f"VLI_REPLAY: Entering Deep History Structural Mode (Origin: {ref_time})")
+        macro_tf, macro_period = "1mo", "10y"
+        tactical_tf, tactical_period = "1wk", "2y"
+        trigger_tf, trigger_period = "1d", "1y"
+        report[0] = f"## MTF SMC Structural Replay: {ticker} (Legacy Analysis Mode)"
+        report.append("> [!NOTE]\n> Intraday tactical data is substituted with Weekly/Daily structural pivots due to historical sampling limits (>2 years).")
+    else:
+        # Standard Configuration
+        macro_tf = macro_cfg.get("timeframes", ["1d"])[0]
+        macro_period = "1y" if macro_tf in ("1d", "4h") else "6mo"
+        tactical_tf = tactical_cfg.get("timeframes", ["1h"])[0]
+        tactical_period = "1mo"
+        trigger_tf = trigger_cfg.get("timeframes", ["5m"])[0]
+        trigger_period = "5d"
+        trigger_period = "5d"
 
     # === CONCURRENT FETCH PHASE ===
     async def fetch_with_sem(period, tf):
         async with _get_yf_semaphore():
             return await asyncio.wait_for(asyncio.to_thread(_fetch_stock_history, norm_ticker, period, tf), timeout=12.0)
 
-    results = await asyncio.gather(fetch_with_sem(macro_period, macro_tf), fetch_with_sem("1mo", tactical_tf), fetch_with_sem("5d", trigger_tf), return_exceptions=True)
+    results = await asyncio.gather(
+        fetch_with_sem(macro_period, macro_tf), 
+        fetch_with_sem(tactical_period, tactical_tf), 
+        fetch_with_sem(trigger_period, trigger_tf), 
+        return_exceptions=True
+    )
     mData_res, tData_res, trData_res = results
 
     try:
@@ -1026,11 +1280,46 @@ async def get_raw_smc_tables(ticker: str, interval: str = "1d", period: str = "1
         return json.dumps([{"error": f"Raw Table Error: {str(e)}"}])
 
 
+def _calculate_sortino_ratio(ticker_df: pd.DataFrame, risk_free_rate: float = 0.0) -> float:
+    """
+    Calculates the annualized Sortino Ratio for a given ticker DataFrame.
+    Sortino = (R_p - R_f) / DownsideDev
+    """
+    try:
+        # Use 'Close' or 'adj close' for returns
+        col = "Close" if "Close" in ticker_df.columns else "close"
+        if col not in ticker_df.columns: return 0.0
+        
+        returns = ticker_df[col].pct_change().dropna()
+        if returns.empty: return 0.0
+        
+        # Annualization factor (Daily to Annual)
+        # Assuming Daily data (1d)
+        mean_return = returns.mean() * 252
+        
+        # Downside Deviation: Std Dev of negative returns only
+        downside_returns = returns[returns < risk_free_rate]
+        if downside_returns.empty: return 0.0 # No downside risk detected? 
+        
+        # Note: We calculate variance using N (len(returns)) not len(downside_returns) 
+        # for a standard Sortino calculation.
+        downside_dev = np.sqrt((downside_returns**2).sum() / len(returns)) * np.sqrt(252)
+        
+        if downside_dev == 0: return 0.0
+        
+        return (mean_return - risk_free_rate) / downside_dev
+    except Exception as e:
+        logger.error(f"VLI_ECON: Sortino calculation failed: {e}")
+        return 0.0
+
 @tool
-async def get_macro_symbols() -> str:
+async def get_macro_symbols(fast_update: bool = False) -> str:
     """
     Institutional Macro Registry Tool: Fetches the current states of all registered macro indicators
-    (Indices, Yields, Commodities, Crypto). Generates 'get_macro_symbols.json' for automated reporting.
+    (Indices, Yields, Commodities, Crypto). 
+    
+    If fast_update=True: Returns only Price, Vol, Change (15s heartbeat).
+    If fast_update=False: Returns full analysis including Sortino Ratio and Level Analysis (5m cycle).
     """
     from src.services.macro_registry import macro_registry
     from datetime import datetime
@@ -1043,15 +1332,66 @@ async def get_macro_symbols() -> str:
 
     # Batch fetch using the datastore infrastructure
     ticker_list = list(macros.values())
+    logger.info(f"VLI_SYSTEM: Fetching batch macro data for: {ticker_list}")
     try:
-        # We use a 5-day window to ensure we have a previous close for percentage calculation
-        data = await asyncio.wait_for(
+        # [REPLAY_INSTRUMENTATION] Replay-Aware Sparkline Fetch
+        ref_time = get_effective_now()
+        
+        # [MARKET_ANCHOR] Removed so futures reflect real-time trailing 100 minutes.
+        logger.info(f"VLI_SYSTEM: Using direct trailing time for Sparkline target: {ref_time}")
+        
+        is_replay = abs((datetime.now() - ref_time).total_seconds()) > 5
+
+        # [SPARKLINE_INTERVAL_LOCK] Fetch 1m data directly, bypassing Replay delegate
+        # yfinance is notoriously buggy with end=... for intraday 1m data, causing full-day omissions.
+        async def _fetch_direct_sparkline():
+            def _do_fetch():
+                return yfinance.download(
+                    ticker_list,
+                    period="2d",
+                    interval="1m",
+                    progress=False,
+                    threads=False,
+                    timeout=15.0,
+                    auto_adjust=False,
+                    prepost=False
+                )
+            async with _get_yf_semaphore():
+                res = await asyncio.to_thread(_do_fetch)
+            if res is not None and not res.empty:
+                # [TZ_ALIGNMENT] Force identical timezone across all tickers
+                try:
+                    res.index = pd.to_datetime(res.index, utc=True).tz_convert('America/New_York').tz_localize(None)
+                except Exception:
+                    res.index = pd.to_datetime(res.index).tz_localize(None)
+                return res
+            return pd.DataFrame()
+            
+        # High-Fidelity Data Retrieval (2-Day 1M window for sub-second anchoring)
+        tasks = [
             asyncio.to_thread(_fetch_batch_history, ticker_list, "5d", "1d"),
-            timeout=15.0
-        )
+            _fetch_direct_sparkline()
+        ]
+        if not fast_update:
+            tasks.append(asyncio.to_thread(_fetch_batch_history, ticker_list, "60d", "1d"))
+            
+        results_raw = await asyncio.wait_for(asyncio.gather(*tasks), timeout=25.0)
+        data_1d = results_raw[0]
+        data_5m = results_raw[1]
+        data_30d = results_raw[2] if len(results_raw) > 2 else None
+        
+        # [MEMORY_ANCHOR] Precise Slice for Sparkline Temporal Alignment
+        try:
+            if not data_5m.empty:
+                safe_index = data_5m.index
+                if getattr(safe_index, 'tz', None) is not None:
+                     safe_index = safe_index.tz_convert('America/New_York').tz_localize(None)
+                data_5m = data_5m[safe_index <= pd.Timestamp(ref_time).tz_localize(None)]
+        except Exception as filter_err:
+             logger.warning(f"VLI: In-memory anchor filter failed: {filter_err}")
 
         for label, ticker in macros.items():
-            ticker_df = _extract_ticker_data(data, ticker)
+            ticker_df = _extract_ticker_data(data_1d, ticker)
             
             # Fallback: If batch fetch failed for this specific ticker, try individual fetch
             if ticker_df.empty:
@@ -1068,42 +1408,112 @@ async def get_macro_symbols() -> str:
 
             last_row = ticker_df.iloc[-1]
             prev_row = ticker_df.iloc[-2] if len(ticker_df) > 1 else last_row
+            
+            try:
+                # Handle pandas Series duplication gracefully
+                p_c = last_row["Close"] if "Close" in last_row else last_row["close"]
+                price = float(p_c.iloc[0]) if isinstance(p_c, pd.Series) else float(p_c)
+                
+                p_p = prev_row["Close"] if "Close" in prev_row else prev_row["close"]
+                prev_price = float(p_p.iloc[0]) if isinstance(p_p, pd.Series) else float(p_p)
+                
+                change = ((price / prev_price) - 1) * 100
+            except Exception as pe:
+                logger.error(f"VLI: Price parse failed: {pe}")
+                price = 0.0
+                change = 0.0
 
-            price = float(last_row["Close"])
-            change = ((price / float(prev_row["Close"])) - 1) * 100
+            # [SPARKLINE_EXTRACTION] High-Fidelity 1M Scaling (390m trading session)
+            sparkline_df = _extract_ticker_data(data_5m, ticker)
+            
+            # Fallback for individual missing 1m data due to batch merging quirks (futures vs crypto)
+            if sparkline_df.empty or sparkline_df.isna().all().all():
+                try:
+                    logger.info(f"VLI: Batch 1m empty for {ticker}, fetching individually.")
+                    sdf = await asyncio.to_thread(yfinance.download, ticker, period="2d", interval="1m", prepost=False, progress=False, threads=False)
+                    if sdf is not None and not sdf.empty:
+                        try:
+                            sdf.index = pd.to_datetime(sdf.index, utc=True).tz_convert('America/New_York').tz_localize(None)
+                        except Exception:
+                            sdf.index = pd.to_datetime(sdf.index).tz_localize(None)
+                        sparkline_df = sdf
+                except Exception as ef:
+                    logger.warning(f"VLI: Fallback 1m fetch failed for {ticker}: {ef}")
+
+            sparkline_values = _bucket_sparkline_data(sparkline_df, ref_time, price, num_points=32, span_minutes=240)
+
+            # [RISK_METRICS] Sortino Ratio (30d)
+            sortino = 0.0
+            if data_30d is not None:
+                ticker_30d = _extract_ticker_data(data_30d, ticker)
+                sortino = _calculate_sortino_ratio(ticker_30d)
 
             results[label] = {
                 "symbol": ticker,
                 "price": round(price, 4),
                 "change_pct": round(change, 2),
-                "volume": int(last_row["Volume"]),
+                "sortino": round(sortino, 2),
+                "volume": int(last_row["Volume"].iloc[0]) if "Volume" in last_row and isinstance(last_row["Volume"], pd.Series) else (int(last_row["Volume"]) if "Volume" in last_row else 0),
                 "last_updated": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             }
 
-            # [NEW] Yield Formatting: Display TNX, TYX, FVX as percentages
-            is_yield = any(y in ticker.upper() for y in ["TNX", "TYX", "FVX"])
+            # [STRUCTURAL_JSON] Format for DynamicTable Component
+            # Headers: ["Asset", "Ticker", "Price", "Change %", "Sortino", "Trend (5m)"]
+            # [YIELD_FORMATTING] Yields must be in % not $
+            is_yield = any(y in ticker.upper() for y in ["TNX", "TYX", "FVX", "BX", "IRX"])
             price_display = f"{price:.2f}%" if is_yield else f"${price:,.2f}"
+            
+            from src.tools.macros import MACRO_NAMES
+            
+            # Resolve descriptive name for UI
+            display_name = MACRO_NAMES.get(label, label)
+            if display_name == label and label.upper() == "CL":
+                display_name = "WTI Crude Oil"
 
-            # Format row for Markdown table
-            color = "🟢" if change >= 0 else "🔴"
-            rows.append(f"| {label} | {ticker} | {price_display} | {color} {change:+.2f}% | {int(last_row['Volume']):,} |")
+            rows.append([
+                display_name,
+                ticker,
+                price_display,
+                {"value": round(change, 2), "type": "text"},
+                round(sortino, 2),
+                {"type": "sparkline", "value": sparkline_values}
+            ])
 
-        # Create Artifact
+        # Create Structural Response Object
+        response_obj = {
+            "type": "table",
+            "headers": ["Asset", "Ticker", "Price", "Change %", "Sortino", "Trend (5m)"],
+            "rows": rows,
+            "metadata": {
+                "origin": str(ref_time),
+                "is_replay": is_replay,
+                "is_fast_pulsar": fast_update,
+                "source": "VLI_DATA_ENGINE_V2"
+            }
+        }
+
+        # Create Artifact for persistence
         artifact_path = os.path.join("data", "artifacts", "get_macro_symbols.json")
         os.makedirs(os.path.dirname(artifact_path), exist_ok=True)
         with open(artifact_path, "w", encoding="utf-8") as f:
-            json.dump(results, f, indent=4)
+            json.dump(response_obj, f, indent=4)
 
-        # Format Return Table
-        table = "# Macro Stocks State\n\n"
-        table += "| Asset | Ticker | Price | Change | Volume |\n"
-        table += "| :--- | :--- | :--- | :--- | :--- |\n"
-        table += "\n".join([str(r) for r in rows])
-        table += f"\n\n> [!NOTE]\n> Analysis posted to Reports window (get_macro_symbols.json)."
+        # [NEW] Synchronize to VLI Transit Bucket (Dashboard Feed)
+        from src.config.vli import get_vli_path
+        transit_path = get_vli_path(os.path.join("01_Transit", "Buckets", "MACRO_WATCHLIST_state.json"))
+        try:
+            os.makedirs(os.path.dirname(transit_path), exist_ok=True)
+            with open(transit_path, "w", encoding="utf-8") as f:
+                json.dump(response_obj, f, indent=4)
+            logger.info(f"VLI_SYSTEM: Macro state synchronized to transit bucket: {transit_path}")
+        except Exception as te:
+            logger.error(f"VLI_SYSTEM: Failed to sync macro state: {te}")
 
-        return table
+        return json.dumps(response_obj)
 
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         logger.error(f"Macro Tool Error: {e}")
         return f"[ERROR]: Failed to fetch macro indicators: {str(e)}"
 
@@ -1142,3 +1552,99 @@ async def get_macro_regime(ticker: str) -> str:
     except Exception as e:
         logger.error(f"Regime Tool Error: {e}")
         return f"[ERROR]: {str(e)}"
+
+
+@tool
+async def get_sparkline_audit_vli(ticker: str, ref_time_ms: int = None) -> str:
+    """
+    High-Fidelity Audit Engine: Returns 30 strictly sampled ground-truth quotes.
+    Phase-locks to ref_time_ms if provided to ensure dashboard alignment.
+    """
+    import json
+    from datetime import datetime, timedelta
+    import pandas as pd
+    from src.utils.temporal import get_effective_now
+    
+    norm_ticker = _normalize_ticker(ticker)
+    
+    # [PHASE_LOCK] Synchronize with the dashboard's last refresh point
+    if ref_time_ms:
+        ref_time = datetime.fromtimestamp(ref_time_ms / 1000.0)
+    else:
+        ref_time = get_effective_now()
+    
+    try:
+        # Fetch 1m data for high-precision 10m sampling
+        data = await asyncio.wait_for(asyncio.to_thread(_fetch_batch_history, [norm_ticker], "5d", "1m"), timeout=15.0)
+        df = _extract_ticker_data(data, norm_ticker)
+        
+        if df.empty:
+            return json.dumps({"error": f"No ground truth for {ticker}"})
+            
+        current_price = float(df.iloc[-1]["Close"] if "Close" in df.columns else df.iloc[-1]["close"])
+        # Audit sync: 20 points over 390m trading session
+        audit_values = _bucket_sparkline_data(df, ref_time, current_price, num_points=20, span_minutes=100)
+        
+        interval = 390.0 / 19.0
+        audit_results = []
+        for i, val in enumerate(audit_values):
+            target_time = ref_time - timedelta(minutes=(19-i)*interval)
+            audit_results.append({
+                "time": target_time.strftime("%m-%d %H:%M"),
+                "price": val
+            })
+
+        return json.dumps({
+            "ticker": ticker,
+            "ref_time": ref_time.isoformat(),
+            "points": audit_results
+        })
+                
+        return json.dumps({
+            "ticker": norm_ticker,
+            "anchor_time": ref_time.strftime("%Y-%m-%d %H:%M:%S"),
+            "points": audit_results
+        })
+        
+    except Exception as e:
+        logger.error(f"Audit Tool Error: {e}")
+        return json.dumps({"error": str(e)})
+
+@tool
+async def manage_macro_watchlist(action: str, label: str = None, ticker: str = None) -> str:
+    """
+    Administrative Watchlist Manager: Allows for dynamic and persistent modification 
+    of the Macro Registry.
+    
+    Actions:
+    - 'add': Requires both label and ticker. (e.g., 'Gold', 'GC=F')
+    - 'remove': Requires label.
+    - 'reset': Wipes all customizations and restores institutional factory defaults.
+    """
+    try:
+        from src.services.macro_registry import macro_registry
+        symbols = list(macro_registry.get_macros().values())
+        logger.info(f"VLI_SYSTEM: Fetching batch macro data for: {symbols}")
+        action = action.lower().strip()
+        if action == "add":
+            if not label or not ticker:
+                return "[ERROR]: 'add' action requires both 'label' and 'ticker'."
+            macro_registry.update_macro(label, ticker)
+            return f"SUCCESS: Added '{label}' ({ticker}) to the persistent macro watchlist."
+            
+        elif action == "remove":
+            if not label:
+                return "[ERROR]: 'remove' action requires a 'label'."
+            macro_registry.remove_macro(label)
+            return f"SUCCESS: Removed '{label}' from the macro watchlist."
+            
+        elif action == "reset":
+            macro_registry.reset_to_defaults()
+            return "SUCCESS: Macro Watchlist has been factory reset to institutional defaults."
+            
+        else:
+            return f"[ERROR]: Unsupported action '{action}'. Use 'add', 'remove', or 'reset'."
+            
+    except Exception as e:
+        logger.error(f"Watchlist Manager Error: {e}")
+        return f"[ERROR]: Failed to manage watchlist: {str(e)}"

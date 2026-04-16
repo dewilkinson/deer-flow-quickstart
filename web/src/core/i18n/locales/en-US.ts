@@ -326,7 +326,6 @@ export const enUS: Translations = {
         empty: "(empty)",
         table: {
           category: "Category",
-          scope: "Scope",
           confidence: "Confidence",
           confidenceLevel: {
             veryHigh: "Very high",
@@ -334,7 +333,6 @@ export const enUS: Translations = {
             normal: "Normal",
             unknown: "Unknown",
           },
-          importance: "Importance",
           content: "Content",
           source: "Source",
           createdAt: "CreatedAt",

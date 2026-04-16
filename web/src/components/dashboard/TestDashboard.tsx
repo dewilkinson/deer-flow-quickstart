@@ -86,8 +86,9 @@ const SCENARIOS: Scenario[] = [
     assertions: [
       { id: '1', label: 'Tavily Search API handshake', status: 'pending' },
       { id: '2', label: 'Yahoo Finance Data Fetch (DXY)', status: 'pending' },
-      { id: '3', label: 'Multi-timeframe SMC computation', status: 'pending' },
-      { id: '4', label: 'Macro report synthesis', status: 'pending' }
+      { id: '3', label: 'Tiered Heartbeat: 15s Price Pulsar Active', status: 'pending' },
+      { id: '4', label: 'Tiered Heartbeat: 5m Structural Cycle (Lazy)', status: 'pending' },
+      { id: '5', label: 'Sortino Risk Ratio Integration', status: 'pending' }
     ]
   },
   {
@@ -188,6 +189,18 @@ const SCENARIOS: Scenario[] = [
       { id: '2', label: "CRITICAL priority promotion", status: 'pending' },
       { id: '3', label: "Randomized celebratory UX triggered", status: 'pending' }
     ]
+  },
+  {
+    id: "sparkline_fidelity",
+    name: "Diagnostic: Sparkline Fidelity Check",
+    description: "Verifies the wide-screen 6-column layout, Sortino integration, and Emerald/Rose sparkline rendering.",
+    prompt: "Generate a full-width macro dashboard using get_macro_symbols and prioritize the Trend sparkline visualization. Return the structural JSON result.",
+    assertions: [
+      { id: '1', label: "Horizontal Fit: All 6 columns visible", status: 'pending' },
+      { id: '2', label: "Risk Delta: Sortino Ratio calculation", status: 'pending' },
+      { id: '3', label: "Visualization: 20-point SVG sparklines", status: 'pending' },
+      { id: '4', label: "Reactive UI: Fast-Pulsar Handshake", status: 'pending' }
+    ]
   }
 ];
 
@@ -201,6 +214,7 @@ export default function TestDashboard() {
   const [directMode, setDirectMode] = useState(false);
   const [activeAnimation, setActiveAnimation] = useState<string | null>(null);
   const [isShaking, setIsShaking] = useState(false);
+  const [macroHeartbeatActive, setMacroHeartbeatActive] = useState(false);
 
   const logsEndRef = useRef<HTMLDivElement>(null);
   const retrievedEndRef = useRef<HTMLDivElement>(null);
@@ -359,11 +373,11 @@ export default function TestDashboard() {
   // Diagnostic Animation Listener
   useEffect(() => {
     if (logs.length === 0) return;
-    const lastLog = logs[logs.length - 1];
+    const lastLog = logs[logs.length - 1]!;
     if (lastLog.content.includes('[UX_ANIMATION: TRIGGER]')) {
        // Randomly choose an animation type
        const types = ['TRIGGER', 'PARTY', 'SHAKE'];
-       const choice = types[Math.floor(Math.random() * types.length)];
+       const choice = types[Math.floor(Math.random() * types.length)]!;
        setActiveAnimation(choice);
        
        if (choice === 'SHAKE') {
@@ -389,6 +403,62 @@ export default function TestDashboard() {
     }
     return () => clearInterval(interval);
   }, [isFuzzing]);
+
+  // VLI LIVE TELEMETRY ENGINE
+  // Synchronizes frontend state with backend Macro Registry and Real-time data.
+  const refreshMacroData = async (priority: 'FAST' | 'FULL' = 'FAST') => {
+    if (!isRunning) return;
+    
+    // 1. Trigger Backend Synchronization
+    try {
+        await fetch('http://localhost:8000/api/vli/refresh-card', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ card_id: 'MW' }) // Trigger Macro Watchlist update
+        });
+        
+        // 2. Poll for the latest structural artifact
+        // The backend saves the latest get_macro_symbols.json to artifacts
+        // For the test harness, we simulate the receipt of the new table
+        addLog('System', 'info', `🔄 [Refresh:${priority}] Synchronizing institutional data...`);
+    } catch (e) {
+        console.error("VLI Refresh Error:", e);
+    }
+  };
+
+  useEffect(() => {
+    let pulsarInterval: any;
+    let structuralInterval: any;
+
+    if (activeScenario?.id === 'smc_report' && isRunning) {
+        setMacroHeartbeatActive(true);
+        console.log("Tiered Heartbeat: Initializing Cycles");
+        
+        // Initial Fetch
+        refreshMacroData('FULL');
+
+        // [PULSAR] 15s High-Frequency Refresh
+        pulsarInterval = setInterval(async () => {
+            if (document.hidden) return; // Lazy: Skip if tab inactive
+            addLog('System', 'info', '💓 [Heartbeat] Triggering 15s Macro Price Pulsar...');
+            refreshMacroData('FAST');
+        }, 15000);
+
+        // [STRUCTURAL] 5m Lazy Background Refresh
+        structuralInterval = setInterval(async () => {
+            if (document.hidden) return; // Lazy: Skip if tab inactive
+            addLog('System', 'info', '🧬 [Heartbeat] Triggering 5m Structural Analysis (Lazy-Mode)...');
+            refreshMacroData('FULL');
+        }, 300000);
+    } else {
+        setMacroHeartbeatActive(false);
+    }
+
+    return () => {
+        clearInterval(pulsarInterval);
+        clearInterval(structuralInterval);
+    };
+  }, [activeScenario, isRunning]);
 
   // Auto-scroll logs
   useEffect(() => {
@@ -582,6 +652,13 @@ export default function TestDashboard() {
                   // Truncate huge text results to keep UI clean, but indicate size
                   const out = data.content.length > 500 ? data.content.substring(0, 500) + `... [Output truncated, length=${data.content.length}]` : data.content;
                   addLog(agent, 'tool', `📥 [Tool Result: ${data.tool_call_id || "unknown"}] ${out}`);
+                  
+                  // [REACTIVE_REFRESH] Detect Macro Watchlist modifications
+                  if (data.content.includes("SUCCESS:") && (data.content.includes("macro watchlist") || data.content.includes("registry"))) {
+                      console.log("Reactive UI: Watchlist modification detected, triggering hot-reload Pulsar.");
+                      addLog('System', 'success', '⚡ [Reactive UI] Hot-Reloading Watchlist state...');
+                      refreshMacroData('FULL');
+                  }
                   
                   // Analyze output for Display Panel
                   let rawContent = data.content;
@@ -838,8 +915,8 @@ export default function TestDashboard() {
     >
       <UXAnimationOverlay />
 
-      {/* LEFT COLUMN: SCENARIOS */}
-      <div className="col-span-3 flex flex-col gap-4 bg-slate-900/40 rounded-xl border border-slate-800/60 p-4 overflow-y-auto custom-scrollbar backdrop-blur-sm h-full">
+      {/* LEFT COLUMN: SCENARIOS (Compact) */}
+      <div className="col-span-2 flex flex-col gap-4 bg-slate-900/40 rounded-xl border border-slate-800/60 p-4 overflow-y-auto custom-scrollbar backdrop-blur-sm h-full">
         <div className="flex items-center gap-2 mb-2 shrink-0">
           <Activity className="w-5 h-5 text-indigo-400" />
           <h2 className="text-lg font-medium text-slate-200">Integration Workflows</h2>
@@ -886,8 +963,8 @@ export default function TestDashboard() {
         </div>
       </div>
 
-      {/* MIDDLE COLUMN: LIVE TERMINAL */}
-      <div className="col-span-6 flex flex-col bg-[#0d1117] rounded-xl border border-slate-800/80 shadow-2xl overflow-hidden relative group">
+      {/* MIDDLE COLUMN: LIVE TERMINAL (Shrunk for Data Density) */}
+      <div className="col-span-4 flex flex-col bg-[#0d1117] rounded-xl border border-slate-800/80 shadow-2xl overflow-hidden relative group">
         <div className="bg-slate-900/80 border-b border-slate-800 px-4 py-3 flex items-center justify-between">
             <Terminal className="w-4 h-4 text-slate-400" />
             <span className="text-[10pt] font-mono text-slate-300">VLI Test Stream Output</span>
@@ -982,8 +1059,8 @@ export default function TestDashboard() {
         </div>
       </div>
 
-      {/* RIGHT COLUMN: CONSOLE (Clean Flow Layout) */}
-      <div className="col-span-3 flex flex-col h-full min-h-0 overflow-hidden pr-4">
+      {/* RIGHT COLUMN: CONSOLE (Expanded for Macro Watchlist) */}
+      <div className="col-span-6 flex flex-col h-full min-h-0 overflow-hidden pr-4">
         <div className="flex-1 flex flex-col relative group min-h-0">
           <div className="flex items-center justify-between mb-8 shrink-0">
             <div className="flex items-center gap-3">

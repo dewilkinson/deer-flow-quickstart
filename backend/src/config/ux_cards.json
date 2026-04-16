@@ -1,0 +1,28 @@
+{
+  "ux_cards": [
+    {
+      "name": "Raw Telemetry Tail",
+      "id": "RT",
+      "type_guid": "3fb8c801-443b-466d-888e-64d559868661",
+      "instance_guid": "de1ef310-8588-4e89-9852-789a71465241"
+    },
+    {
+      "name": "Macro Watchlist",
+      "id": "MW",
+      "type_guid": "5a06587c-6950-4ff6-8367-7389148d2873",
+      "instance_guid": "f3e5b3b0-681e-4c7b-891a-3e5f29c8e8d5"
+    },
+    {
+      "name": "Analysis Report",
+      "id": "AR",
+      "type_guid": "8c4f9a2e-3d71-4b10-9c2b-e9d6c35c4a17",
+      "instance_guid": "7a1d9c5e-8b4e-4f3d-9a2c-d5e6f7a8b9c0"
+    },
+    {
+      "name": "Coordinator Interface",
+      "id": "CI",
+      "type_guid": "a1b2c3d4-e5f6-4a5b-bcde-f1e2d3c4b5a6",
+      "instance_guid": "b6a5c4d3-e2f1-4b5a-9d8c-7f6e5d4c3b2a"
+    }
+  ]
+}

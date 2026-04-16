@@ -62,84 +62,48 @@ TIMEFRAMES = ["1h", "1d"]
 
 
 @tool
-async def fetch_market_macros() -> str:
+async def fetch_market_macros(structural: bool = True) -> str:
     """
     Fetch comprehensive market macro data for key global indices and assets.
     Utilizes the Ground Truth Macro Watchlist state for consistency with the dashboard.
-    Provides price, trend, volume, and regime analysis.
+    
+    If structural=True (default), returns the high-fidelity JSON payload (Sortino, Sparklines).
+    If structural=False, returns a legacy Markdown report.
     """
-    import json
-    import os
+    from .finance import get_macro_symbols
     
-    # 1. Try to load Ground Truth from the Macro Watchlist Bucket
-    state_path = get_vli_path("01_Transit/Buckets/MACRO_WATCHLIST_state.json")
-    bucket_data = {}
-    if os.path.exists(state_path):
-        try:
-            with open(state_path, "r", encoding="utf-8") as f:
-                state = json.load(f)
-                bucket_data = state.get("data", {})
-                logger.info(f"[MACRO_TOOL] Ingested ground truth for {len(bucket_data)} symbols from {state.get('last_updated')}")
-        except Exception as e:
-            logger.error(f"Failed to read Macro Watchlist state: {e}")
-
-    # 2. Fetch live/structured data as fallback or for missing symbols
-    data = await get_macro_data()
-    if not data and not bucket_data:
-        return "Error: Unable to synthesize macro market data at this time."
-
-    report = "## [GROUND_TRUTH]: Macro Market Environment Report\n"
-    report += f"Source: VLI Persistent Bucket Engine | Sync Time: {datetime.now().strftime('%H:%M:%S')}\n\n"
-
-    # Merge logic: Prioritize Bucket Data (includes Regime, Volume, and high-fidelity price changes)
-    all_labels = set(bucket_data.keys()) | {item["label"] for item in data}
+    # [CONVERGENCE] Proxy to the hardened finance engine
+    json_res = await get_macro_symbols.ainvoke({"fast_update": False})
     
-    for label in sorted(list(all_labels)):
-        name = MACRO_NAMES.get(label, "Index")
+    if structural:
+        return json_res
         
-        # Prefer bucket data as it contains finalized Regimes from the specialized tool
-        if label in bucket_data:
-            item = bucket_data[label]
-            price = item.get("Price", 0.0)
-            change = item.get("Change %", 0.0)
-            volume = item.get("Volume", "N/A")
-            regime = item.get("Regime", "UNKNOWN")
-            sortino = item.get("Sortino", 0.0)
+    # Legacy Markdown Fallback
+    import json
+    try:
+        data_obj = json.loads(json_res)
+        headers = data_obj.get("headers", [])
+        rows = data_obj.get("rows", [])
+        
+        report = "## [GROUND_TRUTH]: Macro Market Environment Report\n"
+        report += f"Source: VLI Unified Engine | Sync Time: {datetime.now().strftime('%H:%M:%S')}\n\n"
+        
+        for row in rows:
+            # Row index mapping: Asset, Ticker, Price, Change%, Sortino, Trend
+            label = row[0]
+            ticker = row[1]
+            price = row[2]
+            change = row[3]["value"] if isinstance(row[3], dict) else row[3]
+            sortino = row[4]
             
-            # Format report for the specialist
-            report += f"### {label} ({name})\n"
-            report += f"- **Current Price**: ${price:,.2f} ({change:+.2f}%)\n"
-            report += f"- **Regime Status**: {regime}\n"
+            report += f"### {label} ({ticker})\n"
+            report += f"- **Current Price**: {price} ({change:+.2f}%)\n"
+            report += f"- **Sortino Ratio**: {sortino:.2f}\n\n"
             
-            # Add Sortino (Risk-Adjusted Consistency)
-            if sortino:
-                report += f"- **Sortino Ratio (Day Trading)**: {sortino:.2f} (Consistency Score)\n"
-            
-            # Add Volume Profile Node Analysis
-            vp = item.get("Volume_Profile", {})
-            if isinstance(vp, dict) and "metadata" in vp:
-                meta = vp["metadata"]
-                report += f"- **Volume Profile Nodes**: POC at ${meta.get('poc')}, Value Area [${meta.get('val')} - ${meta.get('vah')}]\n"
-            
-            # SMC / Trend
-            smc = item.get("SMC_Raw", "")
-            if smc:
-                # Truncate raw SMC for report brevity if it's too long
-                smc_summary = str(smc)[:200] + "..." if len(str(smc)) > 200 else str(smc)
-                report += f"- **SMC/Trend Context**: {smc_summary}\n"
-            
-            report += f"- **Volume Activity**: {volume}\n\n"
-
-        else:
-            # Fallback to get_macro_data results if not in bucket
-            item = next((i for i in data if i["label"] == label), None)
-            if item:
-                report += f"### {label} ({name})\n"
-                report += f"- **Price**: ${item['price']:,.2f}\n"
-                report += f"- **Change**: {item['change']:+.2f}%\n"
-                report += "- **Status**: Retaining session parity...\n\n"
-
-    return report
+        return report
+    except Exception as e:
+        logger.error(f"Macro Proxy Error: {e}")
+        return json_res # Fallback to raw JSON if parse fails
 
 
 

@@ -160,7 +160,7 @@ export function RecentChatList() {
     <>
       <SidebarGroup>
         <SidebarGroupLabel>
-          {env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY !== "true"
+          {String(env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY) !== "true"
             ? t.sidebar.recentChats
             : t.sidebar.demoChats}
         </SidebarGroupLabel>
@@ -182,7 +182,7 @@ export function RecentChatList() {
                         >
                           {titleOfThread(thread)}
                         </Link>
-                        {env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY !== "true" && (
+                        {String(env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY) !== "true" && (
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <SidebarMenuAction

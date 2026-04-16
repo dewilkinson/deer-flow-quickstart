@@ -149,4 +149,4 @@ async def reporter_node(state: State, config: RunnableConfig):
         final_report_text = "Analysis completed. (PHASE_SYNTHESIS_RECOVERY): The system has transitioned to a managed reporting baseline due to model constraints."
         fb_msgs = []
 
-    return {"final_report": final_report_text, "messages": fb_msgs + [AIMessage(content=final_report_text, name="reporter_finalize")]}
+    return {"final_report": str(final_report_text), "messages": fb_msgs + [AIMessage(content=str(final_report_text), name="reporter_finalize")]}

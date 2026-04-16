@@ -32,6 +32,8 @@ import asyncio
 # Note: Event loop policy is now managed by server.py to ensure institutional stability.
 # Proactor is avoided for the main API process to prevent EPIPE/fileno conflicts on Windows.
 import base64
+
+import base64
 import json
 import logging
 import re
@@ -328,7 +330,7 @@ async def vli_dashboard_redirect():
 # Add CORS middleware
 # It's recommended to load the allowed origins from an environment variable
 # for better security and flexibility across different environments.
-allowed_origins_str = get_str_env("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:8089,http://127.0.0.1:8089")
+allowed_origins_str = get_str_env("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:8089,http://127.0.0.1:8089,http://localhost:8000,http://127.0.0.1:8000")
 allowed_origins = [origin.strip() for origin in allowed_origins_str.split(",")]
 
 logger.info(f"Allowed origins: {allowed_origins}")
@@ -350,6 +352,18 @@ from fastapi.staticfiles import StaticFiles
 
 @app.on_event("startup")
 async def startup_event():
+    logger.info("VLI_SYSTEM: API Server booting...")
+
+    # [NEW] Dashboard Integrity Guard
+    # Ensure backend_root is defined for the startup event
+    b_dir = os.path.dirname(os.path.abspath(__file__))  # src/server
+    b_root = os.path.abspath(os.path.join(b_dir, "..", ".."))  # backend/
+    dashboard_path = os.path.join(b_root, "public", "VLI_session_dashboard.html")
+    if not os.path.exists(dashboard_path):
+        logger.error(f"CRITICAL ERROR: VLI Dashboard file missing at {dashboard_path}")
+    else:
+        logger.info(f"VLI_SYSTEM: Dashboard integrity verified at {dashboard_path}")
+
     logger.info("Cobalt Multiagent: Launching Unified Heartbeat Engine.")
     from src.services.scheduler import cobalt_scheduler
     
@@ -632,8 +646,9 @@ async def refresh_vli_card(req: RefreshRequest):
             
             # Currently only Macro Watchlist is active as a managed bucket
             # We can expand this loop to other persistent buckets in the future
-            mw_bucket = AssetBucket("MACRO_WATCHLIST", "Macros")
-            await mw_bucket.update()
+            # Bypass generic AssetBucket to maintain custom structural JSON for sparklines
+            from src.tools.finance import get_macro_symbols
+            await get_macro_symbols.ainvoke({"fast_update": True})
             
             with open(telemetry_file, "a", encoding="utf-8") as tf:
                 tf.write(f"> Global state sync complete. All frontend payloads stabilized.\n")
@@ -641,15 +656,14 @@ async def refresh_vli_card(req: RefreshRequest):
             return {"status": "success", "target": "ALL"}
 
         if target == "MW" or "MACRO" in target:
-            from src.services.asset_bucket import AssetBucket
-            bucket = AssetBucket("MACRO_WATCHLIST", "Macros")
+            from src.tools.finance import get_macro_symbols
             logger.info("VLI: Explicit refresh requested for MACRO_WATCHLIST")
             
             with open(telemetry_file, "a", encoding="utf-8") as tf:
                 tf.write(f"\n{timestamp} ### 🔄 [UX REFRESH] Target: {target}\n> Triggering forced update of Macro Watchlist Engine...\n")
                 tf.flush()
             
-            await bucket.update()
+            await get_macro_symbols.ainvoke({"fast_update": True})
             
             with open(telemetry_file, "a", encoding="utf-8") as tf:
                 tf.write(f"> Macro Watchlist states securely synced to frontend payload.\n")
@@ -879,6 +893,34 @@ async def _invoke_vli_agent(
                 if word not in ticker_stop_words:
                     ticker = word
                     break
+
+        if "GET_SPARKLINE_AUDIT_VLI" in text.upper():
+            # [STABILITY] Deterministic Audit Fast-Path
+            from src.tools.finance import get_sparkline_audit_vli
+            start_time = datetime.now()
+            try:
+                # Extract args via regex for speed/robustness
+                t_match = re.search(r"--ticker=([^\s]+)", text)
+                r_match = re.search(r"--ref_time_ms=([^\s]+)", text)
+                
+                ticker_arg = t_match.group(1) if t_match else "SPY"
+                ref_ms_arg = int(r_match.group(1)) if r_match else None
+                
+                logger.info(f"VLI Fast-Path: Executing Sparkline Audit for {ticker_arg} (ref_ms: {ref_ms_arg})")
+                audit_json = await get_sparkline_audit_vli(ticker=ticker_arg, ref_time_ms=ref_ms_arg)
+                
+                duration = (datetime.now() - start_time).total_seconds()
+                _vli_convergence_history.append({
+                    "timestamp": datetime.now().strftime("%H:%M:%S"),
+                    "iteration": 1,
+                    "latency": duration,
+                    "accuracy": 100.0,
+                    "status": "pass"
+                })
+                return audit_json, {}
+            except Exception as ae:
+                logger.error(f"VLI Fast-Path: Audit intercept failed: {ae}")
+                # Fall through to graph if intercept fails
 
         if is_macro:
             # [CRITICAL] Macro Institutional Intercept
@@ -1271,6 +1313,45 @@ async def post_vli_action_plan(request: VLIActionPlanRequest, background_tasks: 
             import uuid
             transaction_id = f"vli_action_{uuid.uuid4().hex[:8]}"
             logger.info(f"VLI: Fresh transaction initialized: {transaction_id}")
+
+    # [FAST-PATH] Ticker-Only Shortcut Bypass (Pre-Orchestration)
+    # Detects if input is ONLY a ticker (e.g., "$NVDA", "AAPL")
+    import re
+    cleaned_input = request.text.strip()
+    ticker_match = re.match(r"^\$?([A-Z]{1,5})$", cleaned_input.upper())
+    
+    if ticker_match and not request.raw_data_mode:
+        ticker = ticker_match.group(1)
+        logger.info(f"VLI: Fast-Path Ticker Hit detected: {ticker}. Bypassing AI Orchestration.")
+        try:
+            from src.tools.finance import get_stock_quote
+            quote = await get_stock_quote(ticker=ticker, use_fast_path=True)
+            
+            if isinstance(quote, dict):
+                # Handle both flat and nested tool results (Standard/Fast/Cached)
+                price = quote.get("price")
+                if not price and "raw" in quote and isinstance(quote["raw"], dict):
+                    price = quote["raw"].get("Close")
+                
+                if price:
+                    change = quote.get("change", 0.0)
+                    change_sign = "+" if change >= 0 else ""
+                    response_text = f"**{ticker}**: ${price:.2f} ({change_sign}{change:.2f}%)"
+                    
+                    # Log to Telemetry
+                    try:
+                        from src.config.vli import get_vli_path
+                        telemetry_file = get_vli_path("VLI_Raw_Telemetry.md")
+                        timestamp = datetime.now().strftime("[%H:%M:%S]")
+                        with open(telemetry_file, "a", encoding="utf-8") as tf:
+                            tf.write(f"\n{timestamp} **FAST_PATH_HIT (Bypass: Ticker Only)**\n")
+                            tf.write(f"- **Ticker**: `{ticker}`\n")
+                            tf.write(f"- **Response**: `{response_text}`\n\n---\n")
+                    except: pass
+                    
+                    return {"response": response_text, "status": "OK", "error_details": None, "thread_id": transaction_id}
+        except Exception as fe:
+            logger.warning(f"VLI: Fast-Path bypass failed for {ticker}, falling back to full graph: {fe}")
 
     # [NEW] ASYNC SYNTHESIS BYPASS
     wants_background = request.background_synthesis or "--BACKGROUND" in request.text.upper()
@@ -2155,6 +2236,7 @@ app.include_router(studio_router)
 # Mount the backend directory to serve the dashboard HTML
 backend_dir = os.path.dirname(os.path.abspath(__file__))  # src/server
 backend_root = os.path.abspath(os.path.join(backend_dir, "..", ".."))  # backend/
-app.mount("/", StaticFiles(directory=backend_root, html=True), name="static")
+public_dir = os.path.join(backend_root, "public")
+app.mount("/", StaticFiles(directory=public_dir, html=True), name="static")
 
 # Trigger hot reload

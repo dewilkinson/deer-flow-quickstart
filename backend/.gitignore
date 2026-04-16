@@ -26,3 +26,10 @@ config.yaml
 
 # Claude Code settings
 .claude/settings.local.json
+
+# Temporary Diagnostic Files (Discourage wildcard deletion of .html source)
+backend/*.log
+backend/debug_*.txt
+backend/test_*.txt
+backend/out.json
+backend/temp_*.html

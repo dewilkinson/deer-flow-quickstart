@@ -72,7 +72,7 @@ function SkillSettingsList({
       <header className="flex justify-between">
         <div className="flex gap-2">
           <Tabs defaultValue="public" onValueChange={setFilter}>
-            <TabsList variant="line">
+            <TabsList>
               <TabsTrigger value="public">{t.common.public}</TabsTrigger>
               <TabsTrigger value="custom">{t.common.custom}</TabsTrigger>
             </TabsList>
@@ -90,7 +90,7 @@ function SkillSettingsList({
       )}
       {filteredSkills.length > 0 &&
         filteredSkills.map((skill) => (
-          <Item className="w-full" variant="outline" key={skill.name}>
+          <Item className="w-full" key={skill.name}>
             <ItemContent>
               <ItemTitle>
                 <div className="flex items-center gap-2">{skill.name}</div>
@@ -102,7 +102,7 @@ function SkillSettingsList({
             <ItemActions>
               <Switch
                 checked={skill.enabled}
-                disabled={env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true"}
+                disabled={String(env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY) === "true"}
                 onCheckedChange={(checked) =>
                   enableSkill({ skillName: skill.name, enabled: checked })
                 }

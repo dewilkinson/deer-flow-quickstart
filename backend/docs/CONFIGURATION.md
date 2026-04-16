@@ -113,10 +113,10 @@ models:
     max_tokens: 4096
     temperature: 1.0  # MiniMax requires temperature in (0.0, 1.0]
     supports_vision: true
-  - name: openrouter-gemini-2.5-flash
-    display_name: Gemini 2.5 Flash (OpenRouter)
+  - name: openrouter-gemini-3-flash
+    display_name: Gemini 3 Flash (OpenRouter)
     use: langchain_openai:ChatOpenAI
-    model: google/gemini-2.5-flash-preview
+    model: google/gemini-3-flash-preview
     api_key: $OPENAI_API_KEY
     base_url: https://openrouter.ai/api/v1
 ```
@@ -149,10 +149,10 @@ Standard `langchain_openai:ChatOpenAI` silently drops `thought_signature` when s
 
 ```yaml
 models:
-  - name: gemini-2.5-pro-thinking
-    display_name: Gemini 2.5 Pro (Thinking)
+  - name: gemini-3-pro-thinking
+    display_name: Gemini 3 Pro (Thinking)
     use: deerflow.models.patched_openai:PatchedChatOpenAI
-    model: google/gemini-2.5-pro-preview   # model name as expected by your gateway
+    model: google/gemini-3-pro-preview   # model name as expected by your gateway
     api_key: $GEMINI_API_KEY
     base_url: https://<your-openai-compat-gateway>/v1
     max_tokens: 16384

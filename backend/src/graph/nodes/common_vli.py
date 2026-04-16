@@ -21,6 +21,7 @@ from src.tools.artifacts import read_session_artifact
 from src.config.vli import get_vli_path
 from src.utils.vli_metrics import log_vli_metric
 from src.config.agents import AGENT_LLM_MAP
+from src.utils.temporal import set_reference_time
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +40,9 @@ async def _run_node_with_tiered_fallback(agent_type, state, config, tools=None, 
         
     fallback_messages = []
     result = None
+
+    # [REPLAY_INSTRUMENTATION] Re-initialize Temporal Context for the specialist node
+    _instrument_temporal_context(state)
 
     for i in range(start_idx, len(TIERS)):
         tier = TIERS[i]
@@ -107,9 +111,22 @@ async def _run_node_with_tiered_fallback(agent_type, state, config, tools=None, 
             # Execute invocation (result is an AIMessage, State dict, or Structured Pydantic object)
             result = await asyncio.wait_for(runnable.ainvoke(llm_input), timeout=tier_timeout)
             
+            # [STABILITY] Null-safety guard for Pydantic/LangChain validation
+            if result is None:
+                logger.warning(f"[VLI_STABILITY] Tier {tier} returned None. Defaulting to empty AIMessage.")
+                result = AIMessage(content="", name="vli_null_recovery")
+            else:
+                # Force content to be a non-null string
+                if hasattr(result, "content") and result.content is None:
+                    result.content = ""
+
             # If we invoked a graph directly, result is a state dict; extract the last message for the unified return type
             if not is_structured and isinstance(result, dict) and "messages" in result and result["messages"]:
                 result = result["messages"][-1]
+                if result is None:
+                     result = AIMessage(content="", name="vli_null_recovery")
+                elif hasattr(result, "content") and result.content is None:
+                     result.content = ""
 
             
             # [PROMPT LEAKAGE GUARD] Detect if the model is echoing its own instructions/security protocol
@@ -142,7 +159,7 @@ async def _run_node_with_tiered_fallback(agent_type, state, config, tools=None, 
                 if i < len(TIERS) - 1:
                     next_tier = TIERS[i+1]
                     msg = f"STRUCTURAL_EXCEPTION: Integrity check failed on {tier} (Instruction Leak). Falling back to {next_tier}..."
-                    fallback_messages.append(AIMessage(content=msg, name="system_fallback"))
+                    fallback_messages.append(AIMessage(content=str(msg), name="system_fallback"))
                     continue
                 else:
                     raise TypeError(f"Agent Intelligence Failure: Structural validation failed on all tiers.")
@@ -363,3 +380,18 @@ def get_orchestrator_tools(config: RunnableConfig):
         read_session_artifact,
         manage_scheduled_tasks,
     ]
+
+
+def _instrument_temporal_context(state: dict):
+    """Detects replay origins in the state and re-synchronizes the virtual clock for the current node's context."""
+    metadata = state.get("metadata", {})
+    replay_origin = metadata.get("replay_origin")
+    
+    if replay_origin:
+        try:
+            from datetime import datetime
+            origin_dt = datetime.fromisoformat(replay_origin)
+            set_reference_time(origin_dt)
+            logger.info(f"[VLI_TEMPORAL_SYNC] Specialized node synchronized to: {replay_origin}")
+        except Exception as e:
+            logger.error(f"[VLI_TEMPORAL_SYNC] Failed to synchronize specialized node: {e}")

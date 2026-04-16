@@ -22,6 +22,7 @@ from src.prompts.planner_model import Plan, Step, StepType
 from src.prompts.template import apply_prompt_template
 from src.tools.shared_storage import GLOBAL_CONTEXT, ORCHESTRATOR_CONTEXT
 from src.services.macro_registry import macro_registry
+from src.utils.temporal import set_reference_time, parse_temporal_directive
 
 from ..types import State
 
@@ -106,6 +107,28 @@ async def vli_node(
         except:
             pass
 
+    # [TEMPORAL_INSTRUMENTATION] Replay Engine Detection
+    # Detect if the user is asking about a past timeframe
+    temporal_origin = parse_temporal_directive(user_query)
+    if temporal_origin:
+        logger.info(f"[VLI_SPINE] Temporal shift detected: {temporal_origin.strftime('%Y-%m-%d')}")
+        set_reference_time(temporal_origin)
+        
+        # [SYNCHRONIZATION] Propagate to state for the Planner (Coordinator)
+        state["metadata"] = state.get("metadata", {})
+        state["metadata"]["replay_origin"] = temporal_origin.isoformat()
+        
+        # Inject into telemetry for dashboard visibility
+        try:
+            from src.config.vli import get_vli_path
+            telemetry_file = get_vli_path("VLI_Raw_Telemetry.md")
+            timestamp = datetime.now().strftime("[%H:%M:%S]")
+            with open(telemetry_file, "a", encoding="utf-8") as tf:
+                tf.write(f"\n{timestamp} ### 🕰️ [REPLAY_ENGINE_ACTIVE]\n> Origin shifted to: **{temporal_origin.strftime('%Y-%m-%d %H:%M:%S')}**\n> All subsequent analytical samples are relative to this origin.\n")
+                tf.flush()
+        except:
+            pass
+
     # [COORDINATION LOGIC] Check if returning from a specialist
     if raw_messages:
         last_msg = raw_messages[-1]
@@ -132,7 +155,8 @@ async def vli_node(
                     update={
                         "steps_completed": steps_completed, 
                         "intent": "EXECUTE_DIRECT" if is_direct_final else state_intent,
-                        "current_plan": current_plan
+                        "current_plan": current_plan,
+                        "metadata": state.get("metadata", {})
                     }, 
                     goto=END if is_direct_final or state.get("raw_data_mode") else "reporter"
                 )
@@ -304,15 +328,16 @@ async def vli_node(
                         final_msgs.append(ToolMessage(content=str(res), tool_call_id=tc["id"], name=tc["name"]))
                 
                 # If we executed tools, we might need a brief status as the final AI message
-                direct_res = plan_obj_a.direct_response or "Command executed successfully (Direct Sync)."
+                direct_res = str(getattr(plan_obj_a, 'direct_response', '') or "Command executed successfully (Direct Sync).")
             else:
-                direct_res = plan_obj_a.direct_response
+                direct_res = str(getattr(plan_obj_a, 'direct_response', '') or "")
 
             return Command(
                 update={
-                    "messages": final_msgs + [AIMessage(content=direct_res, name="parser_finalize")], 
+                    "messages": final_msgs + [AIMessage(content=str(direct_res), name="parser_finalize")], 
                     "intent": final_intent,
-                    "directive": "Provide ONLY the final direct calculation or status result. NO NARRATIVE."
+                    "directive": "Provide ONLY the final direct calculation or status result. NO NARRATIVE.",
+                    "metadata": state.get("metadata", {})
                 },
                 goto=END if (final_intent == "EXECUTE_DIRECT" or is_direct) else "reporter"
             )
@@ -355,7 +380,8 @@ async def vli_node(
         return Command(
             update={
                 "messages": fb_msgs1 + [response] + t_msgs + fb_msgs2 + [AIMessage(content=final_answer, name="vli_coordinator")],
-                "intent": "EXECUTE_DIRECT" if should_bypass_reporter else state.get("intent", "MARKET_INSIGHT")
+                "intent": "EXECUTE_DIRECT" if should_bypass_reporter else state.get("intent", "MARKET_INSIGHT"),
+                "metadata": state.get("metadata", {})
             }, 
             goto=END if should_bypass_reporter else "reporter"
         )
@@ -490,7 +516,8 @@ async def vli_node(
             update={
                 "current_plan": plan_obj, 
                 "intent": "EXECUTE_DIRECT" if is_direct else state_intent, # Propagate to top-level
-                "messages": fallback_msgs_all + [AIMessage(content=final_answer, name="vli_coordinator")]
+                "messages": fallback_msgs_all + [AIMessage(content=final_answer, name="vli_coordinator")],
+                "metadata": state.get("metadata", {})
             }, 
             goto=END if is_direct or state.get("raw_data_mode") else "reporter"
         )
@@ -511,7 +538,8 @@ async def vli_node(
             "steps_completed": 0, 
             "research_topic": plan_obj.title, 
             "locale": plan_obj.locale,
-            "messages": fallback_msgs_all + [AIMessage(content=f"[VLI_SPINE] Plan generated: {plan_obj.title}", name="coordinator")]
+            "messages": fallback_msgs_all + [AIMessage(content=f"[VLI_SPINE] Plan generated: {plan_obj.title}", name="coordinator")],
+            "metadata": state.get("metadata", {})
         }, 
         goto=next_agent
     )

@@ -10,7 +10,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { useI18n } from "@/core/i18n/hooks";
 import { useMCPConfig, useEnableMCPServer } from "@/core/mcp/hooks";
-import type { MCPServerConfig } from "@/core/mcp/types";
+// import type { MCPServerConfig } from "@/core/mcp/types";
 import { env } from "@/env";
 
 import { SettingsSection } from "./settings-section";
@@ -37,13 +37,13 @@ export function ToolSettingsPage() {
 function MCPServerList({
   servers,
 }: {
-  servers: Record<string, MCPServerConfig>;
+  servers: Record<string, any>;
 }) {
   const { mutate: enableMCPServer } = useEnableMCPServer();
   return (
     <div className="flex w-full flex-col gap-4">
       {Object.entries(servers).map(([name, config]) => (
-        <Item className="w-full" variant="outline" key={name}>
+        <Item className="w-full" key={name}>
           <ItemContent>
             <ItemTitle>
               <div className="flex items-center gap-2">
@@ -57,7 +57,7 @@ function MCPServerList({
           <ItemActions>
             <Switch
               checked={config.enabled}
-              disabled={env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true"}
+              disabled={String(env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY) === "true"}
               onCheckedChange={(checked) =>
                 enableMCPServer({ serverName: name, enabled: checked })
               }
