@@ -162,43 +162,8 @@ def _bucket_sparkline_data(df: pd.DataFrame, ref_time: datetime, current_price: 
             values.append(None)
             continue
             
-        # [SAME_DAY_GUARD] Strict Intra-Day Isolation
-        # Ensure the retrieved value is from the same calendar day as the target timestamp.
-        target_ts = pd.Timestamp(tt)
-        val_idx = temp_series.index.searchsorted(tt, side='right') - 1
-        
-        # [PREVENT_WRAP_AROUND]
-        if val_idx < 0:
-            if i > 0 and i < 3: print(f"{i} failed 2: val_idx < 0")
-            values.append(None)
-            continue
-            
-        same_day_val = temp_series.iloc[val_idx]
-        actual_time = temp_series.index[val_idx]
-        
-        # [TZ ALIGNMENT SAFEGUARD]
-        if actual_time.tz is not None and getattr(target_ts, 'tz', None) is not None:
-            if actual_time.tz_convert('America/New_York').date() != target_ts.tz_convert('America/New_York').date():
-                if i > 0 and i < 3: print(f"{i} failed 3: tz aware date mismatch. actual: {actual_time}, target: {target_ts}")
-                values.append(None)
-                continue
-        elif actual_time.tz is None and getattr(target_ts, 'tz', None) is None:
-            if actual_time.date() != target_ts.date():
-                if i > 0 and i < 3: print(f"{i} failed 4: tz naive date mismatch. actual: {actual_time}, target: {target_ts}")
-                values.append(None)
-                continue
-        else:
-            if i > 0 and i < 3: print(f"{i} failed 5: tz mismatch actual tz {actual_time.tz} != target tz {getattr(target_ts, 'tz', None)}")
-            values.append(None)
-            continue
-            
-        # [PREVENT_FUTURE_FLATLINE] If target time is after last known data
-        if tt > last_data_time + pd.Timedelta(minutes=5) and i < len(target_index) - 1:
-            if i > 0 and i < 3: print(f"{i} failed 6: tt > last_data_time")
-            values.append(None)
-        else:
-            final_val = val if i < len(target_index) - 1 else current_price
-            values.append(round(float(final_val), 4))
+        final_val = val if i < len(target_index) - 1 else current_price
+        values.append(round(float(final_val), 4))
             
     # [STABILITY] If everything is None except the last point, return current price flatline
     if all(v is None for v in values[:-1]):
@@ -1354,7 +1319,7 @@ async def get_macro_symbols(fast_update: bool = False) -> str:
                     threads=False,
                     timeout=15.0,
                     auto_adjust=False,
-                    prepost=False
+                    prepost=True
                 )
             async with _get_yf_semaphore():
                 res = await asyncio.to_thread(_do_fetch)
@@ -1430,7 +1395,7 @@ async def get_macro_symbols(fast_update: bool = False) -> str:
             if sparkline_df.empty or sparkline_df.isna().all().all():
                 try:
                     logger.info(f"VLI: Batch 1m empty for {ticker}, fetching individually.")
-                    sdf = await asyncio.to_thread(yfinance.download, ticker, period="2d", interval="1m", prepost=False, progress=False, threads=False)
+                    sdf = await asyncio.to_thread(yfinance.download, ticker, period="2d", interval="1m", prepost=True, progress=False, threads=False)
                     if sdf is not None and not sdf.empty:
                         try:
                             sdf.index = pd.to_datetime(sdf.index, utc=True).tz_convert('America/New_York').tz_localize(None)
