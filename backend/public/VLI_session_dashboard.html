@@ -47,32 +47,26 @@
 
         /* --- DASHBOARD GRID --- */
         .dashboard-container {
-            display: grid;
-            grid-template-columns: 1fr 475px;
-            /* CI Sidebar expanded to 475px */
+            position: relative;
+            width: 100vw;
             height: 100vh;
-            gap: 1.5px;
-            /* Sharp spacing */
-            background: var(--card-border);
+            background-color: #0d111b; /* Deep Drafting Slate */
+            background-image: 
+                /* Mathematically Anchored 120px Dotted Major Lines */
+                radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.12) 1px, transparent 1px),
+                radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.12) 1px, transparent 1px),
+                /* Mathematically Anchored 40px Solid Minor Grid */
+                linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+            background-size: 120px 8px, 8px 120px, 100% 40px, 40px 100%;
+            background-position: 0 0; /* Strict Origin Alignment */
+            overflow: hidden;
+            box-shadow: inset 0 0 100px rgba(0,0,0,0.5); 
         }
 
-        .grid-left {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            grid-template-rows: 5fr 1fr;
-            gap: 15px;
-            padding: 20px;
-            overflow: hidden;
-            background: var(--cobalt-deep);
-        }
+        /* Grid containers removed for WM mode, cards moved to root */
 
-        .grid-right {
-            background: #0d1117;
-            border-left: 1px solid var(--card-border);
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
+        /* .grid-right removed */
 
         /* --- CARDS & UI COMPONENTS --- */
         .card {
@@ -83,22 +77,139 @@
             display: flex;
             flex-direction: column;
             overflow: hidden;
-            position: relative;
-            min-height: 0;
+            position: absolute;
+            min-height: 100px;
+            min-width: 200px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+            transition: opacity 0.2s ease, transform 0.1s ease;
         }
 
         .card-header {
-            padding: 12px 18px;
-            background: rgba(255, 255, 255, 0.03);
+            padding: 10px 15px;
+            background: rgba(255, 255, 255, 0.05);
             border-bottom: 1px solid var(--card-border);
             display: flex;
             justify-content: space-between;
             align-items: center;
             font-weight: 700;
-            font-size: 11px;
-            letter-spacing: 1.5px;
+            font-size: 10px;
+            letter-spacing: 1.2px;
             text-transform: uppercase;
             color: var(--text-muted);
+            cursor: move;
+            user-select: none;
+        }
+
+        .card-controls {
+            display: flex;
+            gap: 8px;
+            margin-left: 10px;
+        }
+
+        .win-btn {
+            width: 14px;
+            height: 14px;
+            cursor: pointer;
+            transition: opacity 0.2s, transform 0.2s;
+            opacity: 0.5;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .win-btn:hover {
+            opacity: 1;
+            transform: scale(1.1);
+        }
+
+        /* Minimalist Line Icons */
+        .win-min::after {
+            content: '';
+            width: 6px;
+            height: 6px;
+            border-right: 1.5px solid var(--text-primary);
+            border-bottom: 1.5px solid var(--text-primary);
+            transform: translateY(-2px) rotate(45deg);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .card.collapsed .win-min::after {
+            transform: translateY(1px) rotate(225deg);
+        }
+
+        .win-max {
+            border: 1.5px solid var(--text-primary);
+            border-radius: 1px;
+            width: 10px !important;
+            height: 10px !important;
+            margin: 2px;
+        }
+
+        .win-close::before, .win-close::after {
+            content: '';
+            position: absolute;
+            width: 12px;
+            height: 1.5px;
+            background: var(--text-primary);
+        }
+        .win-close::before { transform: rotate(45deg); }
+        .win-close::after { transform: rotate(-45deg); }
+
+        .win-pop::before {
+            content: '⧉';
+            font-size: 11px;
+            color: var(--text-primary);
+            line-height: 1;
+        }
+
+        /* Collapse State */
+        .card.collapsed {
+            height: auto !important;
+            min-height: 0;
+        }
+        .card.collapsed .card-body,
+        .card.collapsed .card-resizer {
+            display: none !important;
+        }
+
+        /* --- STANDALONE MODE (VLI ORCHESTRA) --- */
+        body.standalone {
+            background: #000;
+        }
+        body.standalone .vli-menubar,
+        body.standalone .card:not(.popout-target),
+        body.standalone #wm-workspace::before {
+            display: none !important;
+        }
+        body.standalone .popout-target {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            margin: 0 !important;
+            border: none !important;
+            border-radius: 0 !important;
+            z-index: 9999 !important;
+        }
+        body.standalone .popout-target .card-header {
+            cursor: default !important;
+        }
+        body.standalone .popout-target .win-pop,
+        body.standalone .popout-target .win-min,
+        body.standalone .popout-target .win-max {
+            display: none !important;
+        }
+
+        .card-resizer {
+            position: absolute;
+            right: 0;
+            bottom: 0;
+            width: 15px;
+            height: 15px;
+            cursor: nwse-resize;
+            background: linear-gradient(135deg, transparent 50%, rgba(255,255,255,0.1) 50%);
+            z-index: 10;
         }
 
         .card-body {
@@ -637,6 +748,105 @@
         .analysis-report-body::-webkit-scrollbar-thumb:hover {
             background: rgba(255, 255, 255, 0.15);
         }
+
+        /* --- VLI INSTITUTIONAL MENUBAR --- */
+        .vli-menubar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 32px;
+            background: rgba(13, 17, 27, 0.95);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 15px;
+            z-index: 2000;
+            user-select: none;
+            font-family: 'Outfit';
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.8px;
+            color: var(--text-primary);
+        }
+
+        .menu-left, .menu-right {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .menu-item {
+            position: relative;
+            cursor: pointer;
+            padding: 0 10px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            transition: background 0.2s;
+            color: var(--text-muted);
+        }
+
+        .menu-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+            color: #fff;
+        }
+
+        .menu-dropdown {
+            position: absolute;
+            top: 32px;
+            left: 0;
+            background: #0d111b;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-top: none;
+            min-width: 180px;
+            display: none;
+            flex-direction: column;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+        .menu-item:hover .menu-dropdown {
+            display: flex;
+        }
+
+        .dropdown-item {
+            padding: 10px 15px;
+            transition: background 0.2s;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .dropdown-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--cobalt-blue);
+        }
+
+        .dropdown-divider {
+            height: 1px;
+            background: rgba(255, 255, 255, 0.05);
+            margin: 5px 0;
+        }
+
+        .status-pill {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 10px;
+            color: var(--text-muted);
+            background: rgba(255, 255, 255, 0.03);
+            padding: 4px 10px;
+            border-radius: 4px;
+        }
+
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--emerald-green);
+        }
     </style>
 </head>
 
@@ -644,126 +854,340 @@
     <!-- Error Overlay disabled to prevent layout integrity locks during audit sessions -->
     <!-- <div id="error-overlay">...</div> -->
 
-    <div class="dashboard-container">
-        <div class="grid-left" id="operational-grid">
-
-
-            <div class="card" style="grid-column: 1;" data-ux-type-guid="3fb8c801-443b-466d-888e-64d559868661"
-                data-ux-instance-guid="de1ef310-8588-4e89-9852-789a71465241">
-                <div class="card-header">
-                    <div>RAW TELEMETRY TAIL <span class="live-badge">LIVE</span></div>
-                    <span class="descriptor" id="rt-btn" onclick="resetVLI()"
-                        title="Reset Session (Hard Kill)">RT</span>
-                </div>
-                <div class="card-body terminal" id="telemetry-body"></div>
-            </div>
-
-            <!-- New Macro Watchlist Transit Card -->
-            <div class="card" style="grid-column: 2;" data-ux-type-guid="5a06587c-6950-4ff6-8367-7389148d2873"
-                data-ux-instance-guid="f3e5b3b0-681e-4c7b-891a-3e5f29c8e8d5">
-                <div class="card-header">
-                    <div style="display:flex; align-items:center; gap:8px;">
-                        <div>MACRO WATCHLIST <span class="live-badge">LIVE</span></div>
-                    </div>
-                    <div style="display:flex; align-items:center; gap:8px;">
-                        <span class="descriptor">MW</span>
-                    </div>
-                </div>
-                <div class="card-body" style="overflow-y: hidden;">
-                    <table class="macro-table" style="width: 100%;">
-                        <thead>
-                            <tr style="font-size: 14px; letter-spacing: 2px;">
-                                <th style="padding-bottom: 15px; text-align: left;">TICKER</th>
-                                <th style="padding-bottom: 15px; text-align: left;">PRICE</th>
-                                <th style="padding-bottom: 15px; text-align: left;">CHANGE</th>
-                                <th style="padding-bottom: 15px; text-align: left;">SORTINO</th>
-                                <th style="padding-bottom: 15px; text-align: left;">TREND (5M)</th>
-                            </tr>
-                        </thead>
-                        <tbody id="macro-watchlist-body" style="font-size: 15px;">
-                            <tr>
-                                <td colspan="4" style="text-align:center; color:var(--text-muted); padding:30px;">
-                                    Awaiting Data</td>
-                            </tr>
-                        </tbody>
-                    </table>
+    <div class="vli-menubar">
+        <div class="menu-left">
+            <div class="menu-item" style="color: var(--cobalt-blue); font-weight: 800;">VLI
+                <div class="menu-dropdown">
+                    <div class="dropdown-item" onclick="alert('VLI Integrated Engine \nVersion: 4.8.2-INSTITUTIONAL\nStatus: Operational')">System Architecture</div>
+                    <div class="dropdown-divider"></div>
+                    <div class="dropdown-item" onclick="resetVLI()">Reset Backbone Session</div>
+                    <div class="dropdown-item" onclick="toggleDirectMode()">Fast-Path Mode <span id="menu-direct-status" style="font-size: 9px; opacity: 0.6;">OFF</span></div>
                 </div>
             </div>
-
-            <!-- 3. Analysis Report (Technical Document Viewer) -->
-            <div class="card" style="grid-column: 1 / span 2;" data-ux-type-guid="8c4f9a2e-3d71-4b10-9c2b-e9d6c35c4a17"
-                data-ux-instance-guid="7a1d9c5e-8b4e-4f3d-9a2c-d5e6f7a8b9c0">
-                <div class="card-header">
-                    <div>ANALYSIS REPORT</div>
-                    <span class="descriptor">AR</span>
+            <div class="menu-item">WINDOWS
+                <div class="menu-dropdown">
+                    <div class="dropdown-item" onclick="toggleWindow('win-coordinator')">Coordinator Interface <span>ALT+1</span></div>
+                    <div class="dropdown-item" onclick="toggleWindow('win-telemetry')">Raw Telemetry <span>ALT+2</span></div>
+                    <div class="dropdown-item" onclick="toggleWindow('win-watchlist')">Macro Watchlist <span>ALT+3</span></div>
+                    <div class="dropdown-item" onclick="toggleWindow('win-report')">Analysis Report <span>ALT+4</span></div>
                 </div>
-                <div class="card-body terminal analysis-report-body" id="analysis-report-viewer">
-                    <div style="color: var(--text-muted); font-size: 13px; text-align: center; margin-top: 40px;">
-                        Awaiting Results</div>
+            </div>
+            <div class="menu-item">WORKSPACE
+                <div class="menu-dropdown">
+                    <div class="dropdown-item" onclick="resetLayout()">Reset Workspace Geometry</div>
+                    <div class="dropdown-item" onclick="poll()">Force Global Sync</div>
+                    <div class="dropdown-divider"></div>
+                    <div class="dropdown-item" onclick="cascadeWindows()">Cascade Windows</div>
                 </div>
             </div>
         </div>
+        <div class="menu-right">
+            <div class="status-pill">
+                <div class="status-dot"></div>
+                <span id="menu-sync-status">SYNC_OK</span>
+            </div>
+            <div style="font-family: var(--font-mono); color: var(--text-muted); opacity: 0.8;" id="system-clock">09:48:46</div>
+        </div>
+    </div>
 
-        <!-- COORDINATOR INTERFACE -->
-        <div class="grid-right" data-ux-type-guid="a1b2c3d4-e5f6-4a5b-bcde-f1e2d3c4b5a6"
-            data-ux-instance-guid="b6a5c4d3-e2f1-4b5a-9d8c-7f6e5d4c3b2a">
-            <div class="card-header" style="background:transparent; border-bottom:1px solid var(--card-border);">
+    <div class="dashboard-container" id="wm-workspace">
+        
+        <!-- CARD: COORDINATOR INTERFACE -->
+        <div class="card" id="win-coordinator" style="top: 50px; right: 20px; width: 450px; height: calc(100vh - 70px); z-index: 200;">
+            <div class="card-header">
                 <div style="display:flex; align-items:center; gap:8px;">
                     <div class="led-small led-green"></div>
-                    <div>COORDINATOR INTERFACE</div>
-                    <span class="live-badge" id="conn-status"
-                        style="margin-left:5px; background: rgba(63, 185, 80, 0.15); color: var(--emerald-green);">LIVE</span>
+                    <div>COORDINATOR INTERFACE <span class="live-badge" id="conn-status">LIVE</span></div>
                 </div>
-                <div style="display:flex; align-items:center; gap:12px;">
-                    <div id="async-mode-btn" class="direct-mode-toggle off" onclick="toggleAsyncMode()"
-                        title="Toggle Background Deep Synthesis" style="display: none;">
-                        <div class="dot"></div>
-                        <span class="label">ASYNC REPORT: OFF</span>
-                    </div>
-                    <div id="direct-mode-btn" class="direct-mode-toggle on" onclick="toggleDirectMode()">
-                        <div class="dot"></div>
-                        <span class="label">COBALT AI: ON</span>
-                    </div>
-                    <span class="descriptor">CI</span>
+                <div class="card-controls">
+                    <div class="win-btn win-min" onclick="toggleCollapse('win-coordinator')" title="Collapse"></div>
+                    <div class="win-btn win-pop" onclick="popoutWindow('win-coordinator')" title="Pop-out"></div>
+                    <div class="win-btn win-max" onclick="maxWin('win-coordinator')" title="Maximize"></div>
+                    <div class="win-btn win-close" onclick="closeWin('win-coordinator')" title="Close"></div>
                 </div>
             </div>
-            <div class="chat-messages" id="chat-messages">
-                <div class="msg msg-ai"><strong>VLI</strong> initialized. Awaiting market directives or Action Plan
-                    updates.</div>
-            </div>
-            <div class="input-area">
-                <div class="gemini-panel">
-                    <textarea id="chat-input" placeholder="Enter directive or $TICKER analysis..."></textarea>
-                    <div class="panel-controls">
-                        <div style="display:flex; align-items:center; gap:10px;">
-                            <div class="media-btn">+</div>
-
-                            <div class="control-group">
-                                <select class="control-select">
-                                    <option selected>Thinking</option>
-                                    <option>Fast</option>
-                                </select>
-                                <span class="dropdown-arrow">▼</span>
-                            </div>
-
-                            <div class="control-group" style="margin-left: 5px;">
-                                <select class="control-select">
-                                    <option selected>Gemini 3 Flash</option>
-                                    <option>Gemini 3 Pro</option>
-                                    <option>Claude 3.5 Sonnet</option>
-                                </select>
-                                <span class="dropdown-arrow">▼</span>
+            <div class="card-body" style="padding:0; overflow:hidden; display:flex; flex-direction:column;">
+                <div class="chat-messages" id="chat-messages">
+                    <div class="msg msg-ai"><strong>VLI</strong> initialized. Draggable Window Manager mode active.</div>
+                </div>
+                <div class="input-area">
+                    <div class="gemini-panel">
+                        <textarea id="chat-input" placeholder="Enter directive..."></textarea>
+                        <div class="panel-controls">
+                            <div style="display:flex; align-items:center; gap:10px;">
+                                <div class="send-btn" id="send-stop-btn" onclick="handleSendStop()">➤</div>
                             </div>
                         </div>
-                        <div class="send-btn" id="send-stop-btn" onclick="handleSendStop()">➤</div>
                     </div>
                 </div>
             </div>
+            <div class="card-resizer"></div>
         </div>
+
+        <!-- CARD: TELEMETRY -->
+        <div class="card" id="win-telemetry" style="top: 50px; left: 20px; width: 450px; height: 350px; z-index: 100;">
+            <div class="card-header">
+                <div>RAW TELEMETRY <span class="live-badge">LIVE</span></div>
+                <div class="card-controls">
+                    <div class="win-btn win-min" onclick="toggleCollapse('win-telemetry')" title="Collapse"></div>
+                    <div class="win-btn win-pop" onclick="popoutWindow('win-telemetry')" title="Pop-out"></div>
+                    <div class="win-btn win-max" onclick="maxWin('win-telemetry')" title="Maximize"></div>
+                    <div class="win-btn win-close" onclick="closeWin('win-telemetry')" title="Close"></div>
+                </div>
+            </div>
+            <div class="card-body terminal" id="telemetry-body"></div>
+            <div class="card-resizer"></div>
+        </div>
+
+        <!-- CARD: MACRO WATCHLIST -->
+        <div class="card" id="win-watchlist" style="top: 50px; left: 490px; width: 550px; height: 350px; z-index: 110;">
+            <div class="card-header">
+                <div>MACRO WATCHLIST <span class="live-badge">LIVE</span></div>
+                <div class="card-controls">
+                    <div class="win-btn win-min" onclick="toggleCollapse('win-watchlist')" title="Collapse"></div>
+                    <div class="win-btn win-pop" onclick="popoutWindow('win-watchlist')" title="Pop-out"></div>
+                    <div class="win-btn win-close" onclick="closeWin('win-watchlist')" title="Close"></div>
+                </div>
+            </div>
+            <div class="card-body" style="overflow-y: hidden; padding: 10px;">
+                <table class="macro-table">
+                    <thead>
+                        <tr>
+                            <th>TICKER</th>
+                            <th>PRICE</th>
+                            <th>CHANGE</th>
+                            <th>SORTINO</th>
+                            <th>TREND (5M)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="macro-watchlist-body">
+                        <tr><td colspan="5" style="text-align:center; padding:20px;">Standby...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="card-resizer"></div>
+        </div>
+
+        <!-- CARD: ANALYSIS REPORT -->
+        <div class="card" id="win-report" style="top: 420px; left: 20px; width: 1020px; height: calc(100vh - 440px); z-index: 120;">
+            <div class="card-header">
+                <div>ANALYSIS REPORT</div>
+                <div class="card-controls">
+                    <div class="win-btn win-min" onclick="toggleCollapse('win-report')" title="Collapse"></div>
+                    <div class="win-btn win-pop" onclick="popoutWindow('win-report')" title="Pop-out"></div>
+                    <div class="win-btn win-max" onclick="maxWin('win-report')" title="Maximize"></div>
+                    <div class="win-btn win-close" onclick="closeWin('win-report')" title="Close"></div>
+                </div>
+            </div>
+            <div class="card-body terminal analysis-report-body" id="analysis-report-viewer">
+                <div style="color:var(--text-muted); text-align:center; padding:40px;">No report active.</div>
+            </div>
+            <div class="card-resizer"></div>
+        </div>
+
     </div>
 
     <script>
         let refreshCountdown = 60;
+        let activeWin = null;
+        let winManager = {
+            dragging: null,
+            resizing: null,
+            startX: 0,
+            startY: 0,
+            startW: 0,
+            startH: 0,
+            startTop: 0,
+            startLeft: 0,
+            maxZ: 1000
+        };
+
+        function bringToFront(el) {
+            winManager.maxZ++;
+            el.style.zIndex = winManager.maxZ;
+        }
+
+        function initWindowManager() {
+            loadLayout();
+            document.querySelectorAll('.card-header').forEach(header => {
+                header.addEventListener('mousedown', (e) => {
+                    const card = header.closest('.card');
+                    bringToFront(card);
+                    
+                    if (e.target.classList.contains('win-btn')) return;
+                    
+                    winManager.dragging = card;
+                    winManager.startX = e.clientX;
+                    winManager.startY = e.clientY;
+                    winManager.startTop = card.offsetTop;
+                    winManager.startLeft = card.offsetLeft;
+                    
+                    document.addEventListener('mousemove', onMouseMove);
+                    document.addEventListener('mouseup', onMouseUp);
+                });
+            });
+
+            document.querySelectorAll('.card-resizer').forEach(resizer => {
+                resizer.addEventListener('mousedown', (e) => {
+                    const card = resizer.closest('.card');
+                    bringToFront(card);
+                    
+                    winManager.resizing = card;
+                    winManager.startX = e.clientX;
+                    winManager.startY = e.clientY;
+                    winManager.startW = card.offsetWidth;
+                    winManager.startH = card.offsetHeight;
+                    
+                    document.addEventListener('mousemove', onMouseMove);
+                    document.addEventListener('mouseup', onMouseUp);
+                    e.preventDefault();
+                });
+            });
+        }
+
+        function onMouseMove(e) {
+            if (winManager.dragging) {
+                const dx = e.clientX - winManager.startX;
+                const dy = e.clientY - winManager.startY;
+                winManager.dragging.style.top = (winManager.startTop + dy) + 'px';
+                winManager.dragging.style.left = (winManager.startLeft + dx) + 'px';
+                winManager.dragging.style.right = 'auto'; 
+                winManager.dragging.style.bottom = 'auto'; 
+                winManager.dragging.style.margin = '0';            }
+            if (winManager.resizing) {
+                const dx = e.clientX - winManager.startX;
+                const dy = e.clientY - winManager.startY;
+                winManager.resizing.style.width = (winManager.startW + dx) + 'px';
+                winManager.resizing.style.height = (winManager.startH + dy) + 'px';
+            }
+        }
+
+        function saveLayout() {
+            const layout = {};
+            document.querySelectorAll('.card').forEach(card => {
+                layout[card.id] = {
+                    top: card.style.top,
+                    left: card.style.left,
+                    width: card.style.width,
+                    height: card.style.height,
+                    zIndex: card.style.zIndex,
+                    display: card.style.display,
+                    collapsed: card.classList.contains('collapsed')
+                };
+            });
+            localStorage.setItem('vli_wm_layout', JSON.stringify(layout));
+        }
+
+        function loadLayout() {
+            const saved = localStorage.getItem('vli_wm_layout');
+            if (!saved) return;
+            try {
+                const layout = JSON.parse(saved);
+                for (const id in layout) {
+                    const card = document.getElementById(id);
+                    if (card) {
+                        const state = layout[id];
+                        const collapsed = state.collapsed;
+                        delete state.collapsed; // Don't apply 'true/false' to style
+                        Object.assign(card.style, state);
+                        if (collapsed) card.classList.add('collapsed');
+                        
+                        const z = parseInt(state.zIndex) || 100;
+                        if (z > winManager.maxZ) winManager.maxZ = z;
+                    }
+                }
+            } catch(e) {}
+        }
+
+        function onMouseUp() {
+            if (winManager.dragging || winManager.resizing) {
+                saveLayout();
+            }
+            winManager.dragging = null;
+            winManager.resizing = null;
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+        }
+
+        function toggleCollapse(id) {
+            const el = document.getElementById(id);
+            if (el.classList.contains('collapsed')) {
+                el.classList.remove('collapsed');
+                el.style.height = el.dataset.oldHeight || '350px';
+            } else {
+                el.dataset.oldHeight = el.style.height;
+                el.classList.add('collapsed');
+            }
+            saveLayout();
+        }
+
+        function maxWin(id) {
+            const el = document.getElementById(id);
+            if (el.dataset.isMax === "true") {
+                el.style.top = el.dataset.oldTop;
+                el.style.left = el.dataset.oldLeft;
+                el.style.width = el.dataset.oldWidth;
+                el.style.height = el.dataset.oldHeight;
+                el.dataset.isMax = "false";
+            } else {
+                el.dataset.oldTop = el.style.top;
+                el.dataset.oldLeft = el.style.left;
+                el.dataset.oldWidth = el.style.width;
+                el.dataset.oldHeight = el.style.height;
+                el.style.top = "0";
+                el.style.left = "0";
+                el.style.width = "100vw";
+                el.style.height = "100vh";
+                el.dataset.isMax = "true";
+                bringToFront(el);
+            }
+        }
+
+        function closeWin(id) {
+            document.getElementById(id).style.display = 'none';
+        }
+
+        window.addEventListener('blur', onMouseUp);
+        document.addEventListener('DOMContentLoaded', () => {
+            initWindowManager();
+            // --- VLI ORCHESTRA STANDALONE DETECTION ---
+            if (popoutId) {
+                console.log("[VLI_ORCHESTRA] Satellite Mode Active for:", popoutId);
+                document.body.classList.add('standalone');
+                const target = document.getElementById(popoutId);
+                if (target) {
+                    target.classList.add('popout-target');
+                    target.style.position = 'static';
+                    target.style.width = '100vw';
+                    target.style.height = '100vh';
+                }
+                bc.onmessage = (e) => {
+                    if (e.data.type === 'STATE_UPDATE') {
+                        const data = e.data.state;
+                        // Synchronize only the target card
+                        if (popoutId === 'win-telemetry') renderTelemetry(data);
+                        if (popoutId === 'win-watchlist') renderWatchlist(data);
+                        if (popoutId === 'win-report') renderReport(data);
+                        if (window.VLI_DEBUG) console.log("[VLI_ORCHESTRA] Satellite Node Re-Sync Successful.");
+                    }
+                };
+            }
+        });
+
+        // --- VLI ORCHESTRA SPINE ---
+        const bc = new BroadcastChannel('vli_spine');
+        const urlParams = new URLSearchParams(window.location.search);
+        const popoutId = urlParams.get('popout');
+
+        function popoutWindow(id) {
+            const width = 800;
+            const height = 600;
+            const left = (screen.width - width) / 2;
+            const top = (screen.height - height) / 2;
+            window.open(window.location.href.split('?')[0] + '?popout=' + id, id, 
+                `width=${width},height=${height},top=${top},left=${left},toolbar=no,menubar=no,status=no`);
+        }
+
         async function resetVLI() {
             const rtBtn = document.getElementById('rt-btn');
             rtBtn.style.color = 'var(--ruby-red)';
@@ -788,6 +1212,73 @@
                 }, 1000);
             }
         }
+
+        function toggleDirectMode() {
+            directMode = !directMode;
+            const btn = document.getElementById('direct-mode-btn');
+            const menuBtn = document.getElementById('menu-direct-status');
+            if (btn) btn.classList.toggle('active', directMode);
+            if (menuBtn) menuBtn.innerText = directMode ? "ON" : "OFF";
+        }
+
+        function toggleWindow(id) {
+            const el = document.getElementById(id);
+            if (el.style.display === 'none') {
+                el.style.display = 'flex';
+                bringToFront(el);
+            } else {
+                el.style.display = 'none';
+            }
+            saveLayout();
+        }
+
+        function resetLayout() {
+            if (confirm("Reset Institutional Workspace to factory geometry?")) {
+                localStorage.removeItem('vli_wm_layout');
+                location.reload();
+            }
+        }
+
+        function cascadeWindows() {
+            const cards = document.querySelectorAll('.card');
+            let offset = 60;
+            cards.forEach((card, i) => {
+                if (card.style.display !== 'none') {
+                    card.style.top = offset + 'px';
+                    card.style.left = offset + 'px';
+                    bringToFront(card);
+                    offset += 30;
+                }
+            });
+            saveLayout();
+        }
+
+        function updateClock() {
+            const clock = document.getElementById('system-clock');
+            if (clock) {
+                const now = new Date();
+                clock.innerText = now.toLocaleTimeString('en-US', { hour12: false });
+            }
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        // --- WINDOWS HOTKEY ORCHESTRATION ---
+        window.addEventListener('keydown', (e) => {
+            if (e.altKey && !e.ctrlKey && !e.shiftKey) {
+                const key = e.key;
+                const winMap = {
+                    '1': 'win-coordinator',
+                    '2': 'win-telemetry',
+                    '3': 'win-watchlist',
+                    '4': 'win-report'
+                };
+                if (winMap[key]) {
+                    e.preventDefault();
+                    toggleWindow(winMap[key]);
+                }
+            }
+        });
 
         let directMode = false;
         let lastVliThreadId = null;
@@ -993,134 +1484,21 @@
                 document.getElementById('conn-status').innerText = "LIVE";
                 document.getElementById('conn-status').style.color = "var(--emerald-green)";
                 if (data.last_macro_update) {
-                    window.lastMacroUpdateTimestamp = data.last_macro_update; // Store globally for audit phase-locking
-                    const lastUpdate = data.last_macro_update * 1000; // ms
+                    window.lastMacroUpdateTimestamp = data.last_macro_update;
+                    const lastUpdate = data.last_macro_update * 1000;
                     const now = Date.now();
                     const secondsPassed = Math.floor((now - lastUpdate) / 1000);
                     refreshCountdown = Math.max(0, 60 - (secondsPassed % 60));
                 }
 
-                // 1. Macros (Handled only if overview elements are present)
-                const m1 = document.getElementById('macro-list-1');
-                const m2 = document.getElementById('macro-list-2');
-                if (data.macros && m1 && m2) {
-                    m1.innerHTML = ''; m2.innerHTML = '';
-                    data.macros.forEach((m, i) => {
-                        const target = i < (data.macros.length / 2) ? m1 : m2;
-                        const row = document.createElement('tr');
-                        const price = m.price ? `$${parseFloat(m.price).toFixed(2)}` : '---';
-                        const changeVal = (m.change !== undefined && m.change !== null) ? `${m.change >= 0 ? '+' : ''}${parseFloat(m.change).toFixed(2)}%` : '---';
-                        const color = m.color || (m.change >= 0 ? 'var(--price-up)' : 'var(--price-down)');
+                // --- VLI ORCHESTRA: MASTER RENDER & BROADCAST ---
+                renderMacros(data);
+                renderWatchlist(data);
+                renderTelemetry(data);
+                renderReport(data);
 
-                        row.innerHTML = `
-                            <td class="symbol-bold">${m.symbol}</td>
-                            <td class="val-mono" style="font-weight:400;">${price}</td>
-                            <td class="val-mono" style="color:${color}; font-weight:400;">${changeVal}</td>
-                        `;
-                        target.appendChild(row);
-                    });
-                }
-
-                // 1b. Macro Watchlist Content (Structural JSON Support)
-                if (data.macro_watchlist_content) {
-                    const tbody = document.getElementById('macro-watchlist-body');
-                    const mw = data.macro_watchlist_content;
-
-                    if (mw.type === 'table' && mw.rows) {
-                        if (!window.lastMacroWatchlistState) window.lastMacroWatchlistState = {};
-                        tbody.innerHTML = '';
-
-                        mw.rows.forEach(row => {
-                            // Headers: ["Asset", "Ticker", "Price", "Change %", "Sortino", "Trend (5m)"]
-                            const label = row[0];
-                            const ticker = row[1];
-                            const priceDisplay = row[2]; // e.g. "$170.50"
-                            const changeObj = row[3];    // {type: 'text', value: -1.2}
-                            const sortino = row[4];
-                            const sparklineObj = row[5]; // {type: 'sparkline', value: [...]}
-
-                            const priceNum = parseFloat(priceDisplay.replace(/[$,%]/g, ''));
-                            const pctChange = changeObj.value;
-
-                            // Sortino Color Logic: Go (>=2.0) #00ff88, Wait (>=1.0) #ff9900, No Go (<1.0) #ff4444
-                            let sortinoColor = '#ff4444';
-                            if (sortino >= 2.0) sortinoColor = '#00ff88';
-                            else if (sortino >= 1.0) sortinoColor = '#ff9900';
-
-                            let color = '#fff';
-                            if (window.lastMacroWatchlistState[ticker]) {
-                                const lastPrice = window.lastMacroWatchlistState[ticker].price;
-                                if (priceNum > lastPrice) color = 'var(--price-up)';
-                                else if (priceNum < lastPrice) color = 'var(--price-down)';
-                            }
-                            window.lastMacroWatchlistState[ticker] = { price: priceNum };
-
-                            const tr = document.createElement('tr');
-                            tr.style.fontSize = '14px';
-                            tr.innerHTML = `
-                                <td class="symbol-bold" style="padding: 6px 0; vertical-align: middle; max-width: 110px;" data-ticker="${ticker}">
-                                    <div style="font-size: 11px; color: var(--text-muted); line-height: 1; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${label}</div>
-                                    <div style="line-height: 1;">${ticker}</div>
-                                </td>
-                                <td class="val-mono" style="color: ${color}; transition: color 0.5s ease; padding: 6px 0; vertical-align: middle;">${priceDisplay}</td>
-                                <td class="val-mono" style="color: ${pctChange >= 0 ? 'var(--price-up)' : 'var(--price-down)'}; padding: 6px 0; vertical-align: middle;">
-                                    ${pctChange >= 0 ? '▲' : '▼'} ${Math.abs(pctChange).toFixed(2)}%
-                                </td>
-                                <td class="val-mono" style="color: ${sortinoColor}; font-weight: 700; padding: 6px 0; vertical-align: middle;">${sortino}</td>
-                                <td style="padding: 6px 0; vertical-align: middle;">${drawSparkline(sparklineObj.value, ticker)}</td>
-                            `;
-                            tbody.appendChild(tr);
-                        });
-                    }
-                }
-
-                // 2. Telemetry
-                const tBody = document.getElementById('telemetry-body');
-                const logContainer = tBody.closest('.terminal');
-                const wasAtBottom = logContainer.scrollHeight - logContainer.scrollTop <= logContainer.clientHeight + 50;
-
-                // Optimized Update: Only parse and update if content changed
-                const newTelemetry = data.telemetry_tail || "";
-                if (tBody.dataset.lastContent !== newTelemetry) {
-                    // [SECURITY] Client-Side Integrity Filter
-                    let safeTelemetry = newTelemetry;
-                    const leakKeywords = ["# SECURITY OVERRIDE", "APEX 500 SYSTEM", "USER IDENTITY: DAVE", "OPERATIONAL MANDATE"];
-                    if (leakKeywords.some(k => safeTelemetry.toUpperCase().includes(k))) {
-                        safeTelemetry = "**⚠️ [VLI_MONITOR]: TECHNICAL STATE LEAKAGE SUPPRESSED.**";
-                    }
-                    tBody.innerHTML = marked.parse(safeTelemetry);
-                    tBody.dataset.lastContent = safeTelemetry;
-
-                    if (wasAtBottom) {
-                        logContainer.scrollTo({ top: logContainer.scrollHeight, behavior: 'smooth' });
-                    }
-                }
-                // 3. Reports
-                const reportViewer = document.getElementById('analysis-report-viewer');
-                if (data.async_report && reportViewer.dataset.lastReport !== data.async_report) {
-                    if (window.VLI_DEBUG) console.log("[VLI_TRACE] " + new Date().toLocaleTimeString() + " - Updating async report window...");
-                    // [SECURITY] Client-Side Integrity Filter for Reports
-                    let safeReport = data.async_report;
-                    const leakKeywords = ["# SECURITY OVERRIDE", "APEX 500 SYSTEM", "USER IDENTITY: DAVE", "OPERATIONAL MANDATE"];
-                    if (leakKeywords.some(k => safeReport.toUpperCase().includes(k))) {
-                        // Skip updating the persistent report window for short fallback notices
-                        reportViewer.dataset.lastReport = data.async_report;
-                    } else {
-                        reportViewer.innerHTML = `<div class="analysis-report">${applyStatusFormatting(marked.parse(safeReport))}</div>`;
-                        reportViewer.dataset.lastReport = data.async_report;
-                        reportViewer.scrollTop = 0;
-                        try {
-                            renderMathInElement(reportViewer, {
-                                delimiters: [
-                                    { left: '$$', right: '$$', display: true },
-                                    { left: '$', right: '$', display: false },
-                                    { left: '\\(', right: '\\)', display: false },
-                                    { left: '\\[', right: '\\]', display: true }
-                                ]
-                            });
-                        } catch (e) { console.error("KaTeX Report Error:", e); }
-                    }
-                }
+                bc.postMessage({ type: 'STATE_UPDATE', state: data });
+                if (window.VLI_DEBUG) console.log("[VLI_ORCHESTRA] Master Broadcast Sent.");
 
                 // 4. Connectivity Status
                 const statusBadge = document.getElementById('conn-status');
@@ -1130,13 +1508,143 @@
 
             } catch (e) {
                 console.error("VLI Poll Error:", e);
-                document.getElementById('conn-status').innerText = "OFFLINE";
-                document.getElementById('conn-status').style.color = "var(--ruby-red)";
-                document.getElementById('conn-status').style.background = "rgba(248, 81, 73, 0.1)";
+                const statusBadge = document.getElementById('conn-status');
+                if (statusBadge) {
+                    statusBadge.innerText = "OFFLINE";
+                    statusBadge.style.color = "var(--ruby-red)";
+                    statusBadge.style.background = "rgba(248, 81, 73, 0.1)";
+                }
             } finally {
                 isPolling = false;
             }
         }
+
+        // 1. Macros (Handled only if overview elements are present)
+        function renderMacros(data) {
+            const m1 = document.getElementById('macro-list-1');
+            const m2 = document.getElementById('macro-list-2');
+            if (data.macros && m1 && m2) {
+                m1.innerHTML = ''; m2.innerHTML = '';
+                data.macros.forEach((m, i) => {
+                    const target = i < (data.macros.length / 2) ? m1 : m2;
+                    const row = document.createElement('tr');
+                    const price = m.price ? `$${parseFloat(m.price).toFixed(2)}` : '---';
+                    const changeVal = (m.change !== undefined && m.change !== null) ? `${m.change >= 0 ? '+' : ''}${parseFloat(m.change).toFixed(2)}%` : '---';
+                    const color = m.color || (m.change >= 0 ? 'var(--price-up)' : 'var(--price-down)');
+
+                    row.innerHTML = `
+                        <td class="symbol-bold">${m.symbol}</td>
+                        <td class="val-mono" style="font-weight:400;">${price}</td>
+                        <td class="val-mono" style="color:${color}; font-weight:400;">${changeVal}</td>
+                    `;
+                    target.appendChild(row);
+                });
+            }
+        }
+
+        // 1b. Macro Watchlist Content (Structural JSON Support)
+        function renderWatchlist(data) {
+            if (!data.macro_watchlist_content) return;
+            const tbody = document.getElementById('macro-watchlist-body');
+            const mw = data.macro_watchlist_content;
+
+            if (mw.type === 'table' && mw.rows) {
+                if (!window.lastMacroWatchlistState) window.lastMacroWatchlistState = {};
+                tbody.innerHTML = '';
+
+                mw.rows.forEach(row => {
+                    const label = row[0];
+                    const ticker = row[1];
+                    const priceDisplay = row[2];
+                    const changeObj = row[3];
+                    const sortino = row[4];
+                    const sparklineObj = row[5];
+
+                    const priceNum = parseFloat(priceDisplay.replace(/[$,%]/g, ''));
+                    const pctChange = changeObj.value;
+
+                    let sortinoColor = '#ff4444';
+                    if (sortino >= 2.0) sortinoColor = '#00ff88';
+                    else if (sortino >= 1.0) sortinoColor = '#ff9900';
+
+                    let color = '#fff';
+                    if (window.lastMacroWatchlistState[ticker]) {
+                        const lastPrice = window.lastMacroWatchlistState[ticker].price;
+                        if (priceNum > lastPrice) color = 'var(--price-up)';
+                        else if (priceNum < lastPrice) color = 'var(--price-down)';
+                    }
+                    window.lastMacroWatchlistState[ticker] = { price: priceNum };
+
+                    const tr = document.createElement('tr');
+                    tr.style.fontSize = '14px';
+                    tr.innerHTML = `
+                        <td class="symbol-bold" style="padding: 6px 0; vertical-align: middle; max-width: 110px;" data-ticker="${ticker}">
+                            <div style="font-size: 11px; color: var(--text-muted); line-height: 1; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${label}</div>
+                            <div style="line-height: 1;">${ticker}</div>
+                        </td>
+                        <td class="val-mono" style="color: ${color}; transition: color 0.5s ease; padding: 6px 0; vertical-align: middle;">${priceDisplay}</td>
+                        <td class="val-mono" style="color: ${pctChange >= 0 ? 'var(--price-up)' : 'var(--price-down)'}; padding: 6px 0; vertical-align: middle;">
+                            ${pctChange >= 0 ? '▲' : '▼'} ${Math.abs(pctChange).toFixed(2)}%
+                        </td>
+                        <td class="val-mono" style="color: ${sortinoColor}; font-weight: 700; padding: 6px 0; vertical-align: middle;">${sortino}</td>
+                        <td style="padding: 6px 0; vertical-align: middle;">${drawSparkline(sparklineObj.value, ticker)}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
+        }
+
+        // 2. Telemetry
+        function renderTelemetry(data) {
+            const tBody = document.getElementById('telemetry-body');
+            if (!tBody) return;
+            const logContainer = tBody.closest('.terminal');
+            const wasAtBottom = logContainer.scrollHeight - logContainer.scrollTop <= logContainer.clientHeight + 50;
+
+            const newTelemetry = data.telemetry_tail || "";
+            if (tBody.dataset.lastContent !== newTelemetry) {
+                let safeTelemetry = newTelemetry;
+                const leakKeywords = ["# SECURITY OVERRIDE", "APEX 500 SYSTEM", "USER IDENTITY: DAVE", "OPERATIONAL MANDATE"];
+                if (leakKeywords.some(k => safeTelemetry.toUpperCase().includes(k))) {
+                    safeTelemetry = "**⚠️ [VLI_MONITOR]: TECHNICAL STATE LEAKAGE SUPPRESSED.**";
+                }
+                tBody.innerHTML = marked.parse(safeTelemetry);
+                tBody.dataset.lastContent = safeTelemetry;
+
+                if (wasAtBottom) {
+                    logContainer.scrollTo({ top: logContainer.scrollHeight, behavior: 'smooth' });
+                }
+            }
+        }
+
+        // 3. Reports
+        function renderReport(data) {
+            const reportViewer = document.getElementById('analysis-report-viewer');
+            if (!reportViewer) return;
+            if (data.async_report && reportViewer.dataset.lastReport !== data.async_report) {
+                let safeReport = data.async_report;
+                const leakKeywords = ["# SECURITY OVERRIDE", "APEX 500 SYSTEM", "USER IDENTITY: DAVE", "OPERATIONAL MANDATE"];
+                if (leakKeywords.some(k => safeReport.toUpperCase().includes(k))) {
+                    reportViewer.dataset.lastReport = data.async_report;
+                } else {
+                    reportViewer.innerHTML = `<div class="analysis-report">${applyStatusFormatting(marked.parse(safeReport))}</div>`;
+                    reportViewer.dataset.lastReport = data.async_report;
+                    reportViewer.scrollTop = 0;
+                    try {
+                        renderMathInElement(reportViewer, {
+                            delimiters: [
+                                { left: '$$', right: '$$', display: true },
+                                { left: '$', right: '$', display: false },
+                                { left: '\\(', right: '\\)', display: false },
+                                { left: '\\[', right: '\\]', display: true }
+                            ]
+                        });
+                    } catch (e) { }
+                }
+            }
+        }
+
+
 
         async function handleSendStop() {
             if (isProcessing) {
