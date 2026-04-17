@@ -28,7 +28,10 @@ from ..types import State
 
 logger = logging.getLogger(__name__)
 
-# 1. Shared context: Persistent, shared by agents of the SAME type
+# 1. Private context: Truly private to THIS module.
+_NODE_RESOURCE_CONTEXT: dict[str, Any] = {}
+
+# 2. Shared context: Persistent, shared by agents of the SAME type
 _SHARED_RESOURCE_CONTEXT = ORCHESTRATOR_CONTEXT
 
 # 2. Global context: Shared across all agent types

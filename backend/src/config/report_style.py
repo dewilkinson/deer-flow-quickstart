@@ -10,3 +10,4 @@ class ReportStyle(enum.Enum):
     POPULAR_SCIENCE = "popular_science"
     NEWS = "news"
     SOCIAL_MEDIA = "social_media"
+    EXECUTIVE_COMMENTARY = "executive_commentary"

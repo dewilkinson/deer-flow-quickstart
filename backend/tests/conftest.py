@@ -4,9 +4,19 @@ Sets up sys.path and pre-mocks modules that would cause circular import
 issues when unit-testing lightweight config/registry code in isolation.
 """
 
+import os
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock
+
+# Force dummy environment variables for config parsers
+os.environ["GEMINI_API_KEY"] = "dummy"
+os.environ["GOOGLE_API_KEY"] = "dummy"
+os.environ["REDIS_URL"] = "redis://localhost:6379"
+os.environ["OBSIDIAN_VAULT_PATH"] = r"C:\github\obsidian-vault"
+os.environ["OPENAI_API_KEY"] = "dummy"
+os.environ["ANTHROPIC_API_KEY"] = "dummy"
+os.environ["TAVILY_API_KEY"] = "dummy"
 
 # Make 'app' and 'deerflow' importable from any working directory
 sys.path.insert(0, str(Path(__file__).parent.parent))

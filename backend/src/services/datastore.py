@@ -129,32 +129,35 @@ class DatastoreManager:
     @classmethod
     def _get_from_db(cls, ticker: str, resource_type: str, timeframe: str) -> dict[str, Any]:
         """ Internal helper to fetch from PostgreSQL. """
-        SessionLocal = get_session_local()
-        with SessionLocal() as db:
-            cache_obj = db.query(PersistentCache).filter(
-                PersistentCache.ticker == ticker,
-                PersistentCache.resource_type == resource_type,
-                PersistentCache.timeframe == timeframe
-            ).first()
-            
-            if cache_obj:
-                if cache_obj.is_expired():
-                    db.delete(cache_obj)
+        try:
+            SessionLocal = get_session_local()
+            with SessionLocal() as db:
+                cache_obj = db.query(PersistentCache).filter(
+                    PersistentCache.ticker == ticker,
+                    PersistentCache.resource_type == resource_type,
+                    PersistentCache.timeframe == timeframe
+                ).first()
+                
+                if cache_obj:
+                    if cache_obj.is_expired():
+                        db.delete(cache_obj)
+                        db.commit()
+                        return {}
+                    
+                    # Update last accessed in DB
+                    cache_obj.last_accessed = datetime.utcnow()
                     db.commit()
-                    return {}
-                
-                # Update last accessed in DB
-                cache_obj.last_accessed = datetime.utcnow()
-                db.commit()
-                
-                try:
-                    return {
-                        "data": json.loads(cache_obj.data),
-                        "updated_at": cache_obj.created_at,
-                        "price": cache_obj.reference_price
-                    }
-                except:
-                    return {"data": cache_obj.data, "updated_at": cache_obj.created_at, "price": cache_obj.reference_price}
+                    
+                    try:
+                        return {
+                            "data": json.loads(cache_obj.data),
+                            "updated_at": cache_obj.created_at,
+                            "price": cache_obj.reference_price
+                        }
+                    except:
+                        return {"data": cache_obj.data, "updated_at": cache_obj.created_at, "price": cache_obj.reference_price}
+        except Exception as e:
+            logger.warning(f"[DB_FALLBACK] PostgreSQL/SQLite query failed for {ticker}: {e}. Falling back to stateless mode.")
         return {}
 
     @classmethod
@@ -221,34 +224,37 @@ class DatastoreManager:
         
         serialized_data = json.dumps(data) if not isinstance(data, str) else data
         
-        SessionLocal = get_session_local()
-        with SessionLocal() as db:
-            # Upsert logic
-            existing = db.query(PersistentCache).filter(
-                PersistentCache.ticker == ticker,
-                PersistentCache.resource_type == resource_type,
-                PersistentCache.timeframe == timeframe
-            ).first()
-            
-            if existing:
-                existing.data = serialized_data
-                existing.reference_price = price
-                existing.expires_at = expires_at
-                existing.heat_score = HeatManager.get_heat_score(ticker)
-                existing.last_accessed = datetime.utcnow()
-            else:
-                new_entry = PersistentCache(
-                    ticker=ticker,
-                    resource_type=resource_type,
-                    timeframe=timeframe,
-                    reference_price=price,
-                    data=serialized_data,
-                    expires_at=expires_at,
-                    heat_score=HeatManager.get_heat_score(ticker)
-                )
-                db.add(new_entry)
-            
-            db.commit()
+        try:
+            SessionLocal = get_session_local()
+            with SessionLocal() as db:
+                # Upsert logic
+                existing = db.query(PersistentCache).filter(
+                    PersistentCache.ticker == ticker,
+                    PersistentCache.resource_type == resource_type,
+                    PersistentCache.timeframe == timeframe
+                ).first()
+                
+                if existing:
+                    existing.data = serialized_data
+                    existing.reference_price = price
+                    existing.expires_at = expires_at
+                    existing.heat_score = HeatManager.get_heat_score(ticker)
+                    existing.last_accessed = datetime.utcnow()
+                else:
+                    new_entry = PersistentCache(
+                        ticker=ticker,
+                        resource_type=resource_type,
+                        timeframe=timeframe,
+                        reference_price=price,
+                        data=serialized_data,
+                        expires_at=expires_at,
+                        heat_score=HeatManager.get_heat_score(ticker)
+                    )
+                    db.add(new_entry)
+                
+                db.commit()
+        except Exception as e:
+            logger.error(f"[DB_FALLBACK] Failed to save {ticker} to persistent store: {e}")
 
     @classmethod
     def validate_price_consistency(cls, ticker: str, current_price: float):
@@ -286,10 +292,13 @@ class DatastoreManager:
                 c.clear()
             
             # Phase 4: Also flush DB
-            SessionLocal = get_session_local()
-            with SessionLocal() as db:
-                db.query(PersistentCache).delete()
-                db.commit()
+            try:
+                SessionLocal = get_session_local()
+                with SessionLocal() as db:
+                    db.query(PersistentCache).delete()
+                    db.commit()
+            except Exception as e:
+                logger.warning(f"[DB_FALLBACK] Global cache flush failed in DB: {e}. RAM context only.")
                 
             # Phase 5: Clear secondary state
             HeatManager.clear_heat()
@@ -307,10 +316,13 @@ class DatastoreManager:
                 del cache[t]
                 
         # Phase 4: Atomic DB Purge
-        SessionLocal = get_session_local()
-        with SessionLocal() as db:
-            db.query(PersistentCache).filter(PersistentCache.ticker == t).delete()
-            db.commit()
+        try:
+            SessionLocal = get_session_local()
+            with SessionLocal() as db:
+                db.query(PersistentCache).filter(PersistentCache.ticker == t).delete()
+                db.commit()
+        except Exception as e:
+            logger.warning(f"[DB_FALLBACK] Cache invalidation failed for {t} in DB: {e}. RAM context only.")
 
         # Phase 5: Clear secondary state for this ticker
         HeatManager.clear_heat(t)

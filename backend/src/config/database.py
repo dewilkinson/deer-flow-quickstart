@@ -155,7 +155,12 @@ def get_database_url() -> str:
     """Get database URL from environment variables."""
     # Check if we're in test mode
     if os.getenv("VLI_TEST_MODE", "False").lower() == "true":
-        return "sqlite:///./vli_test.db"
+        # Force absolute pathing to prevent 0-byte orphan DBs in root/backend
+        backend_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+        data_dir = os.path.join(backend_dir, "data")
+        os.makedirs(data_dir, exist_ok=True)
+        db_path = os.path.join(data_dir, "vli_main.db")
+        return f"sqlite:///{db_path}"
 
     # Check if full URL is provided
     full_url = os.getenv("RESEARCH_DB_URL")
@@ -240,9 +245,9 @@ def init_database():
         # print("✅ Database connection successful")
 
         # Create tables
-        print("Creating database tables (disabled for testing)...")
+        print("VLI_SYSTEM: Initializing database schema...")
         create_tables()
-        print("[SUCCESS] Database tables bypassed successfully")
+        print("[SUCCESS] Database schema synchronized successfully")
 
     except ImportError as e:
         print(f"[ERROR] Import Error: {e}")
@@ -274,8 +279,13 @@ def init_database():
             print("   4. Check Railway logs for more detailed error information")
             return False
         else:
-            print("[INFO] Local development - soft failing database initialization for VLI testing")
-            return False
+            print("[INFO] Local development - ensuring SQLite schema integrity")
+            try:
+                create_tables()
+                return True
+            except Exception as se:
+                print(f"[ERROR] Failed to auto-initialize SQLite: {se}")
+                return False
 
     print("=== Database Initialization Complete ===")
     return True

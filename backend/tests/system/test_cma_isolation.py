@@ -12,9 +12,7 @@ def test_node_isolation_standards():
 
     # List of nodes to check
     node_files = [
-        "researcher_node",
         "analyst_node",
-        "scout_node",
         "journaler_node",
         "coder_node",
         "coordinator_node",
@@ -22,6 +20,9 @@ def test_node_isolation_standards():
         "reporter_node",
         "imaging_node",
         "human_feedback_node",
+        "synthesizer_node",
+        "vli_node",
+        "smc_analyst_node",
     ]
 
     for node_name in node_files:
@@ -65,13 +66,13 @@ def test_tool_isolation_standards():
 def test_context_privacy_leakage():
     """Verify that modifying one private context does not affect others."""
     from src.graph.nodes.analyst import _NODE_RESOURCE_CONTEXT as ana_ctx
-    from src.graph.nodes.scout import _NODE_RESOURCE_CONTEXT as scout_ctx
+    from src.graph.nodes.vli import _NODE_RESOURCE_CONTEXT as vli_ctx
 
-    scout_ctx["internal_secret"] = "sc_value"
+    vli_ctx["internal_secret"] = "vli_value"
     assert "internal_secret" not in ana_ctx
 
     ana_ctx["internal_secret"] = "ana_value"
-    assert scout_ctx["internal_secret"] == "sc_value"
+    assert vli_ctx["internal_secret"] == "vli_value"
     assert ana_ctx["internal_secret"] == "ana_value"
 
 
@@ -95,7 +96,8 @@ def test_graph_integrity():
     assert graph is not None
     # Check for expected nodes in the graph
     node_names = [n for n in graph.nodes]
-    assert "researcher" in node_names
+    assert "vli" in node_names
     assert "analyst" in node_names
     assert "journaler" in node_names
     assert "reporter" in node_names
+    assert "synthesizer" in node_names

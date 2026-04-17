@@ -129,6 +129,9 @@ def _bucket_sparkline_data(df: pd.DataFrame, ref_time: datetime, current_price: 
     target_data = df[col]
     if isinstance(target_data, pd.DataFrame):
         target_data = target_data.iloc[:, 0]
+        
+    # Crucial Fix: Drop NaN values that leak from multi-ticker batch unions
+    target_data = target_data.dropna()
     
     # Ensure index is correctly unified to Naive EDT
     try:
@@ -165,10 +168,16 @@ def _bucket_sparkline_data(df: pd.DataFrame, ref_time: datetime, current_price: 
         final_val = val if i < len(target_index) - 1 else current_price
         values.append(round(float(final_val), 4))
             
-    # [STABILITY] If everything is None except the last point, return current price flatline
-    if all(v is None for v in values[:-1]):
-        return [round(current_price, 4)] * num_points
-        
+    # [STABILITY] Forward fill None values to maintain trend flow
+    for i in range(len(values)):
+        if values[i] is None:
+            if i == 0:
+                # Find first valid future value
+                future_vals = [v for v in values if v is not None]
+                values[i] = future_vals[0] if future_vals else round(current_price, 4)
+            else:
+                values[i] = values[i-1] # Forward fill
+                
     return values
         
     return values
@@ -415,7 +424,11 @@ async def get_symbol_history_data(symbols: list[str], period: str = "1d", interv
 
         if not is_stale:
             logger.info(f"[CACHE_READ] Using warm lazy cache for {sym}")
-            results.append(cached_entry["data"])
+            data_val = cached_entry["data"]
+            if isinstance(data_val, dict) and "data" in data_val:
+                results.append(data_val["data"])
+            else:
+                results.append(data_val)
         else:
             if cached_entry:
                 logger.info(f"[CACHE_EVICT] Data for {sym} is stale. Fetching fresh data.")

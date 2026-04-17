@@ -1,1114 +1,4 @@
-<!DOCTYPE html>
-<html lang="en">
 
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cobalt | VLI Command Center</title>
-    <link
-        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=Inter:wght@400;700&display=swap"
-        rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"></script>
-    <style>
-        :root {
-            --cobalt-deep: #0a0c10;
-            --cobalt-blue: #58a6ff;
-            --emerald-green: #3fb950;
-            --ruby-red: #f85149;
-            --glass-bg: rgba(13, 17, 23, 0.85);
-            --card-border: rgba(255, 255, 255, 0.1);
-            --text-primary: #e6edf3;
-            --text-muted: #8b949e;
-            --font-main: 'Outfit', sans-serif;
-            --font-mono: 'Inter', monospace;
-            --price-up: #3fb950;
-            --price-down: #f85149;
-            --amber-gold: #d29922;
-        }
-
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-
-        body {
-            background-color: var(--cobalt-deep);
-            color: var(--text-primary);
-            font-family: var(--font-main);
-            height: 100vh;
-            overflow: hidden !important;
-            /* Rigid No-Scroll */
-            background: radial-gradient(circle at 50% -20%, #161b22 0%, #0a0c10 100%);
-        }
-
-        /* --- DASHBOARD GRID --- */
-        .dashboard-container {
-            position: relative;
-            width: 100vw;
-            height: 100vh;
-            background-color: #0d111b; /* Deep Drafting Slate */
-            background-image: 
-                /* Mathematically Anchored 120px Dotted Major Lines */
-                radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.12) 1px, transparent 1px),
-                radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.12) 1px, transparent 1px),
-                /* Mathematically Anchored 40px Solid Minor Grid */
-                linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
-            background-size: 120px 8px, 8px 120px, 100% 40px, 40px 100%;
-            background-position: 0 0; /* Strict Origin Alignment */
-            overflow: hidden;
-            box-shadow: inset 0 0 100px rgba(0,0,0,0.5); 
-        }
-
-        /* Grid containers removed for WM mode, cards moved to root */
-
-        /* .grid-right removed */
-
-        /* --- CARDS & UI COMPONENTS --- */
-        .card {
-            background: var(--glass-bg);
-            border: 1px solid var(--card-border);
-            backdrop-filter: blur(12px);
-            border-radius: 12px;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-            position: absolute;
-            min-height: 100px;
-            min-width: 200px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
-            transition: opacity 0.2s ease, transform 0.1s ease;
-        }
-
-        .card-header {
-            height: 40px;
-            padding: 0 15px;
-            background: rgba(255, 255, 255, 0.05);
-            border-bottom: 1px solid var(--card-border);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-weight: 700;
-            font-size: 17px;
-            letter-spacing: 0.3px;
-            text-transform: uppercase;
-            color: var(--text-muted);
-            cursor: move;
-            user-select: none;
-        }
-
-        .card-controls {
-            display: flex;
-            gap: 8px;
-            margin-left: 10px;
-        }
-
-        .win-btn {
-            width: 14px;
-            height: 14px;
-            cursor: pointer;
-            transition: opacity 0.2s, transform 0.2s;
-            opacity: 0.5;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            position: relative;
-        }
-
-        .win-btn:hover {
-            opacity: 1;
-            transform: scale(1.1);
-        }
-
-        /* Minimalist Line Icons */
-        .win-min::after {
-            content: '';
-            width: 6px;
-            height: 6px;
-            border-right: 1.5px solid var(--text-primary);
-            border-bottom: 1.5px solid var(--text-primary);
-            transform: translateY(-2px) rotate(45deg);
-            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        .card.collapsed .win-min::after {
-            transform: translateY(1px) rotate(225deg);
-        }
-
-        .win-max {
-            border: 1.5px solid var(--text-primary);
-            border-radius: 1px;
-            width: 10px !important;
-            height: 10px !important;
-            margin: 2px;
-        }
-
-        .win-close::before, .win-close::after {
-            content: '';
-            position: absolute;
-            width: 12px;
-            height: 1.5px;
-            background: var(--text-primary);
-        }
-        .win-close::before { transform: rotate(45deg); }
-        .win-close::after { transform: rotate(-45deg); }
-
-        .win-pop::before {
-            content: '⧉';
-            font-size: 11px;
-            color: var(--text-primary);
-            line-height: 1;
-        }
-
-        /* Collapse State */
-        .card.collapsed {
-            height: auto !important;
-            min-height: 0;
-        }
-        .card.collapsed .card-body,
-        .card.collapsed .resize-handle {
-            display: none !important;
-        }
-
-        /* --- STANDALONE MODE (VLI ORCHESTRA) --- */
-        body.standalone {
-            background: #000;
-        }
-        body.standalone .vli-menubar,
-        body.standalone .card:not(.popout-target),
-        body.standalone #wm-workspace::before {
-            display: none !important;
-        }
-        body.standalone .popout-target {
-            position: fixed !important;
-            top: 0 !important;
-            left: 0 !important;
-            width: 100vw !important;
-            height: 100vh !important;
-            margin: 0 !important;
-            border: none !important;
-            border-radius: 0 !important;
-            z-index: 9999 !important;
-        }
-        body.standalone .popout-target .card-header {
-            cursor: default !important;
-        }
-        body.standalone .popout-target .win-pop,
-        body.standalone .popout-target .win-min,
-        body.standalone .popout-target .win-max {
-            display: none !important;
-        }
-
-        .resize-handle { position: absolute; z-index: 99; }
-        .resize-n { top: -4px; left: 5px; right: 5px; height: 8px; cursor: ns-resize; }
-        .resize-s { bottom: -4px; left: 5px; right: 5px; height: 8px; cursor: ns-resize; }
-        .resize-e { top: 5px; bottom: 5px; right: -4px; width: 8px; cursor: ew-resize; }
-        .resize-w { top: 5px; bottom: 5px; left: -4px; width: 8px; cursor: ew-resize; }
-        .resize-nw { top: -4px; left: -4px; width: 12px; height: 12px; cursor: nwse-resize; }
-        .resize-ne { top: -4px; right: -4px; width: 12px; height: 12px; cursor: nesw-resize; }
-        .resize-sw { bottom: -4px; left: -4px; width: 12px; height: 12px; cursor: nesw-resize; }
-        .resize-se { bottom: -4px; right: -4px; width: 12px; height: 12px; cursor: nwse-resize; }
-
-        .card-body {
-            padding: 15px;
-            flex: 1;
-            min-height: 0;
-            display: flex;
-            flex-direction: column;
-            overflow-y: auto;
-            position: relative;
-            height: 100%;
-            width: 100%;
-        }
-
-        /* HUD Badges */
-        .live-badge {
-            background: rgba(63, 185, 80, 0.15);
-            color: var(--emerald-green);
-            padding: 3px 8px;
-            border-radius: 4px;
-            font-size: 9px;
-            font-weight: 800;
-            border: 1px solid rgba(63, 185, 80, 0.3);
-        }
-
-        .descriptor {
-            width: 24px;
-            height: 24px;
-            background: var(--card-border);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 9px;
-            font-weight: 800;
-            color: var(--cobalt-blue);
-        }
-
-        /* Tables & Lists */
-        .macro-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 13px;
-        }
-
-        .macro-table th {
-            text-align: left;
-            color: var(--text-muted);
-            font-size: 10px;
-            padding-bottom: 8px;
-        }
-
-        .macro-table td {
-            padding: 6px 0;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
-        }
-
-        .symbol-bold {
-            font-weight: 700;
-            color: #fff;
-        }
-
-        .val-mono {
-            font-family: var(--font-mono);
-            font-weight: 400 !important;
-        }
-
-        /* CI CHAT - Terminal Reformat */
-        .chat-messages {
-            flex-grow: 1;
-            overflow-y: auto;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
-        }
-
-        .msg {
-            max-width: 95%;
-            padding: 18px;
-            border-radius: 8px;
-            font-size: 14px;
-            line-height: 1.6;
-            position: relative;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-        }
-
-        .msg-ai {
-            background: rgba(13, 17, 23, 0.98);
-            color: var(--text-primary);
-            font-weight: 400;
-            align-self: flex-start;
-            border-left: 4px solid var(--emerald-green);
-            font-family: 'Inter', sans-serif;
-            font-size: 16px;
-            /* Increased from 14px */
-            border-right: 1px dashed rgba(63, 185, 80, 0.1);
-            border-top: 1px dashed rgba(63, 185, 80, 0.1);
-            border-bottom: 1px dashed rgba(63, 185, 80, 0.1);
-        }
-
-        .msg-ai h1,
-        .msg-ai h2,
-        .msg-ai h3 {
-            color: var(--emerald-green);
-            font-family: 'Outfit', sans-serif;
-            font-size: 13pt;
-            margin: 15px 0 8px 0;
-            letter-spacing: 0.5px;
-            text-transform: uppercase;
-            border-bottom: 1px solid rgba(63, 185, 80, 0.15);
-            padding-bottom: 4px;
-        }
-
-        .msg-ai strong {
-            color: var(--emerald-green);
-            font-weight: 400;
-        }
-
-        .msg-ai code {
-            background: rgba(255, 255, 255, 0.05);
-            padding: 2px 5px;
-            border-radius: 4px;
-            color: var(--emerald-green);
-        }
-
-        .msg-ai ul {
-            margin-left: 20px;
-            margin-bottom: 10px;
-            list-style-type: square;
-        }
-
-        .msg-ai li {
-            margin-bottom: 4px;
-            font-weight: 400;
-        }
-
-        .chat-inline-markdown > h1:first-child,
-        .chat-inline-markdown > h2:first-child,
-        .chat-inline-markdown > h3:first-child {
-            display: none;
-        }
-
-        .msg-user {
-            background: rgba(255, 255, 255, 0.03);
-            color: var(--text-muted);
-            align-self: flex-end;
-            border-right: 2px solid rgba(255, 255, 255, 0.1);
-            font-size: 20px;
-        }
-
-        /* --- TYPING INDICATOR --- */
-        .typing-indicator {
-            width: 100%;
-            height: 2px;
-            background: rgba(88, 166, 255, 0.1);
-            position: relative;
-            overflow: hidden;
-            margin-top: auto;
-            margin-bottom: 5px;
-            opacity: 1;
-            transition: opacity 0.5s ease-out;
-            box-shadow: 0 0 10px rgba(88, 166, 255, 0.2);
-            flex-shrink: 0;
-            border-radius: 2px;
-        }
-
-        .typing-indicator.fade-out {
-            opacity: 0;
-        }
-
-        .typing-indicator::after {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            bottom: 0;
-            width: 70%;
-            background: linear-gradient(90deg, transparent 0%, var(--cobalt-blue) 50%, transparent 100%);
-            box-shadow: 0 0 15px rgba(88, 166, 255, 0.4);
-            animation: sweep 1.6s ease-in-out infinite alternate;
-        }
-
-        @keyframes sweep {
-            0% { transform: translateX(-100%); }
-            100% { transform: translateX(140%); }
-        }
-
-        .analysis-report pre {
-            background: #0d1117;
-            padding: 15px;
-            border-radius: 8px;
-            overflow-x: auto;
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            font-family: var(--font-mono);
-            font-size: 15px;
-            /* Increased from 13px */
-            color: #c9d1d9;
-            margin: 10px 0;
-            scrollbar-width: thin;
-        }
-
-        .analysis-report pre::-webkit-scrollbar {
-            height: 6px;
-        }
-
-        .analysis-report pre::-webkit-scrollbar-thumb {
-            background: rgba(88, 166, 255, 0.5);
-            border-radius: 3px;
-        }
-
-        .analysis-report code {
-            font-family: var(--font-mono);
-            color: #79c0ff;
-        }
-
-        /* INPUT PANEL */
-        .input-area {
-            padding: 20px;
-            background: rgba(0, 0, 0, 0.2);
-            border-top: 1px solid var(--card-border);
-        }
-
-        .gemini-panel {
-            background: rgba(30, 35, 45, 0.5);
-            border: 1px solid var(--card-border);
-            border-radius: 12px;
-            padding: 12px;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-
-        #chat-input {
-            background: transparent;
-            border: none;
-            color: #fff;
-            font-family: var(--font-main);
-            font-size: 19px;
-            outline: none;
-            resize: none;
-            min-height: 60px;
-        }
-
-        .panel-controls {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding-top: 8px;
-            border-top: 1px solid rgba(255, 255, 255, 0.05);
-        }
-
-        .media-btn {
-            color: var(--cobalt-blue);
-            font-size: 24px;
-            cursor: pointer;
-            font-weight: 600;
-        }
-
-        .control-group {
-            display: flex;
-            align-items: center;
-            gap: 5px;
-            background: rgba(255, 255, 255, 0.05);
-            padding: 4px 10px;
-            border-radius: 6px;
-            cursor: pointer;
-            position: relative;
-        }
-
-        .control-select {
-            background: transparent;
-            border: none;
-            color: var(--text-muted);
-            font-size: 11px;
-            font-weight: 600;
-            appearance: none;
-            cursor: pointer;
-            outline: none;
-        }
-
-        .dropdown-arrow {
-            font-size: 8px;
-            color: var(--text-muted);
-            margin-left: 4px;
-            pointer-events: none;
-        }
-
-        .send-btn {
-            background: rgba(88, 166, 255, 0.2);
-            color: var(--cobalt-blue);
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            border: 1px solid rgba(88, 166, 255, 0.3);
-            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        .send-btn.processing {
-            background: rgba(248, 81, 73, 0.2);
-            color: var(--ruby-red);
-            border-radius: 4px;
-            /* Square for Stop */
-            border-color: rgba(248, 81, 73, 0.4);
-        }
-
-        .send-btn.processing::after {
-            content: '';
-            width: 12px;
-            height: 12px;
-            background: currentColor;
-            border-radius: 2px;
-        }
-
-        .send-btn:hover {
-            background: var(--cobalt-blue);
-            color: #fff;
-        }
-
-        .send-btn.processing:hover {
-            background: var(--ruby-red);
-            color: #fff;
-        }
-
-        /* TELEMETRY TAIL */
-        .terminal {
-            font-family: var(--font-mono);
-            font-size: 11.5pt;
-            /* Increased from 10pt */
-            background: #05070a;
-            color: #d1d5db;
-            padding: 15px;
-            border-radius: 8px;
-            line-height: 1.5;
-            border-left: 2px solid rgba(88, 166, 255, 0.3);
-            overflow-y: auto !important;
-            scrollbar-width: thin !important;
-            scrollbar-color: var(--cobalt-blue) #05070a !important;
-        }
-
-        .terminal::-webkit-scrollbar {
-            width: 6px !important;
-        }
-
-        .terminal::-webkit-scrollbar-track {
-            background: #05070a !important;
-        }
-
-        .terminal::-webkit-scrollbar-thumb {
-            background: var(--cobalt-blue) !important;
-            border-radius: 3px !important;
-        }
-
-        .terminal h1,
-        .terminal h2,
-        .terminal h3 {
-            color: var(--cobalt-blue);
-            font-size: 11pt;
-            margin: 12px 0 6px 0;
-            letter-spacing: 0.5px;
-        }
-
-        .terminal p {
-            margin-bottom: 6px;
-        }
-
-        .terminal ul {
-            margin-left: 18px;
-            margin-bottom: 8px;
-            list-style-type: square;
-        }
-
-        .terminal strong {
-            color: #fff;
-            border-bottom: 1px dotted rgba(255, 255, 255, 0.2);
-        }
-
-        /* Error Overlay */
-        #error-overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(248, 81, 73, 0.1);
-            backdrop-filter: blur(4px);
-            display: none;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            z-index: 1000;
-            font-weight: 800;
-            color: var(--ruby-red);
-        }
-
-        /* Config Overlay Modal */
-        #profile-modal {
-            position: fixed;
-            top: 0; left: 0; width: 100vw; height: 100vh;
-            background: rgba(0, 0, 0, 0.7);
-            backdrop-filter: blur(10px);
-            z-index: 5000;
-            display: none;
-        }
-
-        .modal-content {
-            background: #0d111b;
-            border: 1px solid var(--card-border);
-            border-radius: 8px;
-            width: 80vw;
-            max-width: 900px;
-            height: 80vh;
-            display: flex;
-            flex-direction: column;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.8);
-            overflow: hidden;
-            
-            position: absolute;
-            top: 10vh;
-            left: 10vw;
-        }
-
-        .modal-header {
-            padding: 15px 20px;
-            background: rgba(255, 255, 255, 0.05);
-            border-bottom: 1px solid var(--card-border);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-weight: 700;
-            font-size: 16px;
-            cursor: move;
-            user-select: none;
-        }
-
-        .modal-tabs {
-            display: flex;
-            background: rgba(0, 0, 0, 0.2);
-            border-bottom: 1px solid var(--card-border);
-        }
-
-        .modal-tab {
-            padding: 10px 20px;
-            cursor: pointer;
-            color: var(--text-muted);
-            border-right: 1px solid var(--card-border);
-            font-weight: 600;
-            font-size: 13px;
-            text-transform: uppercase;
-        }
-
-        .modal-tab.active {
-            background: var(--cobalt-blue);
-            color: #fff;
-        }
-
-        .modal-body {
-            flex: 1;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .modal-body textarea {
-            flex: 1;
-            background: rgba(0,0,0,0.4);
-            border: 1px solid var(--card-border);
-            color: var(--text-primary);
-            padding: 15px;
-            font-family: var(--font-mono);
-            font-size: 16px;
-            resize: none;
-            border-radius: 4px;
-        }
-        
-        .modal-footer {
-            padding: 15px 20px;
-            border-top: 1px solid var(--card-border);
-            display: flex;
-            justify-content: flex-end;
-            gap: 10px;
-        }
-
-        .btn-action {
-            background: var(--cobalt-blue);
-            color: #fff;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 4px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: opacity 0.2s;
-        }
-        .btn-action:hover {
-            opacity: 0.8;
-        }
-
-        /* --- TOGGLE SWITCH --- */
-        .direct-mode-toggle {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            background: rgba(255, 255, 255, 0.05);
-            padding: 4px 10px;
-            border-radius: 20px;
-            border: 1px solid var(--card-border);
-            cursor: pointer;
-            transition: all 0.2s ease;
-            user-select: none;
-        }
-
-        .direct-mode-toggle:hover {
-            background: rgba(255, 255, 255, 0.08);
-        }
-
-        .direct-mode-toggle.active {
-            border-color: rgba(88, 166, 255, 0.4);
-            background: rgba(88, 166, 255, 0.1);
-            box-shadow: 0 0 10px rgba(88, 166, 255, 0.1);
-        }
-
-        .direct-mode-toggle .dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: var(--text-muted);
-            transition: all 0.2s ease;
-        }
-
-        .direct-mode-toggle.active .dot {
-            background: var(--cobalt-blue);
-            box-shadow: 0 0 5px var(--cobalt-blue);
-        }
-
-        .direct-mode-toggle .label {
-            font-size: 9px;
-            font-weight: 700;
-            color: var(--text-muted);
-        }
-
-        .direct-mode-toggle.active .label {
-            color: var(--ruby-red);
-        }
-
-        .direct-mode-toggle.on {
-            border-color: rgba(63, 185, 80, 0.4);
-            background: rgba(63, 185, 80, 0.1);
-        }
-
-        .direct-mode-toggle.on .dot {
-            background: var(--emerald-green);
-            box-shadow: 0 0 5px var(--emerald-green);
-        }
-
-        .direct-mode-toggle.on .label {
-            color: var(--emerald-green);
-        }
-
-        .direct-mode-toggle.off {
-            border-color: rgba(248, 81, 73, 0.4);
-            background: rgba(248, 81, 73, 0.1);
-        }
-
-        .direct-mode-toggle.off .dot {
-            background: var(--ruby-red);
-            box-shadow: 0 0 5px var(--ruby-red);
-        }
-
-        .direct-mode-toggle.off .label {
-            color: var(--ruby-red);
-        }
-
-        /* --- ANALYSIS DOCUMENT VIEWER --- */
-        .analysis-report {
-            flex: 1;
-            font-family: 'Inter', sans-serif;
-            font-size: 17px;
-            color: var(--text-primary);
-            line-height: 1.45;
-            padding: 18px;
-            font-weight: 400;
-            text-rendering: optimizeLegibility;
-        }
-
-        .analysis-report p {
-            margin-bottom: 16px;
-            text-align: justify;
-            hyphens: auto;
-        }
-
-        .analysis-report ul,
-        .analysis-report ol {
-            margin-bottom: 20px;
-            margin-left: 20px;
-        }
-
-        .analysis-report li {
-            margin-bottom: 10px;
-            text-align: justify;
-        }
-
-        .analysis-report h1,
-        .analysis-report h2,
-        .analysis-report h3 {
-            color: var(--emerald-green);
-            font-family: 'Outfit', sans-serif;
-            margin-top: 25px;
-            margin-bottom: 12px;
-            letter-spacing: 0.5px;
-            border-bottom: 1px solid rgba(63, 185, 80, 0.1);
-            padding-bottom: 5px;
-        }
-
-        .analysis-report strong {
-            color: var(--emerald-green);
-            font-weight: 700;
-        }
-
-        .analysis-report blockquote {
-            border-left: 4px solid var(--emerald-green);
-            background: rgba(63, 185, 80, 0.05);
-            padding: 15px;
-            margin: 20px 0;
-            font-style: italic;
-            border-radius: 0 8px 8px 0;
-        }
-
-        .analysis-report table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 20px 0;
-            background: rgba(255, 255, 255, 0.02);
-            border: 1px solid var(--card-border);
-            font-size: 13px;
-        }
-
-        .analysis-report th {
-            background: rgba(255, 255, 255, 0.05);
-            padding: 12px;
-            text-align: left;
-            color: var(--emerald-green);
-            font-family: 'Outfit';
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-
-        .analysis-report td {
-            padding: 12px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-            color: var(--text-muted);
-        }
-
-        .analysis-report hr {
-            border: none;
-            border-bottom: 1px solid var(--card-border);
-            margin: 30px 0;
-        }
-
-        /* Custom Dark Scrollbar */
-        .terminal::-webkit-scrollbar,
-        .analysis-report-body::-webkit-scrollbar {
-            width: 6px;
-        }
-
-        .terminal::-webkit-scrollbar-track,
-        .analysis-report-body::-webkit-scrollbar-track {
-            background: transparent;
-        }
-
-        .terminal::-webkit-scrollbar-thumb,
-        .analysis-report-body::-webkit-scrollbar-thumb {
-            background: rgba(255, 255, 255, 0.08);
-            border-radius: 10px;
-        }
-
-        .terminal::-webkit-scrollbar-thumb:hover,
-        .analysis-report-body::-webkit-scrollbar-thumb:hover {
-            background: rgba(255, 255, 255, 0.15);
-        }
-
-        /* --- VLI INSTITUTIONAL MENUBAR --- */
-        .vli-menubar {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 38px;
-            background: rgba(13, 17, 27, 0.95);
-            backdrop-filter: blur(20px);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 0 15px;
-            z-index: 2000;
-            user-select: none;
-            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-            font-size: 17px;
-            font-weight: 600;
-            letter-spacing: 0.3px;
-            color: var(--text-primary);
-        }
-
-        .menu-left, .menu-right {
-            display: flex;
-            align-items: center;
-            gap: 20px;
-        }
-
-        .menu-item {
-            position: relative;
-            cursor: pointer;
-            padding: 0 10px;
-            height: 32px;
-            display: flex;
-            align-items: center;
-            transition: background 0.2s;
-            color: var(--text-muted);
-        }
-
-        .menu-item:hover {
-            background: rgba(255, 255, 255, 0.05);
-            color: #fff;
-        }
-
-        .menu-dropdown {
-            position: absolute;
-            top: 32px;
-            left: 0;
-            background: #0d111b;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-top: none;
-            min-width: 180px;
-            display: none;
-            flex-direction: column;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-            z-index: 3000;
-        }
-
-        .menu-item:hover > .menu-dropdown,
-        .dropdown-submenu:hover > .menu-dropdown {
-            display: flex;
-        }
-
-        .dropdown-submenu {
-            position: relative;
-        }
-
-        .dropdown-submenu > .menu-dropdown {
-            top: 0;
-            left: 100%;
-            margin-top: -1px;
-        }
-
-        .dropdown-item {
-            padding: 10px 15px;
-            transition: background 0.2s;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-weight: 400;
-            white-space: nowrap;
-        }
-
-        .dropdown-item:hover {
-            background: rgba(255, 255, 255, 0.05);
-            color: var(--cobalt-blue);
-        }
-
-        .dropdown-divider {
-            height: 1px;
-            background: rgba(255, 255, 255, 0.05);
-            margin: 5px 0;
-        }
-
-        .status-pill {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 10px;
-            color: var(--text-muted);
-            background: rgba(255, 255, 255, 0.03);
-            padding: 4px 10px;
-            border-radius: 4px;
-        }
-
-        .status-dot {
-            width: 6px;
-            height: 6px;
-            border-radius: 50%;
-            background: var(--emerald-green);
-        }
-    </style>
-</head>
-
-<body>
-    <!-- Error Overlay disabled to prevent layout integrity locks during audit sessions -->
-    <!-- <div id="error-overlay">...</div> -->
-    
-    <div id="profile-modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <div>TRADER PROFILE & CONFIGURATION</div>
-                <div style="cursor:pointer; color:var(--text-muted);" onclick="closeTraderProfile()">✕</div>
-            </div>
-            <div class="modal-tabs">
-                <div class="modal-tab active" onclick="switchProfileTab('persona')" id="tab-btn-persona">Persona</div>
-                <div class="modal-tab" onclick="switchProfileTab('strategy')" id="tab-btn-strategy">Strategy</div>
-                <div class="modal-tab" onclick="switchProfileTab('rules')" id="tab-btn-rules">Risk Management</div>
-            </div>
-            <div class="modal-body" style="padding-top: 5px;">
-                <div style="display: flex; gap: 10px; margin-bottom: 15px; align-items: center; border-bottom: 1px dotted rgba(255,255,255,0.1); padding-bottom: 10px;">
-                     <span style="font-size: 13px; color: var(--text-muted); font-weight: 500;">Active Module:</span>
-                     <select id="profile-selector" onchange="onProfileDropdownChange()" style="flex:1; background: rgba(0,0,0,0.4); border: 1px solid var(--card-border); color: #fff; padding: 5px; outline: none;"></select>
-                     <button class="btn-action" style="padding: 5px 15px; font-size: 12px; background: rgba(255,255,255,0.1);" onclick="addNewProfileFile()">+ Add New</button>
-                </div>
-                <textarea id="profile-editor" spellcheck="false">Loading...</textarea>
-            </div>
-            <div class="modal-footer">
-                <span id="profile-status" style="margin-right:auto; color:var(--emerald-green); font-size:12px; font-weight:600; display:flex; align-items:center;"></span>
-                <button class="btn-action" style="background:transparent; border:1px solid var(--card-border);" onclick="if(confirm('Are you sure you want to discard your unsaved changes and reset to default?')) { resetCurrentProfileTab(); }">Reset To Default</button>
-                <button class="btn-action" onclick="saveTraderProfile()">Save</button>
-            </div>
-        </div>
-    </div>
-
-    <div class="vli-menubar">
-        <div class="menu-left">
-            <div class="menu-item" accesskey="f"><u>F</u>ile
-                <div class="menu-dropdown">
-                    <div class="dropdown-submenu">
-                        <div class="dropdown-item" style="cursor: default;"><span><u>N</u>ew Window</span> <span style="font-size: 10px; color: var(--text-muted); margin-left:25px;">▶</span></div>
-                        <div class="menu-dropdown">
-                            <div class="dropdown-item" onclick="UXManager.createCard('MACRO_WL')">Macro Watchlist Node</div>
-                            <div class="dropdown-item" onclick="UXManager.createCard('ANALYSIS_REP')">Analysis Report Node</div>
-                        </div>
-                    </div>
-                    <div class="dropdown-divider"></div>
-                    <div class="dropdown-item" onclick="loadWorkspace()"><span><u>L</u>oad Workspace...</span> <span style="color:var(--text-muted); font-size:11px; margin-left:20px;">Ctrl+L</span></div>
-                    <div class="dropdown-item" onclick="saveLayout(); alert('Workspace saved locally.')"><span><u>S</u>ave Workspace</span> <span style="color:var(--text-muted); font-size:11px; margin-left:20px;">Ctrl+S</span></div>
-                    <div class="dropdown-item" onclick="saveWorkspaceAs()"><span>Save Workspace <u>A</u>s...</span> <span style="color:var(--text-muted); font-size:11px; margin-left:20px;">Ctrl+Shift+S</span></div>
-                    <div class="dropdown-divider"></div>
-                    <div class="dropdown-item" onclick="openTraderProfile()"><span><u>T</u>rader Profile...</span></div>
-                </div>
-            </div>
-            <div class="menu-item" onmouseenter="updateViewMenu()" accesskey="v"><u>V</u>iew
-                <div class="menu-dropdown">
-                    <div id="view-menu-list">
-                        <!-- Populated dynamically to show active cards with checkboxes -->
-                        <div class="dropdown-item" style="color:var(--text-muted); cursor:default;">No active windows</div>
-                    </div>
-                    <div class="dropdown-divider"></div>
-                    <div class="dropdown-submenu">
-                        <div class="dropdown-item" style="cursor: default;"><span><u>W</u>orkspace</span> <span style="font-size: 10px; color: var(--text-muted); margin-left:25px;">▶</span></div>
-                        <div class="menu-dropdown">
-                            <div class="dropdown-submenu">
-                                <div class="dropdown-item" style="cursor: default;"><span><u>A</u>rrange</span> <span style="font-size: 10px; color: var(--text-muted); margin-left:25px;">▶</span></div>
-                                <div class="menu-dropdown">
-                                    <div class="dropdown-item" onclick="arrangeWorkspace()"><span><u>S</u>mart Arrange</span></div>
-                                    <div class="dropdown-item" onclick="resetLayout()"><span><u>R</u>eset to Default</span></div>
-                                    <div class="dropdown-item" onclick="cascadeWindows()"><span><u>C</u>ascade Windows</span></div>
-                                </div>
-                            </div>
-                            <div class="dropdown-item" onclick="poll()"><span><u>F</u>orce Global Sync</span></div>
-                            <div class="dropdown-item" onclick="toggleSnapMode()"><span>S<u>n</u>ap</span> <span id="menu-snap-status" style="font-size: 11px; opacity: 0.6; color: var(--text-muted); margin-left:15px;">ON</span></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="menu-right">
-            <div class="status-pill">
-                <div class="status-dot"></div>
-                <span id="menu-sync-status">SYNC_OK</span>
-            </div>
-            <div style="font-family: var(--font-mono); color: var(--text-muted); opacity: 0.8; margin-right: 15px;" id="system-clock">09:48:46</div>
-            <div class="menu-item" style="font-weight: 800; font-size: 16px; padding-right: 10px;">
-                <span style="color: #fff; letter-spacing: 1.5px;">COBALT</span>
-                <span style="color: var(--cobalt-blue); margin: 0 6px; font-weight: 300;">|</span>
-                <span style="color: var(--cobalt-blue); letter-spacing: 1px;">VLI</span>
-                <div class="menu-dropdown" style="right: 0; left: auto;">
-                    <div class="dropdown-item" onclick="alert('VLI Integrated Engine \nVersion: 4.8.2-INSTITUTIONAL\nStatus: Operational')">System Architecture</div>
-                    <div class="dropdown-divider"></div>
-                    <div class="dropdown-item" onclick="resetVLI()">Reset Backbone Session</div>
-                    <div class="dropdown-item" onclick="toggleDirectMode()">Fast-Path Mode <span id="menu-direct-status" style="font-size: 11px; opacity: 0.6; color: var(--text-muted); margin-left:15px;">OFF</span></div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="dashboard-container" id="wm-workspace">
-        <!-- Dynamic cards will be injected here by UXCardManager -->
-    </div>
-
-    <script>
         let refreshCountdown = 60;
         let activeWin = null;
         let winManager = {
@@ -1188,12 +78,12 @@
                 
                 cardBox.style.top = defaultStyles.top || '50px';
                 cardBox.style.left = defaultStyles.left || '50px';
-                if (defaultStyles.right && defaultStyles.right !== 'auto') {
+                if (defaultStyles.right) {
                     cardBox.style.left = 'auto';
                     cardBox.style.right = defaultStyles.right;
                 }
-                cardBox.style.width = defaultStyles.width || '440px';
-                cardBox.style.height = defaultStyles.height || '360px';
+                cardBox.style.width = defaultStyles.width || '450px';
+                cardBox.style.height = defaultStyles.height || '350px';
                 cardBox.style.zIndex = ++winManager.maxZ;
 
                 const liveBadgeHTML = (typeGuid === 'VLI_CHAT' || typeGuid === 'VLI_TELEMETRY') ? `<span class="live-badge" id="conn-status-${instanceGuid}">LIVE</span>` : '';
@@ -1257,14 +147,7 @@
                         </div>
                     </div>
                     ${bodyContent}
-                    <div class="resize-handle resize-n" data-dir="n"></div>
-                    <div class="resize-handle resize-s" data-dir="s"></div>
-                    <div class="resize-handle resize-e" data-dir="e"></div>
-                    <div class="resize-handle resize-w" data-dir="w"></div>
-                    <div class="resize-handle resize-nw" data-dir="nw"></div>
-                    <div class="resize-handle resize-ne" data-dir="ne"></div>
-                    <div class="resize-handle resize-sw" data-dir="sw"></div>
-                    <div class="resize-handle resize-se" data-dir="se"></div>
+                    <div class="card-resizer"></div>
                 `;
 
                 document.getElementById('wm-workspace').appendChild(cardBox);
@@ -1310,22 +193,18 @@
                     document.addEventListener('mouseup', onMouseUp);
                 });
 
-                cardBox.querySelectorAll('.resize-handle').forEach(resizer => {
-                    resizer.addEventListener('mousedown', (e) => {
-                        bringToFront(cardBox);
-                        winManager.resizing = cardBox;
-                        winManager.resizeDir = resizer.dataset.dir;
-                        winManager.startX = e.clientX;
-                        winManager.startY = e.clientY;
-                        winManager.startW = cardBox.offsetWidth;
-                        winManager.startH = cardBox.offsetHeight;
-                        winManager.startTop = cardBox.offsetTop;
-                        winManager.startLeft = cardBox.offsetLeft;
-                        
-                        document.addEventListener('mousemove', onMouseMove);
-                        document.addEventListener('mouseup', onMouseUp);
-                        e.preventDefault();
-                    });
+                const resizer = cardBox.querySelector('.card-resizer');
+                resizer.addEventListener('mousedown', (e) => {
+                    bringToFront(cardBox);
+                    winManager.resizing = cardBox;
+                    winManager.startX = e.clientX;
+                    winManager.startY = e.clientY;
+                    winManager.startW = cardBox.offsetWidth;
+                    winManager.startH = cardBox.offsetHeight;
+                    
+                    document.addEventListener('mousemove', onMouseMove);
+                    document.addEventListener('mouseup', onMouseUp);
+                    e.preventDefault();
                 });
             }
         }
@@ -1366,7 +245,22 @@
                 });
             });
 
-            // Removed generic resize bindings since UXCardManager injects them dynamically
+            document.querySelectorAll('.card-resizer').forEach(resizer => {
+                resizer.addEventListener('mousedown', (e) => {
+                    const card = resizer.closest('.card');
+                    bringToFront(card);
+                    
+                    winManager.resizing = card;
+                    winManager.startX = e.clientX;
+                    winManager.startY = e.clientY;
+                    winManager.startW = card.offsetWidth;
+                    winManager.startH = card.offsetHeight;
+                    
+                    document.addEventListener('mousemove', onMouseMove);
+                    document.addEventListener('mouseup', onMouseUp);
+                    e.preventDefault();
+                });
+            });
         }
 
         let snapModeEnabled = true;
@@ -1378,90 +272,35 @@
         }
 
         function onMouseMove(e) {
-            const now = performance.now();
-            if (winManager.lastTime) {
-                const dt = now - winManager.lastTime;
-                if (dt > 0) {
-                    const dxVel = e.clientX - winManager.lastX;
-                    const dyVel = e.clientY - winManager.lastY;
-                    const vel = Math.sqrt(dxVel*dxVel + dyVel*dyVel) / dt;
-                    winManager.velocity = (winManager.velocity || 0) * 0.8 + vel * 0.2;
-                }
-            } else {
-                winManager.velocity = 0;
-            }
-            winManager.lastX = e.clientX;
-            winManager.lastY = e.clientY;
-            winManager.lastTime = now;
-            
-            let velMultiplier = 1.0;
-            if (winManager.velocity > 0.05) {
-                velMultiplier = Math.max(0, 1.0 - ((winManager.velocity - 0.05) * 4.0));
-            }
-
             if (winManager.dragging) {
                 const dx = e.clientX - winManager.startX;
                 const dy = e.clientY - winManager.startY;
                 
-                let rawTop = winManager.startTop + dy;
-                let rawLeft = winManager.startLeft + dx;
-                let newTop = rawTop;
-                let newLeft = rawLeft;
+                let newTop = winManager.startTop + dy;
+                let newLeft = winManager.startLeft + dx;
                 
-                // --- PULL-AWAY COOLDOWN (Graceful Hysteresis) ---
-                let timeSinceBreak = Date.now() - (winManager.snapBreakTime || 0);
-                let snapStrength = 1.0;
-                if (timeSinceBreak < 2000) snapStrength = 0;
-                else if (timeSinceBreak < 5000) snapStrength = (timeSinceBreak - 2000) / 3000;
-                
-                // --- KINEMATIC INFLUENCE ---
-                snapStrength *= velMultiplier;
-                
-                if (winManager.isSnapped && snapModeEnabled && snapStrength > 0.5) {
-                    const pullDist = Math.max(Math.abs(rawTop - winManager.snappedTop), Math.abs(rawLeft - winManager.snappedLeft));
-                    if (pullDist > 40) {
-                        winManager.snapBreakTime = Date.now();
-                        winManager.isSnapped = false;
-                        snapStrength = 0;
-                    }
-                }
-                
-                let didSnap = false;
-                if (snapModeEnabled && snapStrength > 0) {
-                    const snapThreshold = 32 * snapStrength; // Dominant magnetic pull to other windows
-                    const gridSnapThreshold = 14 * snapStrength; // Base background grid snap
+                if (snapModeEnabled) {
+                    const snapThreshold = 18; // Magnetic pulling distance
+                    // When dragging, getBoundingClientRect won't have updated style yet, 
+                    // but we can trust the computed new dimensions
                     const elWidth = winManager.dragging.offsetWidth;
                     const elHeight = winManager.dragging.offsetHeight;
                     
-                    // 1. Strict Top-Left Grid Anchorage to maintain Title-Bar matrix alignment
-                    const gridX = Math.round(newLeft / 40) * 40;
-                    const gridY = Math.round(newTop / 40) * 40;
-                    
-                    if (Math.abs(newLeft - gridX) < gridSnapThreshold) { newLeft = gridX; didSnap = true; }
-                    if (Math.abs(newTop - gridY) < gridSnapThreshold) { newTop = gridY; didSnap = true; }
-                    
-                    // 2. Strong Window-to-Window Snapping
                     document.querySelectorAll('.card').forEach(other => {
                         if (other === winManager.dragging || other.style.display === 'none') return;
+                        
                         const rect = other.getBoundingClientRect();
                         
-                        // Vertical
-                        if (Math.abs(newTop - rect.bottom) < snapThreshold) { newTop = rect.bottom; didSnap = true; }
-                        if (Math.abs(newTop + elHeight - rect.top) < snapThreshold) { newTop = rect.top - elHeight; didSnap = true; }
-                        if (Math.abs(newTop - rect.top) < snapThreshold) { newTop = rect.top; didSnap = true; }
-                        // Horizontal
-                        if (Math.abs(newLeft - rect.right) < snapThreshold) { newLeft = rect.right; didSnap = true; }
-                        if (Math.abs(newLeft + elWidth - rect.left) < snapThreshold) { newLeft = rect.left - elWidth; didSnap = true; }
-                        if (Math.abs(newLeft - rect.left) < snapThreshold) { newLeft = rect.left; didSnap = true; }
+                        // Vertical Snaps
+                        if (Math.abs(newTop - rect.bottom) < snapThreshold) newTop = rect.bottom; // Snap to bottom edge
+                        if (Math.abs(newTop + elHeight - rect.top) < snapThreshold) newTop = rect.top - elHeight; // Snap to top edge
+                        if (Math.abs(newTop - rect.top) < snapThreshold) newTop = rect.top; // Align tops identically
+                        
+                        // Horizontal Snaps
+                        if (Math.abs(newLeft - rect.right) < snapThreshold) newLeft = rect.right; // Snap to right edge
+                        if (Math.abs(newLeft + elWidth - rect.left) < snapThreshold) newLeft = rect.left - elWidth; // Snap to left edge
+                        if (Math.abs(newLeft - rect.left) < snapThreshold) newLeft = rect.left; // Align lefts identically
                     });
-                }
-                
-                if (didSnap) {
-                    winManager.isSnapped = true;
-                    winManager.snappedTop = newTop;
-                    winManager.snappedLeft = newLeft;
-                } else {
-                    winManager.isSnapped = false;
                 }
                 
                 winManager.dragging.style.top = newTop + 'px';
@@ -1473,58 +312,8 @@
             if (winManager.resizing) {
                 const dx = e.clientX - winManager.startX;
                 const dy = e.clientY - winManager.startY;
-                const dir = winManager.resizeDir;
-                const card = winManager.resizing;
-
-                const gridSnapThreshold = 14 * velMultiplier; 
-                let newLeft = winManager.startLeft;
-                let newTop = winManager.startTop;
-                let newW = winManager.startW;
-                let newH = winManager.startH;
-
-                if (dir.includes('e')) {
-                    newW = Math.max(200, winManager.startW + dx);
-                    if (snapModeEnabled) {
-                        let newRight = winManager.startLeft + newW;
-                        let gridRight = Math.round(newRight / 40) * 40;
-                        if (Math.abs(newRight - gridRight) < gridSnapThreshold) newW = gridRight - winManager.startLeft;
-                    }
-                }
-                if (dir.includes('s')) {
-                    newH = Math.max(100, winManager.startH + dy);
-                    if (snapModeEnabled) {
-                        let newBottom = winManager.startTop + newH;
-                        let gridBottom = Math.round(newBottom / 40) * 40;
-                        if (Math.abs(newBottom - gridBottom) < gridSnapThreshold) newH = gridBottom - winManager.startTop;
-                    }
-                }
-                if (dir.includes('w')) {
-                    newLeft = winManager.startLeft + dx;
-                    if (snapModeEnabled) {
-                        let gridLeft = Math.round(newLeft / 40) * 40;
-                        if (Math.abs(newLeft - gridLeft) < gridSnapThreshold) newLeft = gridLeft;
-                    }
-                    newW = winManager.startW + (winManager.startLeft - newLeft);
-                    if (newW < 200) { newW = 200; newLeft = winManager.startLeft + winManager.startW - 200; }
-                }
-                if (dir.includes('n')) {
-                    newTop = winManager.startTop + dy;
-                    if (snapModeEnabled) {
-                        let gridTop = Math.round(newTop / 40) * 40;
-                        if (Math.abs(newTop - gridTop) < gridSnapThreshold) newTop = gridTop;
-                    }
-                    newH = winManager.startH + (winManager.startTop - newTop);
-                    if (newH < 100) { newH = 100; newTop = winManager.startTop + winManager.startH - 100; }
-                }
-
-                if (dir.includes('w') || dir.includes('e')) {
-                    card.style.width = newW + 'px';
-                    if (dir.includes('w')) card.style.left = newLeft + 'px';
-                }
-                if (dir.includes('n') || dir.includes('s')) {
-                    card.style.height = newH + 'px';
-                    if (dir.includes('n')) card.style.top = newTop + 'px';
-                }
+                winManager.resizing.style.width = (winManager.startW + dx) + 'px';
+                winManager.resizing.style.height = (winManager.startH + dy) + 'px';
             }
         }
 
@@ -1559,11 +348,11 @@
             const saved = localStorage.getItem(targetKey);
             if (!saved) {
                 if (targetKey === 'vli_wm_layout') {
-                    // First boot - rigid 40px geometric fallback
-                    UXManager.createCard('VLI_CHAT', {top: '40px', left: '1440px', width: '440px', height: '800px'}, 'coordinator');
-                    UXManager.createCard('MACRO_WL', {top: '40px', left: '40px', width: '640px', height: '400px'}, 'watchlist');
-                    UXManager.createCard('VLI_TELEMETRY', {top: '40px', left: '720px', width: '680px', height: '400px'}, 'telemetry');
-                    UXManager.createCard('ANALYSIS_REP', {top: '480px', left: '40px', width: '1360px', height: '600px'}, 'report');
+                    // First boot - dynamic geometric fallback
+                    UXManager.createCard('VLI_CHAT', {top: '50px', left: '20px', width: '450px', height: 'calc(100vh - 70px)'}, 'coordinator');
+                    UXManager.createCard('MACRO_WL', {top: '50px', left: '490px', width: '700px', height: '400px'}, 'watchlist');
+                    UXManager.createCard('VLI_TELEMETRY', {top: '50px', left: '1210px', width: 'calc(100vw - 1230px)', height: '400px'}, 'telemetry');
+                    UXManager.createCard('ANALYSIS_REP', {top: '470px', left: '490px', width: 'calc(100vw - 510px)', height: 'calc(100vh - 490px)'}, 'report');
                 } else {
                     alert('Workspace not found: ' + targetKey);
                 }
@@ -1584,17 +373,7 @@
                     const state = layout[id];
                     if (!state.typeGuid) continue;
                     
-                    let card;
-                    if (state.typeGuid === 'VLI_CHAT' && UXManager.instances[state.instanceGuid]) {
-                        card = UXManager.instances[state.instanceGuid];
-                        if (state.top) card.style.top = state.top;
-                        if (state.left) card.style.left = state.left;
-                        if (state.right && state.right !== 'auto') { card.style.right = state.right; card.style.left = 'auto'; }
-                        if (state.width) card.style.width = state.width;
-                        if (state.height) card.style.height = state.height;
-                    } else {
-                        card = UXManager.createCard(state.typeGuid, state, state.instanceGuid);
-                    }
+                    const card = UXManager.createCard(state.typeGuid, state, state.instanceGuid);
                     if (card) {
                         if (state.display) card.style.display = state.display;
                         if (state.collapsed) card.classList.add('collapsed');
@@ -1682,7 +461,6 @@
             }
             winManager.dragging = null;
             winManager.resizing = null;
-            winManager.lastTime = null;
             document.removeEventListener('mousemove', onMouseMove);
             document.removeEventListener('mouseup', onMouseUp);
         }
@@ -1727,6 +505,7 @@
 
         window.addEventListener('blur', onMouseUp);
         document.addEventListener('DOMContentLoaded', () => {
+            initWindowManager();
             // --- VLI ORCHESTRA STANDALONE DETECTION ---
             if (popoutId) {
                 console.log("[VLI_ORCHESTRA] Satellite Mode Active for:", popoutId);
@@ -1830,63 +609,6 @@
             saveLayout();
         }
 
-        function arrangeWorkspace() {
-            const vww = window.innerWidth;
-            const vwh = window.innerHeight;
-            
-            // Grid math for exact 40px matrix alignment
-            const rawChatWidth = vww / 3;
-            const chatWidth = Math.round(rawChatWidth / 40) * 40;
-            const chatLeft = Math.round((vww - chatWidth) / 40) * 40;
-            const chatHeight = Math.round((vwh - 120) / 40) * 40;
-            
-            const leftWidth = chatLeft - 80; // 40px margin on both sides
-            const leftWidthGrid = Math.round(leftWidth / 40) * 40;
-            
-            const chat = Object.values(UXManager.instances).find(c => c.dataset.typeGuid === 'VLI_CHAT');
-            if (chat) {
-                chat.style.display = '';
-                chat.style.top = '40px';
-                chat.style.left = chatLeft + 'px';
-                chat.style.width = chatWidth + 'px';
-                chat.style.height = chatHeight + 'px';
-                bringToFront(chat);
-            }
-            
-            const watchlist = Object.values(UXManager.instances).find(c => c.dataset.typeGuid === 'MACRO_WL');
-            if (watchlist) {
-                watchlist.style.display = '';
-                watchlist.style.top = '40px';
-                watchlist.style.left = '40px';
-                watchlist.style.width = leftWidthGrid + 'px';
-                watchlist.style.height = '400px';
-                bringToFront(watchlist);
-            }
-            
-            const telemetry = Object.values(UXManager.instances).find(c => c.dataset.typeGuid === 'VLI_TELEMETRY');
-            if (telemetry) {
-                telemetry.style.display = '';
-                telemetry.style.top = '480px';
-                telemetry.style.left = '40px';
-                telemetry.style.width = leftWidthGrid + 'px';
-                telemetry.style.height = '400px';
-                bringToFront(telemetry);
-            }
-            
-            const report = Object.values(UXManager.instances).find(c => c.dataset.typeGuid === 'ANALYSIS_REP');
-            if (report) {
-                report.style.display = '';
-                report.style.top = '40px';
-                report.style.left = '40px';
-                report.style.width = leftWidthGrid + 'px';
-                report.style.height = chatHeight + 'px';
-                // push report to back behind telemetry/watchlist if all are open
-                report.style.zIndex = Math.max(10, winManager.maxZ - 10); 
-            }
-            
-            saveLayout();
-        }
-
         function updateClock() {
             const clock = document.getElementById('system-clock');
             if (clock) {
@@ -1948,16 +670,6 @@
 
             let formattedText = text;
             const t = text.trim();
-            
-            // Dynamic Title Bar Extraction setup
-            let dynamicTitle = "Analysis Report";
-            let lines = t.split('\n');
-            let headerLine = lines.find(line => /^#{1,4}\s+/.test(line.trim()));
-            if (headerLine) {
-                dynamicTitle = headerLine.replace(/^#{1,4}\s+/, '').replace(/[\*\_`]/g, '').trim();
-                if (dynamicTitle.length > 55) dynamicTitle = dynamicTitle.substring(0, 52) + "...";
-            }
-            
             if (t.startsWith('{') || t.startsWith('[')) {
                 try {
                     const parsed = JSON.parse(t);
@@ -1969,18 +681,8 @@
 
             reportViewer.innerHTML = `<div class="analysis-report">${applyStatusFormatting(marked.parse(formattedText))}</div>`;
             reportViewer.scrollTop = 0;
-            
-            const card = reportViewer.closest('.card');
-            
-            // Inject dynamic title into the header while preserving the LIVE badge if present
-            const titleElem = card.querySelector('.card-header > div:first-child > div:nth-child(2)');
-            if (titleElem) {
-                const badge = titleElem.querySelector('.live-badge');
-                titleElem.innerHTML = dynamicTitle + (badge ? ' ' + badge.outerHTML : '');
-            }
-            
             // Bring the owning window to front
-            bringToFront(card);
+            bringToFront(reportViewer.closest('.card'));
             
             try {
                 renderMathInElement(reportViewer, {
@@ -2151,16 +853,8 @@
                 if (window.VLI_DEBUG) console.log("[VLI_TRACE] " + new Date().toLocaleTimeString() + " - Poll data received successfully.");
                 if (data.error) throw new Error(data.error);
 
-                const topStatus = document.getElementById('conn-status');
-                if (topStatus) {
-                    topStatus.innerText = "LIVE";
-                    topStatus.style.color = "var(--emerald-green)";
-                }
-                document.querySelectorAll('.live-badge').forEach(b => {
-                    b.innerText = "LIVE";
-                    b.style.color = "var(--emerald-green)";
-                });
-                
+                document.getElementById('conn-status').innerText = "LIVE";
+                document.getElementById('conn-status').style.color = "var(--emerald-green)";
                 if (data.last_macro_update) {
                     window.lastMacroUpdateTimestamp = data.last_macro_update;
                     const lastUpdate = data.last_macro_update * 1000;
@@ -2180,11 +874,9 @@
 
                 // 4. Connectivity Status
                 const statusBadge = document.getElementById('conn-status');
-                if (statusBadge) {
-                    statusBadge.innerText = "LIVE";
-                    statusBadge.style.color = "var(--emerald-green)";
-                    statusBadge.style.background = "rgba(63, 185, 80, 0.15)";
-                }
+                statusBadge.innerText = "LIVE";
+                statusBadge.style.color = "var(--emerald-green)";
+                statusBadge.style.background = "rgba(63, 185, 80, 0.15)";
 
             } catch (e) {
                 console.error("VLI Poll Error:", e);
@@ -2194,10 +886,6 @@
                     statusBadge.style.color = "var(--ruby-red)";
                     statusBadge.style.background = "rgba(248, 81, 73, 0.1)";
                 }
-                document.querySelectorAll('.live-badge').forEach(b => {
-                    b.innerText = "OFFLINE";
-                    b.style.color = "var(--ruby-red)";
-                });
             } finally {
                 isPolling = false;
             }
@@ -2346,15 +1034,18 @@
 
             activeTypingIndicator = document.createElement('div');
             activeTypingIndicator.className = 'typing-indicator';
+            activeTypingIndicator.innerHTML = `
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+            `;
             msgBox.appendChild(activeTypingIndicator);
             msgBox.scrollTop = msgBox.scrollHeight;
         }
 
         function hideTypingIndicator() {
             if (activeTypingIndicator) {
-                activeTypingIndicator.classList.add('fade-out');
-                const target = activeTypingIndicator;
-                setTimeout(() => { if (target.parentNode) target.remove(); }, 500);
+                activeTypingIndicator.remove();
                 activeTypingIndicator = null;
             }
         }
@@ -2504,7 +1195,7 @@
             if (!isRegen) {
                 showTypingIndicator();
             } else {
-                regenTargetAiMsg.innerHTML = '<div class="typing-indicator"></div>';
+                regenTargetAiMsg.innerHTML = '<div class="typing-indicator" style="padding: 10px 0;"><span>.</span><span>.</span><span>.</span></div>';
             }
 
             // Render Math for the user message
@@ -2929,7 +1620,4 @@
                 // If shiftKey is true, allow default newline
             }
         }
-    </script>
-</body>
-
-</html>
+    

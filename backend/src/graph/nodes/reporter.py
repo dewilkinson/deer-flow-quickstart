@@ -13,6 +13,16 @@ from src.prompts.planner_model import Plan
 from ..types import State
 
 logger = logging.getLogger(__name__)
+ 
+# 1. Private context: Truly private to THIS module.
+_NODE_RESOURCE_CONTEXT: dict[str, Any] = {}
+
+# 2. Shared context: Persistent, shared by agents of the SAME type
+_SHARED_RESOURCE_CONTEXT: dict[str, Any] = {}
+
+# 3. Global context: Shared across all agent types
+from src.tools.shared_storage import GLOBAL_CONTEXT
+_GLOBAL_RESOURCE_CONTEXT = GLOBAL_CONTEXT
 
 
 def _sanitize_final_content(text: str) -> str:

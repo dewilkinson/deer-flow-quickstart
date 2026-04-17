@@ -68,10 +68,25 @@ def apply_prompt_template(prompt_name: str, state: AgentState, configurable: Con
     profile_dir = os.path.dirname(profile_path) if os.path.isfile(profile_path) else profile_path
 
     # Define Modules
+    import json
+    config_path = os.path.join(profile_dir, "vli_session_config.json")
+    persona_file = "cma_persona.md"
+    strategy_file = "cma_strategy_apex500.md"
+    risk_file = "cma_risk_management.md"
+    
+    if os.path.exists(config_path):
+        try:
+            with open(config_path) as cf:
+                sc = json.load(cf)
+                persona_file = sc.get("active_persona", persona_file)
+                strategy_file = sc.get("active_strategy", strategy_file)
+                risk_file = sc.get("active_risk", risk_file)
+        except: pass
+
     modules = {
-        "PERSONA": "cma_persona.md",
-        "RISK": "cma_risk_management.md",
-        "STRATEGY": "cma_strategy_apex500.md",
+        "PERSONA": persona_file,
+        "RISK": risk_file,
+        "STRATEGY": strategy_file,
         "JOURNAL": "cma_journal_template.md"
     }
 

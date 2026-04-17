@@ -12,9 +12,11 @@
 
 from .analyst import analyst_node
 from .coder import coder_node
+from .coordinator import coordinator_node
 from .human_feedback import human_feedback_node
 from .imaging import imaging_node
 from .journaler import journaler_node
+from .parser import parser_node
 from .portfolio_manager import portfolio_manager_node
 from .reporter import reporter_node
 from .synthesizer import synthesizer_node

@@ -50,7 +50,7 @@ class Configuration:
     mcp_settings: dict = None  # MCP settings, including dynamic loaded tools
     snaptrade_settings: dict = field(default_factory=dict)  # SnapTrade credentials and settings
     obsidian_settings: dict = field(default_factory=dict)  # Obsidian vault and note settings
-    report_style: str = ReportStyle.ACADEMIC.value  # Report style
+    report_style: str = ReportStyle.EXECUTIVE_COMMENTARY.value  # Report style
     enable_deep_thinking: bool = False  # Whether to enable deep thinking
     developer_mode: bool = True  # Enable root-level system node access by default
 

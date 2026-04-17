@@ -1,0 +1,1 @@
+const fs = require('fs'); const lines = fs.readFileSync('temp.js', 'utf8').split('\n'); let stack = []; for(let i=0; i<lines.length; i++) { for(let j=0; j<lines[i].length; j++) { if (lines[i][j] === '{') { stack.push(i + 1); } else if (lines[i][j] === '}') { stack.pop(); } } } console.log(stack);

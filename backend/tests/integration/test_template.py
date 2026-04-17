@@ -33,8 +33,8 @@ def test_apply_prompt_template():
 
     assert isinstance(messages, list)
     assert len(messages) > 1
-    assert messages[0]["role"] == "system"
-    assert "CURRENT_TIME" in messages[0]["content"]
+    assert messages[0].type == "system"
+    assert "CURRENT_TIME" in messages[0].content
     assert messages[1]["role"] == "user"
     assert messages[1]["content"] == "test message"
 
@@ -49,7 +49,7 @@ def test_apply_prompt_template_empty_messages():
 
     messages = apply_prompt_template("coder", test_state)
     assert len(messages) == 1  # Only system message
-    assert messages[0]["role"] == "system"
+    assert messages[0].type == "system"
 
 
 def test_apply_prompt_template_multiple_messages():
@@ -66,8 +66,8 @@ def test_apply_prompt_template_multiple_messages():
 
     messages = apply_prompt_template("coder", test_state)
     assert len(messages) == 4  # system + 3 messages
-    assert messages[0]["role"] == "system"
-    assert all(m["role"] in ["system", "user", "assistant"] for m in messages)
+    assert messages[0].type == "system"
+    assert all((m.type if hasattr(m, "type") else m.get("role")) in ["system", "user", "assistant"] for m in messages)
 
 
 def test_apply_prompt_template_with_special_chars():
@@ -100,7 +100,7 @@ def test_current_time_format():
     }
 
     messages = apply_prompt_template("coder", test_state)
-    system_content = messages[0]["content"]
+    system_content = messages[0].content
 
     assert any(line.strip().startswith("CURRENT_TIME:") for line in system_content.split("\n"))
 
@@ -114,9 +114,10 @@ def test_apply_prompt_template_reporter():
         "workspace_context": "test reporter context",
         "report_style": "news",
         "locale": "en-US",
+        "intent": "MARKET_INSIGHT",
     }
     messages_news = apply_prompt_template("reporter", test_state_news)
-    system_content_news = messages_news[0]["content"]
+    system_content_news = messages_news[0].content
     assert "NBC News" in system_content_news
 
     test_state_social_media_en = {
@@ -125,9 +126,10 @@ def test_apply_prompt_template_reporter():
         "workspace_context": "test reporter context",
         "report_style": "social_media",
         "locale": "en-US",
+        "intent": "MARKET_INSIGHT",
     }
     messages_default = apply_prompt_template("reporter", test_state_social_media_en)
-    system_content_default = messages_default[0]["content"]
+    system_content_default = messages_default[0].content
     assert "Twitter/X" in system_content_default
 
     test_state_social_media_cn = {
@@ -136,7 +138,8 @@ def test_apply_prompt_template_reporter():
         "workspace_context": "test reporter context",
         "report_style": "social_media",
         "locale": "zh-CN",
+        "intent": "MARKET_INSIGHT",
     }
     messages_cn = apply_prompt_template("reporter", test_state_social_media_cn)
-    system_content_cn = messages_cn[0]["content"]
+    system_content_cn = messages_cn[0].content
     assert "小红书" in system_content_cn

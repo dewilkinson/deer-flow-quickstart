@@ -425,6 +425,211 @@ async def vli_visualization():
 
 # --- VLI SESSION MONITORING & CHAT ENDPOINTS ---
 
+import shutil
+
+class FeedbackRequest(BaseModel):
+    vote: str # 'up' or 'down'
+    request: str
+    response: str
+
+@app.post("/api/v1/vli/feedback")
+async def handle_vli_feedback(req: FeedbackRequest):
+    import os
+    from datetime import datetime
+    base_dir = r"c:\github\obsidian-vault\_cobalt"
+    path = os.path.join(base_dir, "feedback.md")
+    
+    # Ensure file and tables exist
+    if not os.path.exists(path):
+        with open(path, "w", encoding="utf-8") as f:
+            f.write("# VLI Human Feedback Alignment System\n\n## Positive Feedback\n| Timestamp | Request | System Response Snippet |\n|---|---|---|\n\n## Negative Feedback\n| Timestamp | Request | System Response Snippet |\n|---|---|---|\n")
+
+    # Clean text to single lines for Table compliance
+    clean_req = req.request.replace('\n', ' ').strip()
+    clean_req = (clean_req[:100] + '...') if len(clean_req) > 100 else clean_req
+    
+    clean_resp = req.response.replace('\n', ' ').strip()
+    clean_resp = (clean_resp[:150] + '...') if len(clean_resp) > 150 else clean_resp
+    
+    # Escape pipe characters
+    clean_req = clean_req.replace('|', '\\|')
+    clean_resp = clean_resp.replace('|', '\\|')
+    
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    row = f"| {timestamp} | {clean_req} | {clean_resp} |\n"
+    
+    # We natively read, inject row, and write back
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+            
+        target_header = "## Positive Feedback" if req.vote == 'up' else "## Negative Feedback"
+        insert_idx = -1
+        
+        for i, line in enumerate(lines):
+            if line.startswith(target_header):
+                # find the end of the table (or next header)
+                for j in range(i+1, len(lines)):
+                    if lines[j].startswith("## "):
+                        insert_idx = j
+                        break
+                if insert_idx == -1:
+                    insert_idx = len(lines)
+                break
+                
+        if insert_idx != -1:
+            # Check if previous line lacks newline
+            if insert_idx > 0 and not lines[insert_idx-1].endswith('\n'):
+                lines[insert_idx-1] += '\n'
+            lines.insert(insert_idx, row)
+            with open(path, "w", encoding="utf-8") as f:
+                f.writelines(lines)
+            return {"status": "success"}
+        else:
+            # Fallback if table header missing somehow
+            with open(path, "a", encoding="utf-8") as f:
+                 f.write(f"\n{target_header}\n| Timestamp | Request | System Response Snippet |\n|---|---|---|\n{row}")
+            return {"status": "success"}
+    except Exception as e:
+        logger.error(f"[FEEDBACK] Error appending row: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+class TraderProfileUpdate(BaseModel):
+    active_persona: str = "cma_persona.md"
+    active_strategy: str = "cma_strategy_apex500.md"
+    active_rules: str = "cma_risk_management.md"
+    persona_content: str = ""
+    strategy_content: str = ""
+    rules_content: str = ""
+
+@app.get("/api/v1/trader-profile")
+async def get_trader_profile():
+    base_dir = r"c:\github\obsidian-vault\_cobalt"
+    
+    def read_safe(path):
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8") as f:
+                return f.read()
+        return ""
+        
+    import json
+    import glob
+    config_path = os.path.join(base_dir, "vli_session_config.json")
+    active_persona = "cma_persona.md"
+    active_strategy = "cma_strategy_apex500.md"
+    active_rules = "cma_risk_management.md"
+    
+    if os.path.exists(config_path):
+        try:
+            with open(config_path) as cf:
+                sc = json.load(cf)
+                active_persona = sc.get("active_persona", active_persona)
+                active_strategy = sc.get("active_strategy", active_strategy)
+                active_rules = sc.get("active_risk", active_rules)
+        except: pass
+        
+    persona_files = [os.path.basename(f) for f in glob.glob(os.path.join(base_dir, "cma_persona*.md"))]
+    strategy_files = [os.path.basename(f) for f in glob.glob(os.path.join(base_dir, "cma_strategy*.md"))]
+    rules_files = [os.path.basename(f) for f in glob.glob(os.path.join(base_dir, "cma_risk*.md"))]
+    
+    if active_persona not in persona_files: persona_files.append(active_persona)
+    if active_strategy not in strategy_files: strategy_files.append(active_strategy)
+    if active_rules not in rules_files: rules_files.append(active_rules)
+        
+    return {
+        "active_persona": active_persona,
+        "active_strategy": active_strategy,
+        "active_rules": active_rules,
+        "persona_files": sorted(set(persona_files)),
+        "strategy_files": sorted(set(strategy_files)),
+        "rules_files": sorted(set(rules_files)),
+        "persona": read_safe(os.path.join(base_dir, active_persona)),
+        "strategy": read_safe(os.path.join(base_dir, active_strategy)),
+        "rules": read_safe(os.path.join(base_dir, active_rules))
+    }
+
+@app.post("/api/v1/trader-profile")
+async def update_trader_profile(update: TraderProfileUpdate):
+    base_dir = r"c:\github\obsidian-vault\_cobalt"
+    import json
+    config_path = os.path.join(base_dir, "vli_session_config.json")
+    
+    sc = {}
+    if os.path.exists(config_path):
+        try:
+            with open(config_path) as cf:
+                sc = json.load(cf)
+        except: pass
+        
+    sc["active_persona"] = update.active_persona
+    sc["active_strategy"] = update.active_strategy
+    sc["active_risk"] = update.active_rules
+    
+    try:
+        with open(config_path, "w") as cf:
+            json.dump(sc, cf, indent=4)
+            
+        files_to_write = {
+            update.active_persona: update.persona_content,
+            update.active_strategy: update.strategy_content,
+            update.active_rules: update.rules_content
+        }
+        
+        for filename, content in files_to_write.items():
+            path = os.path.join(base_dir, filename)
+            if os.path.exists(path):
+                 shutil.copy(path, path + ".bak")
+            with open(path, "w", encoding="utf-8") as f:
+                 f.write(content)
+                 
+        return {"status": "success"}
+    except Exception as e:
+        logger.error(f"[PROFILE_API] Error updating trader profile: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/v1/trader-profile/file")
+async def get_trader_profile_file(name: str):
+    import os
+    base_dir = r"c:\github\obsidian-vault\_cobalt"
+    path = os.path.join(base_dir, os.path.basename(name))
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="File not found")
+    with open(path, "r", encoding="utf-8") as f:
+        return {"content": f.read()}
+
+class TraderProfileNewRequest(BaseModel):
+    type: str
+    name: str
+
+@app.post("/api/v1/trader-profile/new")
+async def new_trader_profile(req: TraderProfileNewRequest):
+    import os
+    import re
+    base_dir = r"c:\github\obsidian-vault\_cobalt"
+    
+    prefix = {
+        "persona": "cma_persona",
+        "strategy": "cma_strategy",
+        "rules": "cma_risk"
+    }.get(req.type, "cma_custom")
+    
+    clean_name = re.sub(r'[^a-zA-Z0-9_\-]', '_', req.name).strip('_').lower()
+    if not clean_name: raise HTTPException(status_code=400, detail="Invalid name")
+    
+    filename = f"{prefix}_{clean_name}.md"
+    
+    path = os.path.join(base_dir, filename)
+    if os.path.exists(path):
+        raise HTTPException(status_code=400, detail="File already exists.")
+        
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(f"# {req.name.upper()} Template\n\nBegin configuring guidelines here...")
+        return {"filename": filename}
+    except Exception as e:
+        logger.error(f"[PROFILE_API] Error creating profile: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 class VLIActionPlanRequest(BaseModel):
     text: str
@@ -844,7 +1049,7 @@ async def _invoke_vli_agent(
 
     # 2. Refined Ticker Query: Qualified vs Unqualified vs Analyze
     qualifiers = ["PRICE", "VOLUME", "OHLC", "VALUE", "MA", "RSI", "MACD"]
-    is_qualified = any(q in text.upper() for q in qualifiers)
+    is_qualified = any(q in text.upper() for q in qualifiers) or "GET " in text.upper() or len(text.split()) <= 2
     is_analyze = ("ANALYZE" in text.upper() or "ANALYSIS" in text.upper()) and not (is_smc and is_fast_override)
     is_ticker_query = ("$" in text or "GET " in text.upper() or is_fast_override) and len(text) < 65 and not is_analyze
 
@@ -1314,21 +1519,33 @@ async def post_vli_action_plan(request: VLIActionPlanRequest, background_tasks: 
             transaction_id = f"vli_action_{uuid.uuid4().hex[:8]}"
             logger.info(f"VLI: Fresh transaction initialized: {transaction_id}")
 
-    # [FAST-PATH] Ticker-Only Shortcut Bypass (Pre-Orchestration)
-    # Detects if input is ONLY a ticker (e.g., "$NVDA", "AAPL")
+    # [FAST-PATH] Shorthand Directive Bypass (Pre-Orchestration)
+    # Detects common patterns like "get aapl price", "price of nvda", etc.
     import re
-    cleaned_input = request.text.strip()
-    ticker_match = re.match(r"^\$?([A-Z]{1,5})$", cleaned_input.upper())
+    cleaned_input = request.text.strip().upper()
+    ticker = None
+    fp_intent = None
     
-    if ticker_match and not request.raw_data_mode:
-        ticker = ticker_match.group(1)
-        logger.info(f"VLI: Fast-Path Ticker Hit detected: {ticker}. Bypassing AI Orchestration.")
+    # Robust multi-pattern matching for price-only intent
+    # 1. Ticker (price) | Get Ticker (price)
+    m1 = re.match(r"^(?:GET\s+)?\$?([A-Z]{1,5})(?:\s+PRICE)?$", cleaned_input)
+    # 2. Price of Ticker
+    m2 = re.match(r"^PRICE\s+OF\s+\$?([A-Z]{1,5})$", cleaned_input)
+    
+    if m1:
+        ticker = m1.group(1)
+        fp_intent = "Shorthand/Price"
+    elif m2:
+        ticker = m2.group(1)
+        fp_intent = "Price of Ticker"
+        
+    if ticker and not request.raw_data_mode:
+        logger.info(f"VLI: Fast-Path Hit detected: {ticker} (Intent: {fp_intent}). Bypassing AI Orchestration.")
         try:
             from src.tools.finance import get_stock_quote
             quote = await get_stock_quote(ticker=ticker, use_fast_path=True)
             
             if isinstance(quote, dict):
-                # Handle both flat and nested tool results (Standard/Fast/Cached)
                 price = quote.get("price")
                 if not price and "raw" in quote and isinstance(quote["raw"], dict):
                     price = quote["raw"].get("Close")
@@ -1344,9 +1561,11 @@ async def post_vli_action_plan(request: VLIActionPlanRequest, background_tasks: 
                         telemetry_file = get_vli_path("VLI_Raw_Telemetry.md")
                         timestamp = datetime.now().strftime("[%H:%M:%S]")
                         with open(telemetry_file, "a", encoding="utf-8") as tf:
-                            tf.write(f"\n{timestamp} **FAST_PATH_HIT (Bypass: Ticker Only)**\n")
+                            tf.write(f"\n{timestamp} **FAST_PATH_HIT (Bypass: {fp_intent})**\n")
                             tf.write(f"- **Ticker**: `{ticker}`\n")
                             tf.write(f"- **Response**: `{response_text}`\n\n---\n")
+                            tf.flush()
+                            os.fsync(tf.fileno())
                     except: pass
                     
                     return {"response": response_text, "status": "OK", "error_details": None, "thread_id": transaction_id}
