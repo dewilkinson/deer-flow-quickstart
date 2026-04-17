@@ -133,7 +133,6 @@ async def parser_node(state: State, config: RunnableConfig) -> Command[Literal["
             final_polish, fb_msgs_2 = await _run_node_with_tiered_fallback("parser", state, config, messages=all_msgs)
         except Exception:
              # Safety fallback
-             from src.llms.llm import get_llm_by_type
              llm = get_llm_by_type("basic")
              final_polish = await llm.ainvoke(all_msgs)
              fb_msgs_2 = []
