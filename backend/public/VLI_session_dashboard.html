@@ -92,8 +92,8 @@
             justify-content: space-between;
             align-items: center;
             font-weight: 700;
-            font-size: 10px;
-            letter-spacing: 1.2px;
+            font-size: 17px;
+            letter-spacing: 0.3px;
             text-transform: uppercase;
             color: var(--text-muted);
             cursor: move;
@@ -347,12 +347,46 @@
             font-weight: 400;
         }
 
+        .chat-inline-markdown > h1:first-child,
+        .chat-inline-markdown > h2:first-child,
+        .chat-inline-markdown > h3:first-child {
+            display: none;
+        }
+
         .msg-user {
             background: rgba(255, 255, 255, 0.03);
             color: var(--text-muted);
             align-self: flex-end;
             border-right: 2px solid rgba(255, 255, 255, 0.1);
-            font-size: 13px;
+            font-size: 16px;
+        }
+
+        /* --- TYPING INDICATOR --- */
+        .typing-indicator {
+            align-self: flex-start;
+            background: rgba(13, 17, 23, 0.5);
+            padding: 12px 18px;
+            border-radius: 8px;
+            display: flex;
+            gap: 4px;
+            margin-bottom: 20px;
+            border-left: 2px solid var(--cobalt-blue);
+        }
+
+        .typing-dot {
+            width: 6px;
+            height: 6px;
+            background: var(--cobalt-blue);
+            border-radius: 50%;
+            animation: typing-bounce 1.4s infinite ease-in-out both;
+        }
+
+        .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+        .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+
+        @keyframes typing-bounce {
+            0%, 80%, 100% { transform: scale(0); opacity: 0.3; }
+            40% { transform: scale(1); opacity: 1; }
         }
 
         .analysis-report pre {
@@ -566,6 +600,108 @@
             color: var(--ruby-red);
         }
 
+        /* Config Overlay Modal */
+        #profile-modal {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(10px);
+            z-index: 5000;
+            display: none;
+        }
+
+        .modal-content {
+            background: #0d111b;
+            border: 1px solid var(--card-border);
+            border-radius: 8px;
+            width: 80vw;
+            max-width: 900px;
+            height: 80vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.8);
+            overflow: hidden;
+            
+            position: absolute;
+            top: 10vh;
+            left: 10vw;
+        }
+
+        .modal-header {
+            padding: 15px 20px;
+            background: rgba(255, 255, 255, 0.05);
+            border-bottom: 1px solid var(--card-border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 700;
+            font-size: 16px;
+            cursor: move;
+            user-select: none;
+        }
+
+        .modal-tabs {
+            display: flex;
+            background: rgba(0, 0, 0, 0.2);
+            border-bottom: 1px solid var(--card-border);
+        }
+
+        .modal-tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            color: var(--text-muted);
+            border-right: 1px solid var(--card-border);
+            font-weight: 600;
+            font-size: 13px;
+            text-transform: uppercase;
+        }
+
+        .modal-tab.active {
+            background: var(--cobalt-blue);
+            color: #fff;
+        }
+
+        .modal-body {
+            flex: 1;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .modal-body textarea {
+            flex: 1;
+            background: rgba(0,0,0,0.4);
+            border: 1px solid var(--card-border);
+            color: var(--text-primary);
+            padding: 15px;
+            font-family: var(--font-mono);
+            font-size: 16px;
+            resize: none;
+            border-radius: 4px;
+        }
+        
+        .modal-footer {
+            padding: 15px 20px;
+            border-top: 1px solid var(--card-border);
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+
+        .btn-action {
+            background: var(--cobalt-blue);
+            color: #fff;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        .btn-action:hover {
+            opacity: 0.8;
+        }
+
         /* --- TOGGLE SWITCH --- */
         .direct-mode-toggle {
             display: flex;
@@ -755,7 +891,7 @@
             top: 0;
             left: 0;
             width: 100%;
-            height: 32px;
+            height: 38px;
             background: rgba(13, 17, 27, 0.95);
             backdrop-filter: blur(20px);
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
@@ -765,10 +901,10 @@
             padding: 0 15px;
             z-index: 2000;
             user-select: none;
-            font-family: 'Outfit';
-            font-size: 11px;
+            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+            font-size: 17px;
             font-weight: 600;
-            letter-spacing: 0.8px;
+            letter-spacing: 0.3px;
             color: var(--text-primary);
         }
 
@@ -805,10 +941,22 @@
             display: none;
             flex-direction: column;
             box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            z-index: 3000;
         }
 
-        .menu-item:hover .menu-dropdown {
+        .menu-item:hover > .menu-dropdown,
+        .dropdown-submenu:hover > .menu-dropdown {
             display: flex;
+        }
+
+        .dropdown-submenu {
+            position: relative;
+        }
+
+        .dropdown-submenu > .menu-dropdown {
+            top: 0;
+            left: 100%;
+            margin-top: -1px;
         }
 
         .dropdown-item {
@@ -817,6 +965,8 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            font-weight: 400;
+            white-space: nowrap;
         }
 
         .dropdown-item:hover {
@@ -853,31 +1003,85 @@
 <body>
     <!-- Error Overlay disabled to prevent layout integrity locks during audit sessions -->
     <!-- <div id="error-overlay">...</div> -->
+    
+    <div id="profile-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>TRADER PROFILE & CONFIGURATION</div>
+                <div style="cursor:pointer; color:var(--text-muted);" onclick="closeTraderProfile()">✕</div>
+            </div>
+            <div class="modal-tabs">
+                <div class="modal-tab active" onclick="switchProfileTab('persona')" id="tab-btn-persona">Persona</div>
+                <div class="modal-tab" onclick="switchProfileTab('strategy')" id="tab-btn-strategy">Strategy</div>
+                <div class="modal-tab" onclick="switchProfileTab('rules')" id="tab-btn-rules">Risk Management</div>
+            </div>
+            <div class="modal-body" style="padding-top: 5px;">
+                <div style="display: flex; gap: 10px; margin-bottom: 15px; align-items: center; border-bottom: 1px dotted rgba(255,255,255,0.1); padding-bottom: 10px;">
+                     <span style="font-size: 13px; color: var(--text-muted); font-weight: 500;">Active Module:</span>
+                     <select id="profile-selector" onchange="onProfileDropdownChange()" style="flex:1; background: rgba(0,0,0,0.4); border: 1px solid var(--card-border); color: #fff; padding: 5px; outline: none;"></select>
+                     <button class="btn-action" style="padding: 5px 15px; font-size: 12px; background: rgba(255,255,255,0.1);" onclick="addNewProfileFile()">+ Add New</button>
+                </div>
+                <textarea id="profile-editor" spellcheck="false">Loading...</textarea>
+            </div>
+            <div class="modal-footer">
+                <span id="profile-status" style="margin-right:auto; color:var(--emerald-green); font-size:12px; font-weight:600; display:flex; align-items:center;"></span>
+                <button class="btn-action" style="background:transparent; border:1px solid var(--card-border);" onclick="if(confirm('Are you sure you want to discard your unsaved changes and reset to default?')) { resetCurrentProfileTab(); }">Reset To Default</button>
+                <button class="btn-action" onclick="saveTraderProfile()">Save</button>
+            </div>
+        </div>
+    </div>
 
     <div class="vli-menubar">
         <div class="menu-left">
-            <div class="menu-item" style="color: var(--cobalt-blue); font-weight: 800;">VLI
+            <div class="menu-item" style="font-weight: 800; font-size: 16px; padding-left: 10px; margin-right: 15px;">
+                <span style="color: #fff; letter-spacing: 1.5px;">COBALT</span>
+                <span style="color: var(--cobalt-blue); margin: 0 6px; font-weight: 300;">|</span>
+                <span style="color: var(--cobalt-blue); letter-spacing: 1px;">VLI</span>
                 <div class="menu-dropdown">
-                    <div class="dropdown-item" onclick="alert('VLI Integrated Engine \nVersion: 4.8.2-INSTITUTIONAL\nStatus: Operational')">System Architecture</div>
+                    <div class="dropdown-item" onclick="alert('VLI Integrated Engine \\nVersion: 4.8.2-INSTITUTIONAL\\nStatus: Operational')">System Architecture</div>
                     <div class="dropdown-divider"></div>
                     <div class="dropdown-item" onclick="resetVLI()">Reset Backbone Session</div>
-                    <div class="dropdown-item" onclick="toggleDirectMode()">Fast-Path Mode <span id="menu-direct-status" style="font-size: 9px; opacity: 0.6;">OFF</span></div>
+                    <div class="dropdown-item" onclick="toggleDirectMode()">Fast-Path Mode <span id="menu-direct-status" style="font-size: 11px; opacity: 0.6; color: var(--text-muted); margin-left:15px;">OFF</span></div>
                 </div>
             </div>
-            <div class="menu-item">WINDOWS
+            <div class="menu-item" accesskey="f"><u>F</u>ile
                 <div class="menu-dropdown">
-                    <div class="dropdown-item" onclick="toggleWindow('win-coordinator')">Coordinator Interface <span>ALT+1</span></div>
-                    <div class="dropdown-item" onclick="toggleWindow('win-telemetry')">Raw Telemetry <span>ALT+2</span></div>
-                    <div class="dropdown-item" onclick="toggleWindow('win-watchlist')">Macro Watchlist <span>ALT+3</span></div>
-                    <div class="dropdown-item" onclick="toggleWindow('win-report')">Analysis Report <span>ALT+4</span></div>
-                </div>
-            </div>
-            <div class="menu-item">WORKSPACE
-                <div class="menu-dropdown">
-                    <div class="dropdown-item" onclick="resetLayout()">Reset Workspace Geometry</div>
-                    <div class="dropdown-item" onclick="poll()">Force Global Sync</div>
+                    <div class="dropdown-submenu">
+                        <div class="dropdown-item" style="cursor: default;"><span><u>N</u>ew Window</span> <span style="font-size: 10px; color: var(--text-muted); margin-left:25px;">▶</span></div>
+                        <div class="menu-dropdown">
+                            <div class="dropdown-item" onclick="UXManager.createCard('MACRO_WL')">Macro Watchlist Node</div>
+                            <div class="dropdown-item" onclick="UXManager.createCard('ANALYSIS_REP')">Analysis Report Node</div>
+                        </div>
+                    </div>
                     <div class="dropdown-divider"></div>
-                    <div class="dropdown-item" onclick="cascadeWindows()">Cascade Windows</div>
+                    <div class="dropdown-item" onclick="loadWorkspace()"><span><u>L</u>oad Workspace...</span> <span style="color:var(--text-muted); font-size:11px; margin-left:20px;">Ctrl+L</span></div>
+                    <div class="dropdown-item" onclick="saveLayout(); alert('Workspace saved locally.')"><span><u>S</u>ave Workspace</span> <span style="color:var(--text-muted); font-size:11px; margin-left:20px;">Ctrl+S</span></div>
+                    <div class="dropdown-item" onclick="saveWorkspaceAs()"><span>Save Workspace <u>A</u>s...</span> <span style="color:var(--text-muted); font-size:11px; margin-left:20px;">Ctrl+Shift+S</span></div>
+                    <div class="dropdown-divider"></div>
+                    <div class="dropdown-item" onclick="openTraderProfile()"><span><u>T</u>rader Profile...</span></div>
+                </div>
+            </div>
+            <div class="menu-item" onmouseenter="updateViewMenu()" accesskey="v"><u>V</u>iew
+                <div class="menu-dropdown">
+                    <div id="view-menu-list">
+                        <!-- Populated dynamically to show active cards with checkboxes -->
+                        <div class="dropdown-item" style="color:var(--text-muted); cursor:default;">No active windows</div>
+                    </div>
+                    <div class="dropdown-divider"></div>
+                    <div class="dropdown-submenu">
+                        <div class="dropdown-item" style="cursor: default;"><span><u>W</u>orkspace</span> <span style="font-size: 10px; color: var(--text-muted); margin-left:25px;">▶</span></div>
+                        <div class="menu-dropdown">
+                            <div class="dropdown-submenu">
+                                <div class="dropdown-item" style="cursor: default;"><span><u>A</u>rrange</span> <span style="font-size: 10px; color: var(--text-muted); margin-left:25px;">▶</span></div>
+                                <div class="menu-dropdown">
+                                    <div class="dropdown-item" onclick="resetLayout()"><span><u>R</u>eset to Default</span></div>
+                                    <div class="dropdown-item" onclick="cascadeWindows()"><span><u>C</u>ascade Windows</span></div>
+                                </div>
+                            </div>
+                            <div class="dropdown-item" onclick="poll()"><span><u>F</u>orce Global Sync</span></div>
+                            <div class="dropdown-item" onclick="toggleSnapMode()"><span>S<u>n</u>ap</span> <span id="menu-snap-status" style="font-size: 11px; opacity: 0.6; color: var(--text-muted); margin-left:15px;">ON</span></div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -891,100 +1095,7 @@
     </div>
 
     <div class="dashboard-container" id="wm-workspace">
-        
-        <!-- CARD: COORDINATOR INTERFACE -->
-        <div class="card" id="win-coordinator" style="top: 50px; right: 20px; width: 450px; height: calc(100vh - 70px); z-index: 200;">
-            <div class="card-header">
-                <div style="display:flex; align-items:center; gap:8px;">
-                    <div class="led-small led-green"></div>
-                    <div>COORDINATOR INTERFACE <span class="live-badge" id="conn-status">LIVE</span></div>
-                </div>
-                <div class="card-controls">
-                    <div class="win-btn win-min" onclick="toggleCollapse('win-coordinator')" title="Collapse"></div>
-                    <div class="win-btn win-pop" onclick="popoutWindow('win-coordinator')" title="Pop-out"></div>
-                    <div class="win-btn win-max" onclick="maxWin('win-coordinator')" title="Maximize"></div>
-                    <div class="win-btn win-close" onclick="closeWin('win-coordinator')" title="Close"></div>
-                </div>
-            </div>
-            <div class="card-body" style="padding:0; overflow:hidden; display:flex; flex-direction:column;">
-                <div class="chat-messages" id="chat-messages">
-                    <div class="msg msg-ai"><strong>VLI</strong> initialized. Draggable Window Manager mode active.</div>
-                </div>
-                <div class="input-area">
-                    <div class="gemini-panel">
-                        <textarea id="chat-input" placeholder="Enter directive..."></textarea>
-                        <div class="panel-controls">
-                            <div style="display:flex; align-items:center; gap:10px;">
-                                <div class="send-btn" id="send-stop-btn" onclick="handleSendStop()">➤</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="card-resizer"></div>
-        </div>
-
-        <!-- CARD: TELEMETRY -->
-        <div class="card" id="win-telemetry" style="top: 50px; left: 20px; width: 450px; height: 350px; z-index: 100;">
-            <div class="card-header">
-                <div>RAW TELEMETRY <span class="live-badge">LIVE</span></div>
-                <div class="card-controls">
-                    <div class="win-btn win-min" onclick="toggleCollapse('win-telemetry')" title="Collapse"></div>
-                    <div class="win-btn win-pop" onclick="popoutWindow('win-telemetry')" title="Pop-out"></div>
-                    <div class="win-btn win-max" onclick="maxWin('win-telemetry')" title="Maximize"></div>
-                    <div class="win-btn win-close" onclick="closeWin('win-telemetry')" title="Close"></div>
-                </div>
-            </div>
-            <div class="card-body terminal" id="telemetry-body"></div>
-            <div class="card-resizer"></div>
-        </div>
-
-        <!-- CARD: MACRO WATCHLIST -->
-        <div class="card" id="win-watchlist" style="top: 50px; left: 490px; width: 550px; height: 350px; z-index: 110;">
-            <div class="card-header">
-                <div>MACRO WATCHLIST <span class="live-badge">LIVE</span></div>
-                <div class="card-controls">
-                    <div class="win-btn win-min" onclick="toggleCollapse('win-watchlist')" title="Collapse"></div>
-                    <div class="win-btn win-pop" onclick="popoutWindow('win-watchlist')" title="Pop-out"></div>
-                    <div class="win-btn win-close" onclick="closeWin('win-watchlist')" title="Close"></div>
-                </div>
-            </div>
-            <div class="card-body" style="overflow-y: hidden; padding: 10px;">
-                <table class="macro-table">
-                    <thead>
-                        <tr>
-                            <th>TICKER</th>
-                            <th>PRICE</th>
-                            <th>CHANGE</th>
-                            <th>SORTINO</th>
-                            <th>TREND (5M)</th>
-                        </tr>
-                    </thead>
-                    <tbody id="macro-watchlist-body">
-                        <tr><td colspan="5" style="text-align:center; padding:20px;">Standby...</td></tr>
-                    </tbody>
-                </table>
-            </div>
-            <div class="card-resizer"></div>
-        </div>
-
-        <!-- CARD: ANALYSIS REPORT -->
-        <div class="card" id="win-report" style="top: 420px; left: 20px; width: 1020px; height: calc(100vh - 440px); z-index: 120;">
-            <div class="card-header">
-                <div>ANALYSIS REPORT</div>
-                <div class="card-controls">
-                    <div class="win-btn win-min" onclick="toggleCollapse('win-report')" title="Collapse"></div>
-                    <div class="win-btn win-pop" onclick="popoutWindow('win-report')" title="Pop-out"></div>
-                    <div class="win-btn win-max" onclick="maxWin('win-report')" title="Maximize"></div>
-                    <div class="win-btn win-close" onclick="closeWin('win-report')" title="Close"></div>
-                </div>
-            </div>
-            <div class="card-body terminal analysis-report-body" id="analysis-report-viewer">
-                <div style="color:var(--text-muted); text-align:center; padding:40px;">No report active.</div>
-            </div>
-            <div class="card-resizer"></div>
-        </div>
-
+        <!-- Dynamic cards will be injected here by UXCardManager -->
     </div>
 
     <script>
@@ -1001,6 +1112,213 @@
             startLeft: 0,
             maxZ: 1000
         };
+
+        // --- UX CARD FACTORY MANAGER ---
+        const UX_CARD_LIMIT = 8;
+        
+        const CARD_TYPES = {
+            'VLI_CHAT': { idPrefix: 'CI', title: 'Coordinator Interface', isSingleton: true },
+            'VLI_TELEMETRY': { idPrefix: 'TM', title: 'Telemetry', isSingleton: true },
+            'MACRO_WL': { idPrefix: 'WL', title: 'Macro Watchlist', isSingleton: false },
+            'ANALYSIS_REP': { idPrefix: 'AR', title: 'Analysis Report', isSingleton: false }
+        };
+
+        class UXCardManager {
+            constructor() {
+                this.instances = {};
+                this.typeCounts = { 'VLI_CHAT': 0, 'VLI_TELEMETRY': 0, 'MACRO_WL': 0, 'ANALYSIS_REP': 0 };
+            }
+
+            generateGUID() {
+                return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                    var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+                    return v.toString(16);
+                });
+            }
+
+            createCard(typeGuid, defaultStyles = {}, forceInstanceGuid = null) {
+                if (Object.keys(this.instances).length >= UX_CARD_LIMIT) {
+                    console.warn(`[UX_MANAGER] System limit of ${UX_CARD_LIMIT} windows reached.`);
+                    return null;
+                }
+
+                const typeDef = CARD_TYPES[typeGuid];
+                if (!typeDef) {
+                    console.error("Unknown card type: " + typeGuid);
+                    return null;
+                }
+
+                if (typeDef.isSingleton && this.typeCounts[typeGuid] >= 1) {
+                    for (let id in this.instances) {
+                        if (this.instances[id].dataset.typeGuid === typeGuid) {
+                            if (this.instances[id].style.display === 'none') {
+                                this.instances[id].style.display = 'flex';
+                            }
+                            bringToFront(this.instances[id]);
+                            return this.instances[id];
+                        }
+                    }
+                    return null;
+                }
+
+                const instanceGuid = forceInstanceGuid || this.generateGUID();
+                this.typeCounts[typeGuid]++;
+                
+                let badgeLabel = typeDef.idPrefix;
+                if (this.typeCounts[typeGuid] > 1) {
+                    badgeLabel += this.typeCounts[typeGuid];
+                }
+
+                const cardBox = document.createElement('div');
+                cardBox.className = 'card';
+                cardBox.id = 'win-' + instanceGuid;
+                cardBox.dataset.typeGuid = typeGuid;
+                cardBox.dataset.instanceGuid = instanceGuid;
+                cardBox.dataset.badge = badgeLabel;
+                
+                cardBox.style.top = defaultStyles.top || '50px';
+                cardBox.style.left = defaultStyles.left || '50px';
+                if (defaultStyles.right) {
+                    cardBox.style.left = 'auto';
+                    cardBox.style.right = defaultStyles.right;
+                }
+                cardBox.style.width = defaultStyles.width || '450px';
+                cardBox.style.height = defaultStyles.height || '350px';
+                cardBox.style.zIndex = ++winManager.maxZ;
+
+                const liveBadgeHTML = (typeGuid === 'VLI_CHAT' || typeGuid === 'VLI_TELEMETRY') ? `<span class="live-badge" id="conn-status-${instanceGuid}">LIVE</span>` : '';
+                
+                let bodyContent = '';
+                if (typeGuid === 'VLI_CHAT') {
+                    bodyContent = `
+                        <div class="card-body" style="padding:0; overflow:hidden; display:flex; flex-direction:column;">
+                            <div class="chat-messages" id="chat-messages">
+                                <div class="msg msg-ai"><strong>VLI</strong> initialized. Draggable Window Manager mode active.</div>
+                            </div>
+                            <div class="input-area">
+                                <div class="gemini-panel">
+                                    <textarea id="chat-input" placeholder="Enter directive..."></textarea>
+                                    <div class="panel-controls">
+                                        <div style="display:flex; align-items:center; gap:10px;">
+                                            <div class="send-btn" id="send-stop-btn" onclick="handleSendStop()">➤</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>`;
+                } else if (typeGuid === 'VLI_TELEMETRY') {
+                    bodyContent = `<div class="card-body terminal telemetry-body-instance" id="telemetry-body-${instanceGuid}" data-guid="${instanceGuid}"></div>`;
+                } else if (typeGuid === 'MACRO_WL') {
+                    bodyContent = `
+                        <div class="card-body" style="overflow-y: hidden; padding: 10px;">
+                            <table class="macro-table">
+                                <thead>
+                                    <tr>
+                                        <th>TICKER</th>
+                                        <th>PRICE</th>
+                                        <th>CHANGE</th>
+                                        <th>SORTINO</th>
+                                        <th>TREND (5M)</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="macro-watchlist-body-instance" id="macro-watchlist-body-${instanceGuid}" data-guid="${instanceGuid}">
+                                    <tr><td colspan="5" style="text-align:center; padding:20px;">Standby...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>`;
+                } else if (typeGuid === 'ANALYSIS_REP') {
+                    bodyContent = `
+                        <div class="card-body terminal analysis-report-body analysis-report-viewer-instance" id="analysis-report-viewer-${instanceGuid}" data-guid="${instanceGuid}">
+                            <div style="color:var(--text-muted); text-align:center; padding:40px;">No report active.</div>
+                        </div>`;
+                }
+
+                cardBox.innerHTML = `
+                    <div class="card-header">
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <div class="descriptor" style="cursor: pointer; transition: transform 0.1s;" onclick="insertCardIdIntoChat('${badgeLabel}')" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'" title="Insert ${badgeLabel} to Chat">${badgeLabel}</div>
+                            <div>${typeDef.title} ${liveBadgeHTML}</div>
+                        </div>
+                        <div class="card-controls">
+                            <div class="win-btn win-min" onclick="toggleCollapse('win-${instanceGuid}')" title="Collapse"></div>
+                            ${typeGuid === 'VLI_CHAT' ? '' : `<div class="win-btn win-pop" onclick="popoutWindow('win-${instanceGuid}')" title="Pop-out"></div>`}
+                            <div class="win-btn win-max" onclick="maxWin('win-${instanceGuid}')" title="Maximize"></div>
+                            <div class="win-btn win-close" onclick="UXManager.removeCard('${instanceGuid}')" title="Close"></div>
+                        </div>
+                    </div>
+                    ${bodyContent}
+                    <div class="card-resizer"></div>
+                `;
+
+                document.getElementById('wm-workspace').appendChild(cardBox);
+                this.instances[instanceGuid] = cardBox;
+                
+                if (typeGuid === 'VLI_CHAT') {
+                    const inputElement = document.getElementById('chat-input');
+                    if (inputElement) {
+                        inputElement.addEventListener('keydown', handleChatInputKeyDown);
+                    }
+                }
+                
+                this.bindCardEvents(cardBox);
+                return cardBox;
+            }
+
+            removeCard(instanceGuid) {
+                const card = this.instances[instanceGuid];
+                if (card) {
+                    if (CARD_TYPES[card.dataset.typeGuid].isSingleton) {
+                        card.style.display = 'none'; // Singleton preservation
+                    } else {
+                        card.remove();
+                        delete this.instances[instanceGuid];
+                    }
+                    saveLayout();
+                }
+            }
+            
+            bindCardEvents(cardBox) {
+                const header = cardBox.querySelector('.card-header');
+                header.addEventListener('mousedown', (e) => {
+                    bringToFront(cardBox);
+                    if (e.target.classList.contains('win-btn')) return;
+                    
+                    winManager.dragging = cardBox;
+                    winManager.startX = e.clientX;
+                    winManager.startY = e.clientY;
+                    winManager.startTop = cardBox.offsetTop;
+                    winManager.startLeft = cardBox.offsetLeft;
+                    
+                    document.addEventListener('mousemove', onMouseMove);
+                    document.addEventListener('mouseup', onMouseUp);
+                });
+
+                const resizer = cardBox.querySelector('.card-resizer');
+                resizer.addEventListener('mousedown', (e) => {
+                    bringToFront(cardBox);
+                    winManager.resizing = cardBox;
+                    winManager.startX = e.clientX;
+                    winManager.startY = e.clientY;
+                    winManager.startW = cardBox.offsetWidth;
+                    winManager.startH = cardBox.offsetHeight;
+                    
+                    document.addEventListener('mousemove', onMouseMove);
+                    document.addEventListener('mouseup', onMouseUp);
+                    e.preventDefault();
+                });
+            }
+        }
+        
+        window.UXManager = new UXCardManager();
+
+        function insertCardIdIntoChat(badge) {
+            const input = document.getElementById('chat-input');
+            if (input) {
+                const current = input.value;
+                input.value = current + (current.length > 0 && !current.endsWith(' ') ? ' ' : '') + badge;
+                input.focus();
+            }
+        }
 
         function bringToFront(el) {
             winManager.maxZ++;
@@ -1045,15 +1363,52 @@
             });
         }
 
+        let snapModeEnabled = true;
+
+        function toggleSnapMode() {
+            snapModeEnabled = !snapModeEnabled;
+            const statusEl = document.getElementById('menu-snap-status');
+            if (statusEl) statusEl.innerText = snapModeEnabled ? "ON" : "OFF";
+        }
+
         function onMouseMove(e) {
             if (winManager.dragging) {
                 const dx = e.clientX - winManager.startX;
                 const dy = e.clientY - winManager.startY;
-                winManager.dragging.style.top = (winManager.startTop + dy) + 'px';
-                winManager.dragging.style.left = (winManager.startLeft + dx) + 'px';
+                
+                let newTop = winManager.startTop + dy;
+                let newLeft = winManager.startLeft + dx;
+                
+                if (snapModeEnabled) {
+                    const snapThreshold = 18; // Magnetic pulling distance
+                    // When dragging, getBoundingClientRect won't have updated style yet, 
+                    // but we can trust the computed new dimensions
+                    const elWidth = winManager.dragging.offsetWidth;
+                    const elHeight = winManager.dragging.offsetHeight;
+                    
+                    document.querySelectorAll('.card').forEach(other => {
+                        if (other === winManager.dragging || other.style.display === 'none') return;
+                        
+                        const rect = other.getBoundingClientRect();
+                        
+                        // Vertical Snaps
+                        if (Math.abs(newTop - rect.bottom) < snapThreshold) newTop = rect.bottom; // Snap to bottom edge
+                        if (Math.abs(newTop + elHeight - rect.top) < snapThreshold) newTop = rect.top - elHeight; // Snap to top edge
+                        if (Math.abs(newTop - rect.top) < snapThreshold) newTop = rect.top; // Align tops identically
+                        
+                        // Horizontal Snaps
+                        if (Math.abs(newLeft - rect.right) < snapThreshold) newLeft = rect.right; // Snap to right edge
+                        if (Math.abs(newLeft + elWidth - rect.left) < snapThreshold) newLeft = rect.left - elWidth; // Snap to left edge
+                        if (Math.abs(newLeft - rect.left) < snapThreshold) newLeft = rect.left; // Align lefts identically
+                    });
+                }
+                
+                winManager.dragging.style.top = newTop + 'px';
+                winManager.dragging.style.left = newLeft + 'px';
                 winManager.dragging.style.right = 'auto'; 
                 winManager.dragging.style.bottom = 'auto'; 
-                winManager.dragging.style.margin = '0';            }
+                winManager.dragging.style.margin = '0';
+            }
             if (winManager.resizing) {
                 const dx = e.clientX - winManager.startX;
                 const dy = e.clientY - winManager.startY;
@@ -1066,8 +1421,11 @@
             const layout = {};
             document.querySelectorAll('.card').forEach(card => {
                 layout[card.id] = {
+                    instanceGuid: card.dataset.instanceGuid,
+                    typeGuid: card.dataset.typeGuid,
                     top: card.style.top,
                     left: card.style.left,
+                    right: card.style.right,
                     width: card.style.width,
                     height: card.style.height,
                     zIndex: card.style.zIndex,
@@ -1078,25 +1436,123 @@
             localStorage.setItem('vli_wm_layout', JSON.stringify(layout));
         }
 
-        function loadLayout() {
-            const saved = localStorage.getItem('vli_wm_layout');
-            if (!saved) return;
+        function loadWorkspace(customKey = null) {
+            let targetKey = 'vli_wm_layout';
+            if (!customKey) {
+                const manual = prompt('Enter workspace name to load (leave blank for default):');
+                if (manual) targetKey = 'vli_wm_layout_' + manual;
+            } else {
+                targetKey = customKey;
+            }
+            
+            const saved = localStorage.getItem(targetKey);
+            if (!saved) {
+                if (targetKey === 'vli_wm_layout') {
+                    // First boot - dynamic geometric fallback
+                    UXManager.createCard('VLI_CHAT', {top: '50px', left: '20px', width: '450px', height: 'calc(100vh - 70px)'}, 'coordinator');
+                    UXManager.createCard('MACRO_WL', {top: '50px', left: '490px', width: '700px', height: '400px'}, 'watchlist');
+                    UXManager.createCard('VLI_TELEMETRY', {top: '50px', left: '1210px', width: 'calc(100vw - 1230px)', height: '400px'}, 'telemetry');
+                    UXManager.createCard('ANALYSIS_REP', {top: '470px', left: '490px', width: 'calc(100vw - 510px)', height: 'calc(100vh - 490px)'}, 'report');
+                } else {
+                    alert('Workspace not found: ' + targetKey);
+                }
+                return;
+            }
             try {
+                // Clear existing
+                Object.keys(UXManager.instances).forEach(id => {
+                    const card = UXManager.instances[id];
+                    if (card.dataset.typeGuid !== 'VLI_CHAT') {
+                        card.remove();
+                        delete UXManager.instances[id];
+                    }
+                });
+                
                 const layout = JSON.parse(saved);
                 for (const id in layout) {
-                    const card = document.getElementById(id);
+                    const state = layout[id];
+                    if (!state.typeGuid) continue;
+                    
+                    const card = UXManager.createCard(state.typeGuid, state, state.instanceGuid);
                     if (card) {
-                        const state = layout[id];
-                        const collapsed = state.collapsed;
-                        delete state.collapsed; // Don't apply 'true/false' to style
-                        Object.assign(card.style, state);
-                        if (collapsed) card.classList.add('collapsed');
-                        
+                        if (state.display) card.style.display = state.display;
+                        if (state.collapsed) card.classList.add('collapsed');
                         const z = parseInt(state.zIndex) || 100;
                         if (z > winManager.maxZ) winManager.maxZ = z;
                     }
                 }
             } catch(e) {}
+        }
+
+        function loadLayout() {
+            loadWorkspace('vli_wm_layout');
+        }
+
+        function saveWorkspaceAs() {
+            const name = prompt('Enter workspace name to save:');
+            if (name) {
+                const layout = {};
+                document.querySelectorAll('.card').forEach(card => {
+                    layout[card.id] = {
+                        instanceGuid: card.dataset.instanceGuid,
+                        typeGuid: card.dataset.typeGuid,
+                        top: card.style.top,
+                        left: card.style.left,
+                        right: card.style.right,
+                        width: card.style.width,
+                        height: card.style.height,
+                        zIndex: card.style.zIndex,
+                        display: card.style.display,
+                        collapsed: card.classList.contains('collapsed')
+                    };
+                });
+                localStorage.setItem('vli_wm_layout_' + name, JSON.stringify(layout));
+                alert('Workspace saved as: ' + name);
+            }
+        }
+
+        function updateViewMenu() {
+            const viewMenu = document.getElementById('view-menu-list');
+            if(!viewMenu) return;
+            viewMenu.innerHTML = '';
+            
+            const keys = Object.keys(UXManager.instances);
+            if (keys.length === 0) {
+                viewMenu.innerHTML = '<div class="dropdown-item" style="color:var(--text-muted); cursor:default;">No active windows</div>';
+                return;
+            }
+            
+            // Add a way to manually summon singletons if they are purely removed or never created
+            if (!Object.values(UXManager.instances).find(c => c.dataset.typeGuid === 'VLI_CHAT')) {
+                 viewMenu.innerHTML += `<div class="dropdown-item" onclick="UXManager.createCard('VLI_CHAT')" style="color:var(--emerald-green);">[+] Spawn Coordinator</div>`;
+            }
+            if (!Object.values(UXManager.instances).find(c => c.dataset.typeGuid === 'VLI_TELEMETRY')) {
+                 viewMenu.innerHTML += `<div class="dropdown-item" onclick="UXManager.createCard('VLI_TELEMETRY')" style="color:var(--emerald-green);">[+] Spawn Telemetry</div>`;
+            }
+            if (keys.length > 0) viewMenu.innerHTML += '<div class="dropdown-divider"></div>';
+
+            keys.forEach(guid => {
+                const card = UXManager.instances[guid];
+                const badge = card.dataset.badge;
+                const title = CARD_TYPES[card.dataset.typeGuid].title;
+                const isVisible = card.style.display !== 'none';
+                
+                const check = isVisible ? '☑' : '☐';
+                const el = document.createElement('div');
+                el.className = 'dropdown-item';
+                el.innerHTML = `<span>${title}</span> <span style="font-size:16px; margin-left: 20px;">${check}</span>`;
+                el.onclick = () => {
+                    if (isVisible) {
+                        card.style.display = 'none';
+                    } else {
+                        card.style.display = '';
+                        bringToFront(card);
+                    }
+                    saveLayout();
+                    updateViewMenu();
+                };
+                viewMenu.appendChild(el);
+            });
         }
 
         function onMouseUp() {
@@ -1297,7 +1753,20 @@
             if (event) event.preventDefault();
             const text = sessionArtifacts[artifactId];
             if (!text) return;
-            const reportViewer = document.getElementById('analysis-report-viewer');
+
+            // Find a blank report viewer or spawn a new one via the Factory
+            let reportViewer = null;
+            const viewers = document.querySelectorAll('.analysis-report-viewer-instance');
+            for (const v of viewers) {
+                if (v.innerText.includes("No report active.") || v.innerText.trim() === "") {
+                    reportViewer = v;
+                    break;
+                }
+            }
+            if (!reportViewer) {
+                const newCard = UXManager.createCard('ANALYSIS_REP');
+                reportViewer = newCard.querySelector('.analysis-report-viewer-instance');
+            }
 
             let formattedText = text;
             const t = text.trim();
@@ -1312,6 +1781,9 @@
 
             reportViewer.innerHTML = `<div class="analysis-report">${applyStatusFormatting(marked.parse(formattedText))}</div>`;
             reportViewer.scrollTop = 0;
+            // Bring the owning window to front
+            bringToFront(reportViewer.closest('.card'));
+            
             try {
                 renderMathInElement(reportViewer, {
                     delimiters: [
@@ -1545,13 +2017,14 @@
         // 1b. Macro Watchlist Content (Structural JSON Support)
         function renderWatchlist(data) {
             if (!data.macro_watchlist_content) return;
-            const tbody = document.getElementById('macro-watchlist-body');
             const mw = data.macro_watchlist_content;
+            if (!(mw.type === 'table' && mw.rows)) return;
+            if (!window.lastMacroWatchlistState) window.lastMacroWatchlistState = {};
 
-            if (mw.type === 'table' && mw.rows) {
-                if (!window.lastMacroWatchlistState) window.lastMacroWatchlistState = {};
+            document.querySelectorAll('.macro-watchlist-body-instance').forEach(tbody => {
+                const instanceGuid = tbody.dataset.guid;
                 tbody.innerHTML = '';
-
+            
                 mw.rows.forEach(row => {
                     const label = row[0];
                     const ticker = row[1];
@@ -1573,8 +2046,7 @@
                         if (priceNum > lastPrice) color = 'var(--price-up)';
                         else if (priceNum < lastPrice) color = 'var(--price-down)';
                     }
-                    window.lastMacroWatchlistState[ticker] = { price: priceNum };
-
+                    
                     const tr = document.createElement('tr');
                     tr.style.fontSize = '14px';
                     tr.innerHTML = `
@@ -1591,60 +2063,92 @@
                     `;
                     tbody.appendChild(tr);
                 });
+            });
+            
+            // Only update tracker state once per broadcast to avoid duplicate overrides in multi-instance environments
+            if (mw.rows.length > 0) {
+                 mw.rows.forEach(row => {
+                     const priceNum = parseFloat(row[2].replace(/[$,%]/g, ''));
+                     window.lastMacroWatchlistState[row[1]] = { price: priceNum };
+                 });
             }
         }
 
         // 2. Telemetry
         function renderTelemetry(data) {
-            const tBody = document.getElementById('telemetry-body');
-            if (!tBody) return;
-            const logContainer = tBody.closest('.terminal');
-            const wasAtBottom = logContainer.scrollHeight - logContainer.scrollTop <= logContainer.clientHeight + 50;
+            document.querySelectorAll('.telemetry-body-instance').forEach(tBody => {
+                const logContainer = tBody.closest('.terminal');
+                const wasAtBottom = logContainer.scrollHeight - logContainer.scrollTop <= logContainer.clientHeight + 50;
 
-            const newTelemetry = data.telemetry_tail || "";
-            if (tBody.dataset.lastContent !== newTelemetry) {
-                let safeTelemetry = newTelemetry;
-                const leakKeywords = ["# SECURITY OVERRIDE", "APEX 500 SYSTEM", "USER IDENTITY: DAVE", "OPERATIONAL MANDATE"];
-                if (leakKeywords.some(k => safeTelemetry.toUpperCase().includes(k))) {
-                    safeTelemetry = "**⚠️ [VLI_MONITOR]: TECHNICAL STATE LEAKAGE SUPPRESSED.**";
-                }
-                tBody.innerHTML = marked.parse(safeTelemetry);
-                tBody.dataset.lastContent = safeTelemetry;
+                const newTelemetry = data.telemetry_tail || "";
+                if (tBody.dataset.lastContent !== newTelemetry) {
+                    let safeTelemetry = newTelemetry;
+                    const leakKeywords = ["# SECURITY OVERRIDE", "APEX 500 SYSTEM", "USER IDENTITY: DAVE", "OPERATIONAL MANDATE"];
+                    if (leakKeywords.some(k => safeTelemetry.toUpperCase().includes(k))) {
+                        safeTelemetry = "**⚠️ [VLI_MONITOR]: TECHNICAL STATE LEAKAGE SUPPRESSED.**";
+                    }
+                    tBody.innerHTML = marked.parse(safeTelemetry);
+                    tBody.dataset.lastContent = safeTelemetry;
 
-                if (wasAtBottom) {
-                    logContainer.scrollTo({ top: logContainer.scrollHeight, behavior: 'smooth' });
+                    if (wasAtBottom) {
+                        logContainer.scrollTo({ top: logContainer.scrollHeight, behavior: 'smooth' });
+                    }
                 }
-            }
+            });
         }
 
         // 3. Reports
         function renderReport(data) {
-            const reportViewer = document.getElementById('analysis-report-viewer');
-            if (!reportViewer) return;
-            if (data.async_report && reportViewer.dataset.lastReport !== data.async_report) {
-                let safeReport = data.async_report;
-                const leakKeywords = ["# SECURITY OVERRIDE", "APEX 500 SYSTEM", "USER IDENTITY: DAVE", "OPERATIONAL MANDATE"];
-                if (leakKeywords.some(k => safeReport.toUpperCase().includes(k))) {
-                    reportViewer.dataset.lastReport = data.async_report;
-                } else {
-                    reportViewer.innerHTML = `<div class="analysis-report">${applyStatusFormatting(marked.parse(safeReport))}</div>`;
-                    reportViewer.dataset.lastReport = data.async_report;
-                    reportViewer.scrollTop = 0;
-                    try {
-                        renderMathInElement(reportViewer, {
-                            delimiters: [
-                                { left: '$$', right: '$$', display: true },
-                                { left: '$', right: '$', display: false },
-                                { left: '\\(', right: '\\)', display: false },
-                                { left: '\\[', right: '\\]', display: true }
-                            ]
-                        });
-                    } catch (e) { }
+            document.querySelectorAll('.analysis-report-viewer-instance').forEach(reportViewer => {
+                if (data.async_report && reportViewer.dataset.lastReport !== data.async_report) {
+                    let safeReport = data.async_report;
+                    const leakKeywords = ["# SECURITY OVERRIDE", "APEX 500 SYSTEM", "USER IDENTITY: DAVE", "OPERATIONAL MANDATE"];
+                    if (leakKeywords.some(k => safeReport.toUpperCase().includes(k))) {
+                        reportViewer.dataset.lastReport = data.async_report;
+                    } else {
+                        reportViewer.innerHTML = `<div class="analysis-report">${applyStatusFormatting(marked.parse(safeReport))}</div>`;
+                        reportViewer.dataset.lastReport = data.async_report;
+                        reportViewer.scrollTop = 0;
+                        try {
+                            renderMathInElement(reportViewer, {
+                                delimiters: [
+                                    { left: '$$', right: '$$', display: true },
+                                    { left: '$', right: '$', display: false },
+                                    { left: '\\(', right: '\\)', display: false },
+                                    { left: '\\[', right: '\\]', display: true }
+                                ]
+                            });
+                        } catch (e) { }
+                    }
                 }
-            }
+            });
         }
 
 
+
+        let activeTypingIndicator = null;
+
+        function showTypingIndicator() {
+            const msgBox = document.getElementById('chat-messages');
+            if (activeTypingIndicator) return;
+
+            activeTypingIndicator = document.createElement('div');
+            activeTypingIndicator.className = 'typing-indicator';
+            activeTypingIndicator.innerHTML = `
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+            `;
+            msgBox.appendChild(activeTypingIndicator);
+            msgBox.scrollTop = msgBox.scrollHeight;
+        }
+
+        function hideTypingIndicator() {
+            if (activeTypingIndicator) {
+                activeTypingIndicator.remove();
+                activeTypingIndicator = null;
+            }
+        }
 
         async function handleSendStop() {
             if (isProcessing) {
@@ -1660,6 +2164,7 @@
                 btn.innerText = "➤";
                 btn.classList.remove('processing');
                 isProcessing = false;
+                hideTypingIndicator();
 
                 await fetch('/api/vli/reset', { method: 'POST' });
                 const msgBox = document.getElementById('chat-messages');
@@ -1695,34 +2200,100 @@
                 text = text.replace(/\b(WAIT|HOLD|PENDING|WARNING)\b/g, '<span style="color: var(--amber-gold); font-weight: 400;">$&</span>');
                 text = text.replace(/\b(APPROVED|PROCEED|AUTHORIZE|GO|SUCCESS|RESOLVED|PASSED)\b/g, '<span style="color: var(--emerald-green); font-weight: 400;">$&</span>');
 
+                // Card Badge Designator Shortcut highlighting (CI, TM, WL, AR)
+                text = text.replace(/\b(CI|TM\d*|WL\d*|AR\d*)\b/g, '<span style="color: var(--cobalt-blue); font-weight: 700;">$&</span>');
+
                 return `>${text}<`;
             });
 
             // Remove the wrapping <span></span> (7 chars at start, 7 chars at end)
-            return processed.substring(6, processed.length - 7);
+        async function submitFeedback(event, vote) {
+            const btn = event.currentTarget;
+            if (btn.dataset.submitted) return;
+            
+            const aiMsg = btn.closest('.msg-ai');
+            if (!aiMsg || !aiMsg.dataset.requestText) return;
+
+            const reqText = aiMsg.dataset.requestText;
+            
+            let respText = "";
+            const inlineContainer = aiMsg.querySelector('.chat-inline-markdown');
+            if (inlineContainer) respText = inlineContainer.innerText;
+            else respText = aiMsg.innerText;
+
+            btn.style.color = (vote === 'up') ? 'var(--emerald-green)' : 'var(--ruby-red)';
+            btn.dataset.submitted = 'true';
+            btn.title = 'Syncing...';
+
+            try {
+                const res = await fetch('/api/v1/vli/feedback', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ vote: vote, request: reqText, response: respText })
+                });
+                if (res.ok) {
+                     btn.title = (vote === 'up') ? 'Positive Feedback Logged' : 'Negative Feedback Logged';
+                } else {
+                     btn.title = 'Error logging feedback';
+                     btn.style.color = 'var(--amber-gold)';
+                }
+            } catch(e) {
+                 btn.title = 'Network error logger';
+                 btn.style.color = 'var(--text-muted)';
+            }
         }
 
-        async function sendMessage() {
-            const input = document.getElementById('chat-input');
-            const text = input.value.trim();
-            if (!text) return;
+        async function regenerateMessage(event) {
+            const btn = event.currentTarget;
+            const aiMsg = btn.closest('.msg-ai');
+            if (aiMsg && aiMsg.dataset.requestText) {
+                // If the system is currently processing something else, ignore
+                if (isProcessing) return;
+                sendMessage(aiMsg);
+            }
+        }
 
-            // Push to history
-            chatHistory.push(text);
-            historyIndex = chatHistory.length;
+        async function sendMessage(regenTargetAiMsg = null) {
+            const input = document.getElementById('chat-input');
+            const isRegen = !!regenTargetAiMsg;
+            const rawText = isRegen ? regenTargetAiMsg.dataset.requestText : input.value.trim();
+            if (!rawText) return;
+
+            const msgBox = document.getElementById('chat-messages');
+
+            if (!isRegen) {
+                // Push to history
+                chatHistory.push(rawText);
+                historyIndex = chatHistory.length;
+                input.value = '';
+
+                const userMsg = document.createElement('div');
+                userMsg.className = 'msg msg-user';
+                userMsg.innerHTML = applyStatusFormatting(marked.parse(rawText));
+                msgBox.appendChild(userMsg);
+
+                // Render Math for the user message
+                renderMathInElement(userMsg, {
+                    delimiters: [
+                        { left: '$$', right: '$$', display: true },
+                        { left: '$', right: '$', display: false },
+                        { left: '\\(', right: '\\)', display: false },
+                        { left: '\\[', right: '\\]', display: true }
+                    ]
+                });
+                msgBox.scrollTop = msgBox.scrollHeight;
+            }
 
             const btn = document.getElementById('send-stop-btn');
             btn.innerText = "";
             btn.classList.add('processing');
             isProcessing = true;
 
-            const msgBox = document.getElementById('chat-messages');
-            const userMsg = document.createElement('div');
-            userMsg.className = 'msg msg-user';
-            userMsg.innerHTML = applyStatusFormatting(marked.parse(text));
-            msgBox.appendChild(userMsg);
-
-            input.value = '';
+            if (!isRegen) {
+                showTypingIndicator();
+            } else {
+                regenTargetAiMsg.innerHTML = '<div class="typing-indicator" style="padding: 10px 0;"><span>.</span><span>.</span><span>.</span></div>';
+            }
 
             // Render Math for the user message
             renderMathInElement(userMsg, {
@@ -1736,7 +2307,7 @@
             msgBox.scrollTop = msgBox.scrollHeight;
 
             try {
-                let requestText = text;
+                let requestText = rawText;
 
                 if (requestText.toUpperCase().startsWith("REFRESH")) {
                     let targetCard = requestText.substring(7).trim().toUpperCase();
@@ -1782,10 +2353,14 @@
                 }
                 const durationSec = ((performance.now() - startTime) / 1000).toFixed(2);
                 console.log("[VLI_TRACE] " + new Date().toLocaleTimeString() + ` - Command response received in ${durationSec}s.`);
+                
+                hideTypingIndicator();
 
                 if (isProcessing) {
-                    const aiMsg = document.createElement('div');
-                    aiMsg.className = 'msg msg-ai';
+                    const aiMsg = isRegen ? regenTargetAiMsg : document.createElement('div');
+                    if (!isRegen) aiMsg.className = 'msg msg-ai';
+                    aiMsg.dataset.requestText = rawText;
+                    
                     const responseText = data.response || "No response generated.";
 
                     if (rawDataMode) {
@@ -1858,53 +2433,29 @@
                             cleanText.length < 600;
 
                         if (!isShort) {
-                            // [NEW] Mirror long-form analysis to the persistent Report Card
-                            const reportViewer = document.getElementById('analysis-report-viewer');
-                            reportViewer.innerHTML = `<div class="analysis-report">${applyStatusFormatting(marked.parse(cleanText))}</div>`;
-                            reportViewer.scrollTop = 0;
-
-                            try {
-                                renderMathInElement(reportViewer, {
-                                    delimiters: [
-                                        { left: '$$', right: '$$', display: true },
-                                        { left: '$', right: '$', display: false },
-                                        { left: '\\(', right: '\\)', display: false },
-                                        { left: '\\[', right: '\\]', display: true }
-                                    ]
-                                });
-                            } catch (e) { console.error("KaTeX Report Error:", e); }
-
-                            // Determine file suffix
-                            let suffix = "md";
-                            const txtTrim = cleanText.trim();
-                            if (txtTrim.startsWith('{') || txtTrim.startsWith('[')) { suffix = "json"; }
-                            else if (txtTrim.toLowerCase().includes('<html') || txtTrim.toLowerCase().includes('<div')) { suffix = "html"; }
-
-                            // Generate safe filename from request text
-                            let baseName = "vli_report";
-                            if (requestText) {
-                                baseName = requestText.trim().replace(/[^a-zA-Z0-9\s]/g, '').trim().replace(/\s+/g, '_').substring(0, 25).toLowerCase();
-                                if (!baseName) baseName = "vli_report";
-                            }
-                            const filename = `${baseName}.${suffix}`;
-
-                            // Generate Blob for download link
-                            const mimeType = suffix === 'json' ? 'application/json' : suffix === 'html' ? 'text/html' : 'text/markdown';
-                            const blob = new Blob([cleanText], { type: mimeType });
-                            const url = URL.createObjectURL(blob);
-
                             const artifactId = 'artifact_' + Date.now() + Math.floor(Math.random() * 1000);
                             sessionArtifacts[artifactId] = cleanText;
 
-                            // Keep Chat completely clean with just the file link redirect
-                            aiMsg.innerHTML = `<strong>Analysis posted to Reports window.</strong><br>Returned: <a href="${url}" download="${filename}" onclick="renderArtifactToReport(event, '${artifactId}')" ondblclick="openNativeNotepad('${filename}')" style="color: #e5e7eb; font-weight: 700; text-decoration: underline; background: rgba(128, 128, 128, 0.25); padding: 4px 8px; border-radius: 4px; display: inline-block; margin-top: 10px; cursor: pointer;">${filename}</a><div style="font-size:10px; color:var(--text-muted); margin-top:8px;">⏱️ Latency: ${durationSec}s</div>`;
+                            // Inline Rendering in Chat Log with Gemini-style footer
+                            const footerHTML = `
+                                <div class="gemini-footer" style="display:flex; align-items:center; gap: 14px; margin-top: 15px; color: var(--text-muted); padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.05); font-size:14px; user-select:none;">
+                                    <div style="cursor:default;" title="Latency: ${durationSec}s">◷ ${durationSec}s</div>
+                                    <div style="cursor:pointer; transition:color 0.2s;" onclick="submitFeedback(event, 'up')" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='var(--text-muted)'" title="Good Response"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:-2px;"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path></svg></div>
+                                    <div style="cursor:pointer; transition:color 0.2s;" onclick="submitFeedback(event, 'down')" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='var(--text-muted)'" title="Bad Response"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:-2px;"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"></path></svg></div>
+                                    <div style="cursor:pointer; transition:color 0.2s;" onclick="regenerateMessage(event)" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='var(--text-muted)'" title="Regenerate">⟳</div>
+                                    <div style="cursor:pointer; transition:color 0.2s;" onclick="navigator.clipboard.writeText(sessionArtifacts['${artifactId}'])" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='var(--text-muted)'" title="Copy Raw Markdown">⎘</div>
+                                    <div style="cursor:pointer; transition:color 0.2s;" onclick="renderArtifactToReport(event, '${artifactId}')" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='var(--text-muted)'" title="Popout to Analysis Window">⧉</div>
+                                    <div style="cursor:pointer; transition:color 0.2s;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='var(--text-muted)'" title="More Actions">⋮</div>
+                                </div>`;
+                                
+                            aiMsg.innerHTML = `<div class="chat-inline-markdown">${applyStatusFormatting(marked.parse(cleanText))}</div>` + footerHTML;
                         } else {
                             // Inline rendering for single-paragraph responses
-                            aiMsg.innerHTML = applyStatusFormatting(marked.parse(cleanText)) + `<div style="font-size:10px; color:var(--text-muted); margin-top:8px;">⏱️ Latency: ${durationSec}s</div>`;
+                            aiMsg.innerHTML = `<div class="chat-inline-markdown">${applyStatusFormatting(marked.parse(cleanText))}</div>` + `<div style="font-size:10px; color:var(--text-muted); margin-top:8px; display:flex; gap:10px; align-items:center;"><span>◷ Latency: ${durationSec}s</span><span style="cursor:pointer; transition:color 0.2s;" onclick="submitFeedback(event, 'up')" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='var(--text-muted)'" title="Good Response"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:-2px;"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path></svg></span><span style="cursor:pointer; transition:color 0.2s;" onclick="submitFeedback(event, 'down')" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='var(--text-muted)'" title="Bad Response"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:-2px;"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"></path></svg></span><span style="cursor:pointer; transition:color 0.2s;" onclick="regenerateMessage(event)" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='var(--text-muted)'" title="Regenerate">⟳</span></div>`;
                         }
                     } // close else
 
-                    msgBox.appendChild(aiMsg);
+                    if (!isRegen) msgBox.appendChild(aiMsg);
 
                     // Render Math for the AI message response
                     renderMathInElement(aiMsg, {
@@ -1927,6 +2478,7 @@
                     msgBox.appendChild(errMsg);
                 }
             } finally {
+                hideTypingIndicator();
                 btn.innerText = "➤";
                 btn.classList.remove('processing');
                 isProcessing = false;
@@ -1942,7 +2494,197 @@
             } catch (e) { }
         })();
 
+        // --- TRADER PROFILE LOGIC ---
+        let profileState = {
+            active_persona: '', active_strategy: '', active_rules: '',
+            persona_files: [], strategy_files: [], rules_files: [],
+            persona_content: '', strategy_content: '', rules_content: ''
+        };
+        let activeProfileTab = 'persona';
+
+        async function openTraderProfile() {
+            document.getElementById('profile-modal').style.display = 'flex';
+            document.getElementById('profile-status').innerText = 'Syncing...';
+            try {
+                const res = await fetch('/api/v1/trader-profile');
+                if(res.ok) {
+                    const data = await res.json();
+                    profileState = {
+                        active_persona: data.active_persona,
+                        active_strategy: data.active_strategy,
+                        active_rules: data.active_rules,
+                        persona_files: data.persona_files,
+                        strategy_files: data.strategy_files,
+                        rules_files: data.rules_files,
+                        persona_content: data.persona,
+                        strategy_content: data.strategy,
+                        rules_content: data.rules
+                    };
+                    document.getElementById('profile-status').innerText = 'Synced Configurations.';
+                    activeProfileTab = ''; // Prevent initial state clobber
+                    switchProfileTab('persona');
+                } else {
+                    document.getElementById('profile-status').innerText = 'Failed to load';
+                }
+            } catch(e) {
+                document.getElementById('profile-status').innerText = 'Network error';
+            }
+        }
+
+        function closeTraderProfile() {
+            document.getElementById('profile-modal').style.display = 'none';
+        }
+
+        function switchProfileTab(tab) {
+            const ta = document.getElementById('profile-editor');
+            const selector = document.getElementById('profile-selector');
+            
+            if (activeProfileTab && profileState[activeProfileTab + '_content'] !== undefined && ta.value !== 'Loading...') {
+                 profileState[activeProfileTab + '_content'] = ta.value;
+                 if (selector.value) profileState['active_' + activeProfileTab] = selector.value;
+            }
+
+            activeProfileTab = tab;
+            ta.value = profileState[tab + '_content'] || '';
+            
+            // Populate Dropdown
+            selector.innerHTML = '';
+            const fileList = profileState[tab + '_files'] || [];
+            fileList.forEach(f => {
+                const opt = document.createElement('option');
+                opt.value = f;
+                opt.innerText = f;
+                if (f === profileState['active_' + tab]) opt.selected = true;
+                selector.appendChild(opt);
+            });
+
+            ['persona', 'strategy', 'rules'].forEach(t => {
+                const btn = document.getElementById('tab-btn-' + t);
+                if (t === tab) btn.classList.add('active');
+                else btn.classList.remove('active');
+            });
+        }
+        
+        async function onProfileDropdownChange() {
+            const selector = document.getElementById('profile-selector');
+            const targetFile = selector.value;
+            profileState['active_' + activeProfileTab] = targetFile;
+            
+            document.getElementById('profile-status').innerText = 'Loading module...';
+            try {
+                const res = await fetch('/api/v1/trader-profile/file?name=' + encodeURIComponent(targetFile));
+                if (res.ok) {
+                    const data = await res.json();
+                    document.getElementById('profile-editor').value = data.content;
+                    profileState[activeProfileTab + '_content'] = data.content;
+                    document.getElementById('profile-status').innerText = 'Loaded module successfully.';
+                }
+            } catch(e) { }
+        }
+
+        async function addNewProfileFile() {
+             const name = prompt("Enter a simple name for the new module (e.g. 'momentum', 'swing'):");
+             if (!name) return;
+             
+             document.getElementById('profile-status').innerText = 'Creating module...';
+             try {
+                 const res = await fetch('/api/v1/trader-profile/new', {
+                     method: 'POST',
+                     headers: {'Content-Type': 'application/json'},
+                     body: JSON.stringify({ type: activeProfileTab, name: name })
+                 });
+                 if (res.ok) {
+                     const data = await res.json();
+                     profileState[activeProfileTab + '_files'].push(data.filename);
+                     profileState['active_' + activeProfileTab] = data.filename;
+                     
+                     switchProfileTab(activeProfileTab);
+                     onProfileDropdownChange();
+                 } else {
+                     document.getElementById('profile-status').innerText = 'Failed to create module.';
+                 }
+             } catch(e) {}
+        }
+        
+        async function resetCurrentProfileTab() {
+            document.getElementById('profile-status').innerText = 'Resetting module...';
+            try {
+                const selector = document.getElementById('profile-selector');
+                const targetFile = selector.value;
+                const res = await fetch('/api/v1/trader-profile/file?name=' + encodeURIComponent(targetFile));
+                if (res.ok) {
+                    const data = await res.json();
+                    document.getElementById('profile-editor').value = data.content;
+                    profileState[activeProfileTab + '_content'] = data.content;
+                    document.getElementById('profile-status').innerText = 'Discarded unsaved changes.';
+                }
+            } catch(e) { }
+        }
+
+        async function saveTraderProfile() {
+            const ta = document.getElementById('profile-editor');
+            const selector = document.getElementById('profile-selector');
+            profileState[activeProfileTab + '_content'] = ta.value;
+            if (selector.value) profileState['active_' + activeProfileTab] = selector.value;
+
+            document.getElementById('profile-status').innerText = 'Saving...';
+            try {
+                const res = await fetch('/api/v1/trader-profile', {
+                    method: 'POST',
+                    headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify(profileState)
+                });
+                if(res.ok) {
+                    document.getElementById('profile-status').innerText = '✔ Backup created & Config saved successfully.';
+                    setTimeout(closeTraderProfile, 1500);
+                } else {
+                    document.getElementById('profile-status').innerText = 'Failed to save';
+                }
+            } catch(e) {
+                document.getElementById('profile-status').innerText = 'Network error saving config';
+            }
+        }
+
         setInterval(poll, 5000);
+
+        // Bootstrap on successful DOM load
+        document.addEventListener("DOMContentLoaded", () => {
+            loadLayout(); // Guarantee UX configurations recall on reload
+            poll();
+            
+            // Re-bind access keys globally so typical OS combo intercepts work outside form focus
+            document.addEventListener('keydown', function(e) {
+                if(e.altKey && !e.ctrlKey) {
+                    if(e.key.toLowerCase() === 'f') {
+                        document.querySelector('[accesskey="f"]').click();
+                    } else if (e.key.toLowerCase() === 'v') {
+                        document.querySelector('[accesskey="v"]').focus();
+                        // For pure css hover, native trigger is slightly hard via JS, so rely on hover.
+                    }
+                }
+            });
+
+            // Initialize Modal Dragging Hook
+            const modHeader = document.querySelector('.modal-header');
+            const modContent = document.querySelector('.modal-content');
+            let isModDragging = false, mStartX, mStartY, mInitX, mInitY;
+            modHeader.addEventListener('mousedown', (e) => {
+                if(e.target.closest('div[onclick]')) return;
+                isModDragging = true;
+                mStartX = e.clientX;
+                mStartY = e.clientY;
+                mInitX = modContent.offsetLeft;
+                mInitY = modContent.offsetTop;
+            });
+            document.addEventListener('mousemove', (e) => {
+                if(!isModDragging) return;
+                const dx = e.clientX - mStartX;
+                const dy = e.clientY - mStartY;
+                modContent.style.left = (mInitX + dx) + 'px';
+                modContent.style.top = (mInitY + dy) + 'px';
+            });
+            document.addEventListener('mouseup', () => { isModDragging = false; });
+        });
 
         // [STABILITY] Force-inject the VERIFY button if the header was overwritten
         setTimeout(() => {
@@ -1966,30 +2708,15 @@
         let chatHistory = [];
         let historyIndex = -1;
 
-        // [UX] Single Enter to Submit (Shift+Enter for newline) + History Navigation
-        document.getElementById('chat-input').addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                if (isProcessing) return; // [FIX] Prevent accidental cancels via keyboard
-                handleSendStop();
-            } else if (e.key === 'ArrowUp') {
-                if (chatHistory.length > 0 && historyIndex > 0) {
-                    historyIndex--;
-                    e.target.value = chatHistory[historyIndex];
+        function handleChatInputKeyDown(e) {
+            if (e.key === 'Enter') {
+                if (!e.shiftKey) {
                     e.preventDefault();
+                    handleSendStop();
                 }
-            } else if (e.key === 'ArrowDown') {
-                if (chatHistory.length > 0 && historyIndex < chatHistory.length) {
-                    historyIndex++;
-                    if (historyIndex === chatHistory.length) {
-                        e.target.value = '';
-                    } else {
-                        e.target.value = chatHistory[historyIndex];
-                    }
-                    e.preventDefault();
-                }
+                // If shiftKey is true, allow default newline
             }
-        });
+        }
     </script>
 </body>
 
