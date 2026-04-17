@@ -85,7 +85,8 @@
         }
 
         .card-header {
-            padding: 10px 15px;
+            height: 40px;
+            padding: 0 15px;
             background: rgba(255, 255, 255, 0.05);
             border-bottom: 1px solid var(--card-border);
             display: flex;
@@ -168,7 +169,7 @@
             min-height: 0;
         }
         .card.collapsed .card-body,
-        .card.collapsed .card-resizer {
+        .card.collapsed .resize-handle {
             display: none !important;
         }
 
@@ -201,16 +202,15 @@
             display: none !important;
         }
 
-        .card-resizer {
-            position: absolute;
-            right: 0;
-            bottom: 0;
-            width: 15px;
-            height: 15px;
-            cursor: nwse-resize;
-            background: linear-gradient(135deg, transparent 50%, rgba(255,255,255,0.1) 50%);
-            z-index: 10;
-        }
+        .resize-handle { position: absolute; z-index: 99; }
+        .resize-n { top: -4px; left: 5px; right: 5px; height: 8px; cursor: ns-resize; }
+        .resize-s { bottom: -4px; left: 5px; right: 5px; height: 8px; cursor: ns-resize; }
+        .resize-e { top: 5px; bottom: 5px; right: -4px; width: 8px; cursor: ew-resize; }
+        .resize-w { top: 5px; bottom: 5px; left: -4px; width: 8px; cursor: ew-resize; }
+        .resize-nw { top: -4px; left: -4px; width: 12px; height: 12px; cursor: nwse-resize; }
+        .resize-ne { top: -4px; right: -4px; width: 12px; height: 12px; cursor: nesw-resize; }
+        .resize-sw { bottom: -4px; left: -4px; width: 12px; height: 12px; cursor: nesw-resize; }
+        .resize-se { bottom: -4px; right: -4px; width: 12px; height: 12px; cursor: nwse-resize; }
 
         .card-body {
             padding: 15px;
@@ -358,35 +358,44 @@
             color: var(--text-muted);
             align-self: flex-end;
             border-right: 2px solid rgba(255, 255, 255, 0.1);
-            font-size: 16px;
+            font-size: 20px;
         }
 
         /* --- TYPING INDICATOR --- */
         .typing-indicator {
-            align-self: flex-start;
-            background: rgba(13, 17, 23, 0.5);
-            padding: 12px 18px;
-            border-radius: 8px;
-            display: flex;
-            gap: 4px;
-            margin-bottom: 20px;
-            border-left: 2px solid var(--cobalt-blue);
+            width: 100%;
+            height: 2px;
+            background: rgba(88, 166, 255, 0.1);
+            position: relative;
+            overflow: hidden;
+            margin-top: auto;
+            margin-bottom: 5px;
+            opacity: 1;
+            transition: opacity 0.5s ease-out;
+            box-shadow: 0 0 10px rgba(88, 166, 255, 0.2);
+            flex-shrink: 0;
+            border-radius: 2px;
         }
 
-        .typing-dot {
-            width: 6px;
-            height: 6px;
-            background: var(--cobalt-blue);
-            border-radius: 50%;
-            animation: typing-bounce 1.4s infinite ease-in-out both;
+        .typing-indicator.fade-out {
+            opacity: 0;
         }
 
-        .typing-dot:nth-child(1) { animation-delay: -0.32s; }
-        .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+        .typing-indicator::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            width: 70%;
+            background: linear-gradient(90deg, transparent 0%, var(--cobalt-blue) 50%, transparent 100%);
+            box-shadow: 0 0 15px rgba(88, 166, 255, 0.4);
+            animation: sweep 1.6s ease-in-out infinite alternate;
+        }
 
-        @keyframes typing-bounce {
-            0%, 80%, 100% { transform: scale(0); opacity: 0.3; }
-            40% { transform: scale(1); opacity: 1; }
+        @keyframes sweep {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(140%); }
         }
 
         .analysis-report pre {
@@ -439,7 +448,7 @@
             border: none;
             color: #fff;
             font-family: var(--font-main);
-            font-size: 15px;
+            font-size: 19px;
             outline: none;
             resize: none;
             min-height: 60px;
@@ -1033,17 +1042,6 @@
 
     <div class="vli-menubar">
         <div class="menu-left">
-            <div class="menu-item" style="font-weight: 800; font-size: 16px; padding-left: 10px; margin-right: 15px;">
-                <span style="color: #fff; letter-spacing: 1.5px;">COBALT</span>
-                <span style="color: var(--cobalt-blue); margin: 0 6px; font-weight: 300;">|</span>
-                <span style="color: var(--cobalt-blue); letter-spacing: 1px;">VLI</span>
-                <div class="menu-dropdown">
-                    <div class="dropdown-item" onclick="alert('VLI Integrated Engine \\nVersion: 4.8.2-INSTITUTIONAL\\nStatus: Operational')">System Architecture</div>
-                    <div class="dropdown-divider"></div>
-                    <div class="dropdown-item" onclick="resetVLI()">Reset Backbone Session</div>
-                    <div class="dropdown-item" onclick="toggleDirectMode()">Fast-Path Mode <span id="menu-direct-status" style="font-size: 11px; opacity: 0.6; color: var(--text-muted); margin-left:15px;">OFF</span></div>
-                </div>
-            </div>
             <div class="menu-item" accesskey="f"><u>F</u>ile
                 <div class="menu-dropdown">
                     <div class="dropdown-submenu">
@@ -1090,7 +1088,18 @@
                 <div class="status-dot"></div>
                 <span id="menu-sync-status">SYNC_OK</span>
             </div>
-            <div style="font-family: var(--font-mono); color: var(--text-muted); opacity: 0.8;" id="system-clock">09:48:46</div>
+            <div style="font-family: var(--font-mono); color: var(--text-muted); opacity: 0.8; margin-right: 15px;" id="system-clock">09:48:46</div>
+            <div class="menu-item" style="font-weight: 800; font-size: 16px; padding-right: 10px;">
+                <span style="color: #fff; letter-spacing: 1.5px;">COBALT</span>
+                <span style="color: var(--cobalt-blue); margin: 0 6px; font-weight: 300;">|</span>
+                <span style="color: var(--cobalt-blue); letter-spacing: 1px;">VLI</span>
+                <div class="menu-dropdown" style="right: 0; left: auto;">
+                    <div class="dropdown-item" onclick="alert('VLI Integrated Engine \nVersion: 4.8.2-INSTITUTIONAL\nStatus: Operational')">System Architecture</div>
+                    <div class="dropdown-divider"></div>
+                    <div class="dropdown-item" onclick="resetVLI()">Reset Backbone Session</div>
+                    <div class="dropdown-item" onclick="toggleDirectMode()">Fast-Path Mode <span id="menu-direct-status" style="font-size: 11px; opacity: 0.6; color: var(--text-muted); margin-left:15px;">OFF</span></div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -1178,12 +1187,12 @@
                 
                 cardBox.style.top = defaultStyles.top || '50px';
                 cardBox.style.left = defaultStyles.left || '50px';
-                if (defaultStyles.right) {
+                if (defaultStyles.right && defaultStyles.right !== 'auto') {
                     cardBox.style.left = 'auto';
                     cardBox.style.right = defaultStyles.right;
                 }
-                cardBox.style.width = defaultStyles.width || '450px';
-                cardBox.style.height = defaultStyles.height || '350px';
+                cardBox.style.width = defaultStyles.width || '440px';
+                cardBox.style.height = defaultStyles.height || '360px';
                 cardBox.style.zIndex = ++winManager.maxZ;
 
                 const liveBadgeHTML = (typeGuid === 'VLI_CHAT' || typeGuid === 'VLI_TELEMETRY') ? `<span class="live-badge" id="conn-status-${instanceGuid}">LIVE</span>` : '';
@@ -1247,7 +1256,14 @@
                         </div>
                     </div>
                     ${bodyContent}
-                    <div class="card-resizer"></div>
+                    <div class="resize-handle resize-n" data-dir="n"></div>
+                    <div class="resize-handle resize-s" data-dir="s"></div>
+                    <div class="resize-handle resize-e" data-dir="e"></div>
+                    <div class="resize-handle resize-w" data-dir="w"></div>
+                    <div class="resize-handle resize-nw" data-dir="nw"></div>
+                    <div class="resize-handle resize-ne" data-dir="ne"></div>
+                    <div class="resize-handle resize-sw" data-dir="sw"></div>
+                    <div class="resize-handle resize-se" data-dir="se"></div>
                 `;
 
                 document.getElementById('wm-workspace').appendChild(cardBox);
@@ -1293,18 +1309,22 @@
                     document.addEventListener('mouseup', onMouseUp);
                 });
 
-                const resizer = cardBox.querySelector('.card-resizer');
-                resizer.addEventListener('mousedown', (e) => {
-                    bringToFront(cardBox);
-                    winManager.resizing = cardBox;
-                    winManager.startX = e.clientX;
-                    winManager.startY = e.clientY;
-                    winManager.startW = cardBox.offsetWidth;
-                    winManager.startH = cardBox.offsetHeight;
-                    
-                    document.addEventListener('mousemove', onMouseMove);
-                    document.addEventListener('mouseup', onMouseUp);
-                    e.preventDefault();
+                cardBox.querySelectorAll('.resize-handle').forEach(resizer => {
+                    resizer.addEventListener('mousedown', (e) => {
+                        bringToFront(cardBox);
+                        winManager.resizing = cardBox;
+                        winManager.resizeDir = resizer.dataset.dir;
+                        winManager.startX = e.clientX;
+                        winManager.startY = e.clientY;
+                        winManager.startW = cardBox.offsetWidth;
+                        winManager.startH = cardBox.offsetHeight;
+                        winManager.startTop = cardBox.offsetTop;
+                        winManager.startLeft = cardBox.offsetLeft;
+                        
+                        document.addEventListener('mousemove', onMouseMove);
+                        document.addEventListener('mouseup', onMouseUp);
+                        e.preventDefault();
+                    });
                 });
             }
         }
@@ -1345,22 +1365,7 @@
                 });
             });
 
-            document.querySelectorAll('.card-resizer').forEach(resizer => {
-                resizer.addEventListener('mousedown', (e) => {
-                    const card = resizer.closest('.card');
-                    bringToFront(card);
-                    
-                    winManager.resizing = card;
-                    winManager.startX = e.clientX;
-                    winManager.startY = e.clientY;
-                    winManager.startW = card.offsetWidth;
-                    winManager.startH = card.offsetHeight;
-                    
-                    document.addEventListener('mousemove', onMouseMove);
-                    document.addEventListener('mouseup', onMouseUp);
-                    e.preventDefault();
-                });
-            });
+            // Removed generic resize bindings since UXCardManager injects them dynamically
         }
 
         let snapModeEnabled = true;
@@ -1372,35 +1377,90 @@
         }
 
         function onMouseMove(e) {
+            const now = performance.now();
+            if (winManager.lastTime) {
+                const dt = now - winManager.lastTime;
+                if (dt > 0) {
+                    const dxVel = e.clientX - winManager.lastX;
+                    const dyVel = e.clientY - winManager.lastY;
+                    const vel = Math.sqrt(dxVel*dxVel + dyVel*dyVel) / dt;
+                    winManager.velocity = (winManager.velocity || 0) * 0.8 + vel * 0.2;
+                }
+            } else {
+                winManager.velocity = 0;
+            }
+            winManager.lastX = e.clientX;
+            winManager.lastY = e.clientY;
+            winManager.lastTime = now;
+            
+            let velMultiplier = 1.0;
+            if (winManager.velocity > 0.05) {
+                velMultiplier = Math.max(0, 1.0 - ((winManager.velocity - 0.05) * 4.0));
+            }
+
             if (winManager.dragging) {
                 const dx = e.clientX - winManager.startX;
                 const dy = e.clientY - winManager.startY;
                 
-                let newTop = winManager.startTop + dy;
-                let newLeft = winManager.startLeft + dx;
+                let rawTop = winManager.startTop + dy;
+                let rawLeft = winManager.startLeft + dx;
+                let newTop = rawTop;
+                let newLeft = rawLeft;
                 
-                if (snapModeEnabled) {
-                    const snapThreshold = 18; // Magnetic pulling distance
-                    // When dragging, getBoundingClientRect won't have updated style yet, 
-                    // but we can trust the computed new dimensions
+                // --- PULL-AWAY COOLDOWN (Graceful Hysteresis) ---
+                let timeSinceBreak = Date.now() - (winManager.snapBreakTime || 0);
+                let snapStrength = 1.0;
+                if (timeSinceBreak < 2000) snapStrength = 0;
+                else if (timeSinceBreak < 5000) snapStrength = (timeSinceBreak - 2000) / 3000;
+                
+                // --- KINEMATIC INFLUENCE ---
+                snapStrength *= velMultiplier;
+                
+                if (winManager.isSnapped && snapModeEnabled && snapStrength > 0.5) {
+                    const pullDist = Math.max(Math.abs(rawTop - winManager.snappedTop), Math.abs(rawLeft - winManager.snappedLeft));
+                    if (pullDist > 40) {
+                        winManager.snapBreakTime = Date.now();
+                        winManager.isSnapped = false;
+                        snapStrength = 0;
+                    }
+                }
+                
+                let didSnap = false;
+                if (snapModeEnabled && snapStrength > 0) {
+                    const snapThreshold = 32 * snapStrength; // Dominant magnetic pull to other windows
+                    const gridSnapThreshold = 14 * snapStrength; // Base background grid snap
                     const elWidth = winManager.dragging.offsetWidth;
                     const elHeight = winManager.dragging.offsetHeight;
                     
+                    // 1. Strict Top-Left Grid Anchorage to maintain Title-Bar matrix alignment
+                    const gridX = Math.round(newLeft / 40) * 40;
+                    const gridY = Math.round(newTop / 40) * 40;
+                    
+                    if (Math.abs(newLeft - gridX) < gridSnapThreshold) { newLeft = gridX; didSnap = true; }
+                    if (Math.abs(newTop - gridY) < gridSnapThreshold) { newTop = gridY; didSnap = true; }
+                    
+                    // 2. Strong Window-to-Window Snapping
                     document.querySelectorAll('.card').forEach(other => {
                         if (other === winManager.dragging || other.style.display === 'none') return;
-                        
                         const rect = other.getBoundingClientRect();
                         
-                        // Vertical Snaps
-                        if (Math.abs(newTop - rect.bottom) < snapThreshold) newTop = rect.bottom; // Snap to bottom edge
-                        if (Math.abs(newTop + elHeight - rect.top) < snapThreshold) newTop = rect.top - elHeight; // Snap to top edge
-                        if (Math.abs(newTop - rect.top) < snapThreshold) newTop = rect.top; // Align tops identically
-                        
-                        // Horizontal Snaps
-                        if (Math.abs(newLeft - rect.right) < snapThreshold) newLeft = rect.right; // Snap to right edge
-                        if (Math.abs(newLeft + elWidth - rect.left) < snapThreshold) newLeft = rect.left - elWidth; // Snap to left edge
-                        if (Math.abs(newLeft - rect.left) < snapThreshold) newLeft = rect.left; // Align lefts identically
+                        // Vertical
+                        if (Math.abs(newTop - rect.bottom) < snapThreshold) { newTop = rect.bottom; didSnap = true; }
+                        if (Math.abs(newTop + elHeight - rect.top) < snapThreshold) { newTop = rect.top - elHeight; didSnap = true; }
+                        if (Math.abs(newTop - rect.top) < snapThreshold) { newTop = rect.top; didSnap = true; }
+                        // Horizontal
+                        if (Math.abs(newLeft - rect.right) < snapThreshold) { newLeft = rect.right; didSnap = true; }
+                        if (Math.abs(newLeft + elWidth - rect.left) < snapThreshold) { newLeft = rect.left - elWidth; didSnap = true; }
+                        if (Math.abs(newLeft - rect.left) < snapThreshold) { newLeft = rect.left; didSnap = true; }
                     });
+                }
+                
+                if (didSnap) {
+                    winManager.isSnapped = true;
+                    winManager.snappedTop = newTop;
+                    winManager.snappedLeft = newLeft;
+                } else {
+                    winManager.isSnapped = false;
                 }
                 
                 winManager.dragging.style.top = newTop + 'px';
@@ -1412,8 +1472,58 @@
             if (winManager.resizing) {
                 const dx = e.clientX - winManager.startX;
                 const dy = e.clientY - winManager.startY;
-                winManager.resizing.style.width = (winManager.startW + dx) + 'px';
-                winManager.resizing.style.height = (winManager.startH + dy) + 'px';
+                const dir = winManager.resizeDir;
+                const card = winManager.resizing;
+
+                const gridSnapThreshold = 14 * velMultiplier; 
+                let newLeft = winManager.startLeft;
+                let newTop = winManager.startTop;
+                let newW = winManager.startW;
+                let newH = winManager.startH;
+
+                if (dir.includes('e')) {
+                    newW = Math.max(200, winManager.startW + dx);
+                    if (snapModeEnabled) {
+                        let newRight = winManager.startLeft + newW;
+                        let gridRight = Math.round(newRight / 40) * 40;
+                        if (Math.abs(newRight - gridRight) < gridSnapThreshold) newW = gridRight - winManager.startLeft;
+                    }
+                }
+                if (dir.includes('s')) {
+                    newH = Math.max(100, winManager.startH + dy);
+                    if (snapModeEnabled) {
+                        let newBottom = winManager.startTop + newH;
+                        let gridBottom = Math.round(newBottom / 40) * 40;
+                        if (Math.abs(newBottom - gridBottom) < gridSnapThreshold) newH = gridBottom - winManager.startTop;
+                    }
+                }
+                if (dir.includes('w')) {
+                    newLeft = winManager.startLeft + dx;
+                    if (snapModeEnabled) {
+                        let gridLeft = Math.round(newLeft / 40) * 40;
+                        if (Math.abs(newLeft - gridLeft) < gridSnapThreshold) newLeft = gridLeft;
+                    }
+                    newW = winManager.startW + (winManager.startLeft - newLeft);
+                    if (newW < 200) { newW = 200; newLeft = winManager.startLeft + winManager.startW - 200; }
+                }
+                if (dir.includes('n')) {
+                    newTop = winManager.startTop + dy;
+                    if (snapModeEnabled) {
+                        let gridTop = Math.round(newTop / 40) * 40;
+                        if (Math.abs(newTop - gridTop) < gridSnapThreshold) newTop = gridTop;
+                    }
+                    newH = winManager.startH + (winManager.startTop - newTop);
+                    if (newH < 100) { newH = 100; newTop = winManager.startTop + winManager.startH - 100; }
+                }
+
+                if (dir.includes('w') || dir.includes('e')) {
+                    card.style.width = newW + 'px';
+                    if (dir.includes('w')) card.style.left = newLeft + 'px';
+                }
+                if (dir.includes('n') || dir.includes('s')) {
+                    card.style.height = newH + 'px';
+                    if (dir.includes('n')) card.style.top = newTop + 'px';
+                }
             }
         }
 
@@ -1448,11 +1558,11 @@
             const saved = localStorage.getItem(targetKey);
             if (!saved) {
                 if (targetKey === 'vli_wm_layout') {
-                    // First boot - dynamic geometric fallback
-                    UXManager.createCard('VLI_CHAT', {top: '50px', left: '20px', width: '450px', height: 'calc(100vh - 70px)'}, 'coordinator');
-                    UXManager.createCard('MACRO_WL', {top: '50px', left: '490px', width: '700px', height: '400px'}, 'watchlist');
-                    UXManager.createCard('VLI_TELEMETRY', {top: '50px', left: '1210px', width: 'calc(100vw - 1230px)', height: '400px'}, 'telemetry');
-                    UXManager.createCard('ANALYSIS_REP', {top: '470px', left: '490px', width: 'calc(100vw - 510px)', height: 'calc(100vh - 490px)'}, 'report');
+                    // First boot - rigid 40px geometric fallback
+                    UXManager.createCard('VLI_CHAT', {top: '40px', left: '1440px', width: '440px', height: '800px'}, 'coordinator');
+                    UXManager.createCard('MACRO_WL', {top: '40px', left: '40px', width: '640px', height: '400px'}, 'watchlist');
+                    UXManager.createCard('VLI_TELEMETRY', {top: '40px', left: '720px', width: '680px', height: '400px'}, 'telemetry');
+                    UXManager.createCard('ANALYSIS_REP', {top: '480px', left: '40px', width: '1360px', height: '600px'}, 'report');
                 } else {
                     alert('Workspace not found: ' + targetKey);
                 }
@@ -1473,7 +1583,17 @@
                     const state = layout[id];
                     if (!state.typeGuid) continue;
                     
-                    const card = UXManager.createCard(state.typeGuid, state, state.instanceGuid);
+                    let card;
+                    if (state.typeGuid === 'VLI_CHAT' && UXManager.instances[state.instanceGuid]) {
+                        card = UXManager.instances[state.instanceGuid];
+                        if (state.top) card.style.top = state.top;
+                        if (state.left) card.style.left = state.left;
+                        if (state.right && state.right !== 'auto') { card.style.right = state.right; card.style.left = 'auto'; }
+                        if (state.width) card.style.width = state.width;
+                        if (state.height) card.style.height = state.height;
+                    } else {
+                        card = UXManager.createCard(state.typeGuid, state, state.instanceGuid);
+                    }
                     if (card) {
                         if (state.display) card.style.display = state.display;
                         if (state.collapsed) card.classList.add('collapsed');
@@ -1561,6 +1681,7 @@
             }
             winManager.dragging = null;
             winManager.resizing = null;
+            winManager.lastTime = null;
             document.removeEventListener('mousemove', onMouseMove);
             document.removeEventListener('mouseup', onMouseUp);
         }
@@ -1605,7 +1726,6 @@
 
         window.addEventListener('blur', onMouseUp);
         document.addEventListener('DOMContentLoaded', () => {
-            initWindowManager();
             // --- VLI ORCHESTRA STANDALONE DETECTION ---
             if (popoutId) {
                 console.log("[VLI_ORCHESTRA] Satellite Mode Active for:", popoutId);
@@ -1770,6 +1890,16 @@
 
             let formattedText = text;
             const t = text.trim();
+            
+            // Dynamic Title Bar Extraction setup
+            let dynamicTitle = "Analysis Report";
+            let lines = t.split('\n');
+            let headerLine = lines.find(line => /^#{1,4}\s+/.test(line.trim()));
+            if (headerLine) {
+                dynamicTitle = headerLine.replace(/^#{1,4}\s+/, '').replace(/[\*\_`]/g, '').trim();
+                if (dynamicTitle.length > 55) dynamicTitle = dynamicTitle.substring(0, 52) + "...";
+            }
+            
             if (t.startsWith('{') || t.startsWith('[')) {
                 try {
                     const parsed = JSON.parse(t);
@@ -1781,8 +1911,18 @@
 
             reportViewer.innerHTML = `<div class="analysis-report">${applyStatusFormatting(marked.parse(formattedText))}</div>`;
             reportViewer.scrollTop = 0;
+            
+            const card = reportViewer.closest('.card');
+            
+            // Inject dynamic title into the header while preserving the LIVE badge if present
+            const titleElem = card.querySelector('.card-header > div:first-child > div:nth-child(2)');
+            if (titleElem) {
+                const badge = titleElem.querySelector('.live-badge');
+                titleElem.innerHTML = dynamicTitle + (badge ? ' ' + badge.outerHTML : '');
+            }
+            
             // Bring the owning window to front
-            bringToFront(reportViewer.closest('.card'));
+            bringToFront(card);
             
             try {
                 renderMathInElement(reportViewer, {
@@ -1953,8 +2093,16 @@
                 if (window.VLI_DEBUG) console.log("[VLI_TRACE] " + new Date().toLocaleTimeString() + " - Poll data received successfully.");
                 if (data.error) throw new Error(data.error);
 
-                document.getElementById('conn-status').innerText = "LIVE";
-                document.getElementById('conn-status').style.color = "var(--emerald-green)";
+                const topStatus = document.getElementById('conn-status');
+                if (topStatus) {
+                    topStatus.innerText = "LIVE";
+                    topStatus.style.color = "var(--emerald-green)";
+                }
+                document.querySelectorAll('.live-badge').forEach(b => {
+                    b.innerText = "LIVE";
+                    b.style.color = "var(--emerald-green)";
+                });
+                
                 if (data.last_macro_update) {
                     window.lastMacroUpdateTimestamp = data.last_macro_update;
                     const lastUpdate = data.last_macro_update * 1000;
@@ -1974,9 +2122,11 @@
 
                 // 4. Connectivity Status
                 const statusBadge = document.getElementById('conn-status');
-                statusBadge.innerText = "LIVE";
-                statusBadge.style.color = "var(--emerald-green)";
-                statusBadge.style.background = "rgba(63, 185, 80, 0.15)";
+                if (statusBadge) {
+                    statusBadge.innerText = "LIVE";
+                    statusBadge.style.color = "var(--emerald-green)";
+                    statusBadge.style.background = "rgba(63, 185, 80, 0.15)";
+                }
 
             } catch (e) {
                 console.error("VLI Poll Error:", e);
@@ -1986,6 +2136,10 @@
                     statusBadge.style.color = "var(--ruby-red)";
                     statusBadge.style.background = "rgba(248, 81, 73, 0.1)";
                 }
+                document.querySelectorAll('.live-badge').forEach(b => {
+                    b.innerText = "OFFLINE";
+                    b.style.color = "var(--ruby-red)";
+                });
             } finally {
                 isPolling = false;
             }
@@ -2134,18 +2288,15 @@
 
             activeTypingIndicator = document.createElement('div');
             activeTypingIndicator.className = 'typing-indicator';
-            activeTypingIndicator.innerHTML = `
-                <div class="typing-dot"></div>
-                <div class="typing-dot"></div>
-                <div class="typing-dot"></div>
-            `;
             msgBox.appendChild(activeTypingIndicator);
             msgBox.scrollTop = msgBox.scrollHeight;
         }
 
         function hideTypingIndicator() {
             if (activeTypingIndicator) {
-                activeTypingIndicator.remove();
+                activeTypingIndicator.classList.add('fade-out');
+                const target = activeTypingIndicator;
+                setTimeout(() => { if (target.parentNode) target.remove(); }, 500);
                 activeTypingIndicator = null;
             }
         }
@@ -2206,7 +2357,10 @@
                 return `>${text}<`;
             });
 
-            // Remove the wrapping <span></span> (7 chars at start, 7 chars at end)
+            // Remove the wrapping <span></span> (6 chars at start, 7 chars at end)
+            return processed.slice(6, -7);
+        }
+
         async function submitFeedback(event, vote) {
             const btn = event.currentTarget;
             if (btn.dataset.submitted) return;
@@ -2292,7 +2446,7 @@
             if (!isRegen) {
                 showTypingIndicator();
             } else {
-                regenTargetAiMsg.innerHTML = '<div class="typing-indicator" style="padding: 10px 0;"><span>.</span><span>.</span><span>.</span></div>';
+                regenTargetAiMsg.innerHTML = '<div class="typing-indicator"></div>';
             }
 
             // Render Math for the user message
