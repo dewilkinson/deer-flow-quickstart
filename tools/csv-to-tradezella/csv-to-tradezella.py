@@ -105,55 +105,6 @@ def generate_tradezella_csv(input_filename, output_filename, target_month=None, 
     elif args_ytd:
         effective_start_date = datetime(current_year, 1, 1).date()
 
-    if reconcile and effective_start_date:
-        start_date = effective_start_date
-        
-        # Identify symbols that have trades in the requested range
-        symbols_in_range = set()
-        for d_key, trades in daily_groups.items():
-            for t in trades:
-                symbols_in_range.add(t['Symbol'].strip())
-            
-        for sym in list(symbols_in_range):
-            # Calculate net for sym in the requested range
-            net_in_range = 0
-            for d_key, trades in daily_groups.items():
-                for t in trades:
-                    if t['Symbol'].strip() == sym:
-                        q = abs(float(t.get('Quantity', '0').replace(',', '')))
-                        if "BOUGHT" in t['Action'].upper(): net_in_range += q
-                        else: net_in_range -= q
-            
-            # If net is negative, we need to find entries BEFORE start_date
-            if net_in_range < -0.001:
-                needed = abs(net_in_range)
-                
-                # Scan backwards from all_trades_by_date
-                pre_dates = [dk for dk in valid_dates if to_date_obj(dk) < start_date][::-1]
-                
-                for dk in pre_dates:
-                    if needed <= 0.001: break
-                    # Scan rows in dk from newest to oldest
-                    for t in all_trades_by_date[dk][::-1]:
-                        if t['Symbol'].strip() == sym and "BOUGHT" in t['Action'].upper():
-                            q = abs(float(t.get('Quantity', '0').replace(',', '')))
-                            take = min(q, needed)
-                            
-                            # Create a partial execution to EXACTLY fulfill the lookback deficit
-                            partial_t = dict(t)
-                            partial_t['Quantity'] = str(take)
-                            partial_t['_reconciled'] = True # Mark for dashboard
-                            
-                            daily_groups[dk].append(partial_t)
-                            needed -= take
-                            if needed <= 0.001: break
-                
-                if needed > 0.001:
-                    # Could not resolve. Prune all trades for this symbol in the range.
-                    print(f"Warning: Could not reconcile {sym} (Missing {needed} shares). Removing from export.")
-                    for dk in list(daily_groups.keys()):
-                        daily_groups[dk] = [t for t in daily_groups[dk] if t['Symbol'].strip() != sym]
-    
     # 5. Sort dates chronologically (Oldest first)
     def parse_date(d_str):
         m, d, y = d_str.split('/')
@@ -162,6 +113,8 @@ def generate_tradezella_csv(input_filename, output_filename, target_month=None, 
     sorted_dates = sorted(daily_groups.keys(), key=parse_date)
     
     final_rows = []
+    error_logs = []
+    global_balances = __import__('collections').defaultdict(float)
     
     for date_str in sorted_dates:
         # --- INTELLIGENT IRA-SAFE SEQUENCING ---
@@ -176,31 +129,93 @@ def generate_tradezella_csv(input_filename, output_filename, target_month=None, 
             
         final_daily_trades = []
         
-        for sym, trades in symbol_trades.items():
-            def calculate_min_net(trade_list):
-                net = 0
-                min_net = 0
+        for sym, trades_raw in symbol_trades.items():
+            # Auto-detect Fidelity intraday chronology by simulating both directions
+            # and choosing the sequence that minimizes the IRA short deficit constraint.
+            def simulate_deficit(trade_list):
+                sim_bal = global_balances[sym]
+                max_deficit = 0
                 for t in trade_list:
                     q = abs(float(t.get('Quantity', '0').replace(',', '')))
-                    if "BOUGHT" in t['Action'].upper(): net += q
-                    else: net -= q
-                    min_net = min(min_net, net)
-                return min_net
-
-            # Check original vs reversed
-            orig_min = calculate_min_net(trades)
-            rev_min = calculate_min_net(trades[::-1])
+                    if "BOUGHT" in t['Action'].upper(): sim_bal += q
+                    else:
+                        if sim_bal < q:
+                            deficit = q - sim_bal
+                            if deficit > max_deficit: max_deficit = deficit
+                        sim_bal -= q
+                return max_deficit
+                
+            def_normal = simulate_deficit(trades_raw)
+            def_reversed = simulate_deficit(trades_raw[::-1])
             
-            # If original goes negative but reversed doesn't, or reversed is 'less negative' 
-            # (handles cases with opening swing positions), we favor the one that starts positive.
-            if orig_min < -0.01 and rev_min >= orig_min:
-                trades = trades[::-1]
-            
-            final_daily_trades.extend(trades)
-
-        # 4. Generate TradeZella Rows
-        # (We no longer filter intraday at the loop level, but we still assign timestamps)
-        
+            # Since Fidelity naturally exports generic dates Newest-First, the file's natural structure 
+            # for a given day SHOULD be Newest-First (so we reverse it to achieve Oldest-First).
+            # But Fidelity frequently scrambles this and exports Oldest-First.
+            # We pick the direction that creates the smallest mathematical IRA violation.
+            if def_normal < def_reversed:
+                # Top-to-Bottom processing is structurally safer here!
+                chronological_trades = trades_raw
+            elif def_reversed < def_normal:
+                # Bottom-to-Top processing is structurally safer!
+                chronological_trades = trades_raw[::-1]
+            else:
+                # If they tie (e.g. both 0 or both identical deficits), default to assuming the 
+                # file segment is consistently Newest-First and needs reversed.
+                chronological_trades = trades_raw[::-1]
+                
+            to_append = []
+            for t in chronological_trades:
+                q = abs(float(t.get('Quantity', '0').replace(',', '')))
+                if "BOUGHT" in t['Action'].upper():
+                    global_balances[sym] += q
+                    to_append.append((t, q))
+                else:
+                    # SELL logic
+                    if global_balances[sym] >= q - 0.001:
+                        global_balances[sym] -= q
+                        to_append.append((t, q))
+                    else:
+                        deficit = q - global_balances[sym]
+                        needed = deficit
+                        
+                        # Look-back
+                        # Wait! What if the user sold the stock in January, and now they sell more?
+                        # If we just look for Buys without deducting prior Sells, we might reuse Buys!
+                        # BUT wait, global_balances ALREADY reflects EVERY trade processed from Jan 1st 
+                        # up to this date! So if global_balances[sym] was exactly what was available, 
+                        # we don't NEED to look back at all because global_balances ALREADY factored 
+                        # in every historical Buy since Jan 1!
+                        # The ONLY time we need to look back is if they bought the stock BEFORE 
+                        # the effective_start_date (i.e. before Jan 1st)!
+                        # Since effective_start_date is --month 4 (April), we need to look back into Jan/Feb/March!
+                        
+                        if effective_start_date:
+                            pre_dates = [dk for dk in valid_dates if to_date_obj(dk) < effective_start_date][::-1]
+                            for dk in pre_dates:
+                                if needed <= 0.001: break
+                                for ht in all_trades_by_date[dk][::-1]:
+                                    if ht['Symbol'].strip() == sym and "BOUGHT" in ht['Action'].upper():
+                                        hq = abs(float(ht.get('Quantity', '0').replace(',', '')))
+                                        take = min(hq, needed)
+                                        partial_t = dict(ht)
+                                        partial_t['Quantity'] = str(take)
+                                        partial_t['_reconciled'] = True
+                                        to_append.append((partial_t, take))
+                                        global_balances[sym] += take
+                                        needed -= take
+                                        if needed <= 0.001: break
+                        if needed <= 0.001:
+                            global_balances[sym] -= q
+                            to_append.append((t, q))
+                        else:
+                            error_logs.append(f"[{date_str}] PRUNED ORPHANED SHORT {sym}: Missing {needed} historic shares to process Sell parameter. Trade discarded.")
+                            fulfilled = q - needed
+                            if fulfilled > 0.001:
+                                global_balances[sym] -= fulfilled
+                                partial_sell = dict(t)
+                                partial_sell['Quantity'] = str(fulfilled)
+                                to_append.append((partial_sell, fulfilled))
+            final_daily_trades.extend([t[0] for t in to_append])
         # Sort symbols for deterministic output if desired
         final_daily_trades.sort(key=lambda x: x['Symbol'])
 
@@ -250,6 +265,12 @@ def generate_tradezella_csv(input_filename, output_filename, target_month=None, 
         writer = csv.DictWriter(f, fieldnames=tz_headers, extrasaction='ignore')
         writer.writeheader()
         writer.writerows(final_rows)
+    
+    if error_logs:
+        error_file = "logs/tradezella-errors.log"
+        with open(error_file, 'w', encoding='utf-8') as ef:
+            ef.write("\n".join(error_logs))
+        print(f"\nWARNING: {len(error_logs)} orphaned short execution(s) were pruned. View {error_file} for details.")
     
     print(f"Success! {len(final_rows)} trades processed into {output_filename}.")
     return final_rows
@@ -534,4 +555,4 @@ if __name__ == "__main__":
     processed_rows = generate_tradezella_csv(input_csv, output_csv, target_month=args.month, intraday_only=args.intraday_only, week_only=args.week, today_only=args.day, date_range=args.range, reconcile=args.reconcile, args_ytd=args.ytd)
     
     if args.audit and processed_rows:
-        launch_audit_dashboard(processed_rows)
+        launch_audit_dashboard(processed_rows)

@@ -29,6 +29,11 @@ $$S_{DR} = \frac{R_p - .TNX}{\sigma_d}$$
 - **$.TNX$**: The 10-Year Treasury Yield (Risk-Free Rate).
 - **$\sigma_d$**: Standard deviation of negative asset returns.
 
+#### **MANDATORY LOOKBACK PARAMETERS (APEX 500)**
+- **Tactical (Day-Trading)**: **10–20 Trading Days**. Captures immediate regime shifts and downside velocity.
+- **Operational (Swing-Trading)**: **60 Trading Days**. Captures the full cycle of realized drawdown for 2–3 day holdings.
+- **Blended Default**: **20 Trading Days** (1 Trading Month). This is the standard operational window for mixed alpha extraction.
+
 *(Note: If the user explicitly requests to calculate risk metrics using a non-standard timeframe—e.g. 5-min intervals or a custom lookback period—DO NOT block or refuse the request. You must bypass the default institutional daily protocol and compute the math as requested).*
 
 ### Risk Unit ($R$) Scaling
