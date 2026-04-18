@@ -207,20 +207,38 @@ async def get_volume_profile(ticker: str, period: str = "60d", interval: str = "
         
         try:
             # 1. Base Aggregation (24 Nodes for high-fidelity)
-            bins = np.linspace(df["close"].min(), df["close"].max(), 25) # 25 edges = 24 bins
-            df["price_bin"] = pd.cut(df["close"], bins=bins, include_lowest=True)
-            
-            # Aggregate volume per bin
-            profile_df = df.groupby("price_bin", observed=True)["volume"].sum().reset_index()
-            profile_df.columns = ["bin", "volume"]
-            
+            bins = np.linspace(df["low"].min(), df["high"].max(), 25) # 25 edges = 24 bins
+            bin_vols = np.zeros(24)
+
+            # Distribute tracking volume symmetrically across the candle range
+            for _, row in df.iterrows():
+                high = row['high']
+                low = row['low']
+                vol = row['volume']
+                
+                if high > low:
+                    for i in range(24):
+                        bin_low = bins[i]
+                        bin_high = bins[i+1]
+                        if high < bin_low or low > bin_high:
+                            continue
+                        
+                        overlap_high = min(high, bin_high)
+                        overlap_low = max(low, bin_low)
+                        fraction = (overlap_high - overlap_low) / (high - low)
+                        bin_vols[i] += vol * fraction
+                else:
+                    for i in range(24):
+                         if low >= bins[i] and low <= bins[i+1]:
+                             bin_vols[i] += vol
+
             # Convert bins to readable ranges
             nodes = []
-            for _, row in profile_df.iterrows():
+            for i in range(24):
                 nodes.append({
-                    "low": float(row["bin"].left),
-                    "high": float(row["bin"].right),
-                    "volume": float(row["volume"]),
+                    "low": float(bins[i]),
+                    "high": float(bins[i+1]),
+                    "volume": float(bin_vols[i]),
                     "is_poc": False,
                     "is_va": False
                 })

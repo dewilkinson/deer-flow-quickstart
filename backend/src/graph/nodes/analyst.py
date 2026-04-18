@@ -8,7 +8,7 @@ from typing import Any
 
 from langchain_core.runnables import RunnableConfig
 
-from src.tools import fetch_market_macros, get_bollinger_bands, get_ema_analysis, get_macd_analysis, get_rsi_analysis, get_smc_analysis, get_stock_quote, get_volatility_atr, get_volume_profile, invalidate_market_cache
+from src.tools import fetch_market_macros, get_bollinger_bands, get_ema_analysis, get_macd_analysis, get_rsi_analysis, run_smc_analysis, get_stock_quote, get_volatility_atr, get_volume_profile, invalidate_market_cache
 from src.tools.artifacts import read_session_artifact
 from src.tools.shared_storage import ANALYST_CONTEXT, GLOBAL_CONTEXT
 
@@ -31,7 +31,7 @@ async def analyst_node(state: State, config: RunnableConfig):
     """Analyst node implementation."""
     cached_list = ", ".join([str(t) for t in sorted(list(GLOBAL_CONTEXT.get("cached_tickers", set())))])
     logger.info(f"Analyst Node: Synthesizing technical indicators. GLOBAL_CACHE_VISIBILITY=[{cached_list}]")
-    tools = [get_smc_analysis, get_ema_analysis, get_stock_quote, get_rsi_analysis, get_macd_analysis, get_volatility_atr, get_volume_profile, get_bollinger_bands, fetch_market_macros, invalidate_market_cache, read_session_artifact]
+    tools = [run_smc_analysis, get_ema_analysis, get_stock_quote, get_rsi_analysis, get_macd_analysis, get_volatility_atr, get_volume_profile, get_bollinger_bands, fetch_market_macros, invalidate_market_cache, read_session_artifact]
 
     instructions = f"Report verbosity={state.get('verbosity', 1)}. "
     return await _setup_and_execute_agent_step(state, config, "analyst", tools, agent_instructions=instructions)

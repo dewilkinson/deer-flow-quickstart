@@ -5,6 +5,25 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cobalt | VLI Command Center</title>
+    
+    <script>
+        // VLI Dynamic Tab Session Tracker (Window Isolation)
+        const VLI_CLIENT_ID = sessionStorage.getItem('vli_client_id') || ('client_' + Math.random().toString(36).substr(2, 9));
+        sessionStorage.setItem('vli_client_id', VLI_CLIENT_ID);
+        
+        // Globally intercept fetch to attach Client-ID header to internal VLI requests
+        const originalFetch = window.fetch;
+        window.fetch = async function () {
+            let [resource, config] = arguments;
+            if(typeof resource === 'string' && resource.startsWith('/api/vli/')) {
+                if(config === undefined) { config = {}; }
+                if(config.headers === undefined) { config.headers = {}; }
+                config.headers['X-VLI-Client-ID'] = VLI_CLIENT_ID;
+            }
+            return await originalFetch(resource, config);
+        };
+    </script>
+    
     <link
         href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=Inter:wght@400;700&display=swap"
         rel="stylesheet">
@@ -298,67 +317,128 @@
         }
 
         .msg-ai {
-            background: rgba(13, 17, 23, 0.98);
+            background: transparent;
             color: var(--text-primary);
             font-weight: 400;
             align-self: flex-start;
-            border-left: 4px solid var(--emerald-green);
             font-family: 'Inter', sans-serif;
-            font-size: 16px;
-            /* Increased from 14px */
-            border-right: 1px dashed rgba(63, 185, 80, 0.1);
-            border-top: 1px dashed rgba(63, 185, 80, 0.1);
-            border-bottom: 1px dashed rgba(63, 185, 80, 0.1);
+            font-size: 15px; /* Refined for readability */
+            line-height: 1.6;
+            margin-bottom: 32px;
+            box-shadow: none; /* Gemini uses flat design */
+            width: 100%;
         }
 
-        .msg-ai h1,
-        .msg-ai h2,
-        .msg-ai h3 {
-            color: var(--emerald-green);
-            font-family: 'Outfit', sans-serif;
-            font-size: 13pt;
-            margin: 15px 0 8px 0;
-            letter-spacing: 0.5px;
-            text-transform: uppercase;
-            border-bottom: 1px solid rgba(63, 185, 80, 0.15);
-            padding-bottom: 4px;
+        .msg-ai-content {
+            padding-left: 28px;
+        }
+
+        .msg-ai h1, .msg-ai h2, .msg-ai h3 {
+            color: var(--text-primary);
+            font-family: 'Inter', sans-serif;
+            font-size: 1.1em;
+            margin: 20px 0 10px 0;
+            letter-spacing: -0.2px;
+            text-transform: none;
+            border-bottom: none;
+            padding-bottom: 0;
+            font-weight: 600;
         }
 
         .msg-ai strong {
-            color: var(--emerald-green);
-            font-weight: 400;
+            color: #fff;
+            font-weight: 600;
         }
 
         .msg-ai code {
-            background: rgba(255, 255, 255, 0.05);
-            padding: 2px 5px;
+            background: rgba(255, 255, 255, 0.08);
+            padding: 2px 6px;
             border-radius: 4px;
-            color: var(--emerald-green);
+            font-family: var(--font-mono);
+            font-size: 0.9em;
+            color: var(--cobalt-blue);
         }
 
-        .msg-ai ul {
-            margin-left: 20px;
-            margin-bottom: 10px;
-            list-style-type: square;
+        .msg-ai ul, .msg-ai ol {
+            margin: 12px 0 12px 24px;
         }
 
         .msg-ai li {
-            margin-bottom: 4px;
-            font-weight: 400;
+            margin-bottom: 8px;
         }
 
-        .chat-inline-markdown > h1:first-child,
-        .chat-inline-markdown > h2:first-child,
-        .chat-inline-markdown > h3:first-child {
-            display: none;
+        /* --- GEMINI THINKING ACCORDION --- */
+        .thought-container {
+            margin-bottom: 12px;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid transparent;
+            transition: all 0.3s ease;
+        }
+
+        .thought-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            cursor: pointer;
+            padding: 8px 0;
+            user-select: none;
+            color: var(--text-muted);
+            font-size: 14px;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+
+        .thought-header:hover {
+            color: var(--text-primary);
+        }
+
+        .thought-icon-chevron {
+            width: 12px;
+            height: 12px;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            opacity: 0.6;
+        }
+
+        .thought-header.open .thought-icon-chevron {
+            transform: rotate(180deg);
+        }
+
+        .thought-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1), padding 0.3s;
+            padding: 0 10px 0 28px;
+            font-size: 13px;
+            color: var(--text-muted);
+            line-height: 1.6;
+            border-left: 1px solid rgba(255, 255, 255, 0.08);
+            margin-left: 20px;
+        }
+
+        .thought-header.open + .thought-content {
+            max-height: 1000px;
+            padding: 10px 10px 20px 28px;
+        }
+
+        .gemini-sparkle {
+            color: var(--cobalt-blue);
+            width: 18px;
+            height: 18px;
         }
 
         .msg-user {
-            background: rgba(255, 255, 255, 0.03);
-            color: var(--text-muted);
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-primary);
             align-self: flex-end;
-            border-right: 2px solid rgba(255, 255, 255, 0.1);
-            font-size: 20px;
+            border-radius: 20px;
+            padding: 12px 20px;
+            font-size: 15px;
+            max-width: 80%;
+            border-bottom-right-radius: 4px;
+            margin-bottom: 32px;
+            font-family: 'Inter', sans-serif;
+            border: 1px solid rgba(255, 255, 255, 0.05);
         }
 
         /* --- TYPING INDICATOR --- */
@@ -390,7 +470,7 @@
             width: 70%;
             background: linear-gradient(90deg, transparent 0%, var(--cobalt-blue) 50%, transparent 100%);
             box-shadow: 0 0 15px rgba(88, 166, 255, 0.4);
-            animation: sweep 1.6s ease-in-out infinite alternate;
+            animation: sweep 1.2s ease-in-out infinite;
         }
 
         @keyframes sweep {
@@ -1109,6 +1189,7 @@
     </div>
 
     <script>
+        window.VLI_DEBUG = true;
         let refreshCountdown = 60;
         let activeWin = null;
         let winManager = {
@@ -1776,6 +1857,7 @@
                     document.getElementById('telemetry-body').innerHTML = '<div class="log-entry">SYSTEM_NODE: RESET SIGNAL SENT SUCCESSFULLY.</div>';
                     document.getElementById('telemetry-body').dataset.lastContent = ""; // Reset cache
                     document.getElementById('chat-messages').innerHTML = '';
+                    vliChatSyncPointer = 0; // Reset history pointer
                     document.getElementById('analysis-report-viewer').innerHTML = '<div style="display: flex; height: 100%; align-items: center; justify-content: center; color: var(--text-muted); font-family: Outfit; font-weight: 200; letter-spacing: 2px;">VLI_REPORT_STANDBY</div>';
                     document.getElementById('analysis-report-viewer').dataset.lastReport = "";
                     poll();
@@ -1897,6 +1979,93 @@
         setInterval(updateClock, 1000);
         updateClock();
 
+        // --- MARKED CUSTOM RENDERER ---
+        const renderer = new marked.Renderer();
+        renderer.code = function(code, language) {
+            const id = 'code-' + Math.random().toString(36).substr(2, 9);
+            return `
+                <div class="code-block-container" style="position: relative; margin: 10px 0;">
+                    <button class="copy-code-btn" onclick="copyCode(this)" data-code-id="${id}" style="position: absolute; top: 10px; right: 10px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.1); color: var(--text-muted); padding: 4px 8px; border-radius: 4px; font-size: 10px; cursor: pointer; z-index: 10; font-family: var(--font-main); transition: all 0.2s;">Copy</button>
+                    <pre style="margin:0;"><code id="${id}" class="language-${language}">${code}</code></pre>
+                </div>
+            `;
+        };
+        marked.setOptions({ renderer: renderer });
+
+        async function copyCode(btn) {
+            const id = btn.dataset.codeId;
+            const code = document.getElementById(id).innerText;
+            await navigator.clipboard.writeText(code);
+            btn.innerText = 'Copied!';
+            btn.style.color = 'var(--emerald-green)';
+            setTimeout(() => { btn.innerText = 'Copy'; btn.style.color = ''; }, 2000);
+        }
+
+        async function copyMessage(btn) {
+            const msgContent = btn.closest('.msg-ai-content').querySelector('.chat-inline-markdown').innerText;
+            await navigator.clipboard.writeText(msgContent);
+            const oldText = btn.innerText;
+            btn.innerText = '✅';
+            setTimeout(() => btn.innerText = oldText, 2000);
+        }
+
+        // --- GEMINI MESSAGE RENDERING ENGINE ---
+        function vliAppendMessage(container, msg) {
+            try {
+                if (window.VLI_DEBUG) console.log("[VLI_RENDER] Appending message:", msg);
+                const isAI = msg.role === 'ai';
+            const msgDiv = document.createElement('div');
+            msgDiv.className = isAI ? 'msg msg-ai' : 'msg msg-user';
+            
+            if (isAI) {
+                let thoughtHTML = "";
+                if (msg.thought) {
+                    const tid = 'thought-' + Math.random().toString(36).substr(2, 9);
+                    thoughtHTML = `
+                        <div class="thought-container">
+                            <div class="thought-header" onclick="this.classList.toggle('open')">
+                                <div class="thought-icon-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></div>
+                                <div class="gemini-sparkle"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L14.5 9L22 11.5L14.5 14L12 21L9.5 14L2 11.5L9.5 9L12 2Z"/></svg></div>
+                                <span>Show thinking</span>
+                            </div>
+                            <div class="thought-content">${marked.parse(msg.thought)}</div>
+                        </div>
+                    `;
+                }
+                
+                msgDiv.innerHTML = `
+                    <div class="msg-ai-content">
+                        ${thoughtHTML}
+                        <div class="chat-inline-markdown">${applyStatusFormatting(marked.parse(msg.content || ''))}</div>
+                        <div style="font-size:10px; color:var(--text-muted); margin-top:12px; display:flex; gap:12px; align-items:center;">
+                            <span>${msg.timestamp}</span>
+                            <span style="cursor:pointer; opacity: 0.6; transition: opacity 0.2s;" onclick="copyMessage(this)" title="Copy Response">📋</span>
+                        </div>
+                    </div>
+                `;
+            } else {
+                msgDiv.innerText = msg.content;
+            }
+            
+            container.appendChild(msgDiv);
+            container.scrollTop = container.scrollHeight;
+            
+                // Render Math
+                try {
+                    renderMathInElement(msgDiv, {
+                        delimiters: [
+                            { left: '$$', right: '$$', display: true },
+                            { left: '$', right: '$', display: false }
+                        ]
+                    });
+                } catch (e) {
+                    if (window.VLI_DEBUG) console.error("[VLI_RENDER] KaTeX error:", e);
+                }
+            } catch (err) {
+                console.error("[VLI_RENDER] CRITICAL FAILURE:", err, msg);
+            }
+        }
+
         // --- WINDOWS HOTKEY ORCHESTRATION ---
         window.addEventListener('keydown', (e) => {
             if (e.altKey && !e.ctrlKey && !e.shiftKey) {
@@ -1916,6 +2085,7 @@
 
         let directMode = false;
         let lastVliThreadId = null;
+        let vliChatSyncPointer = 0; // Tracks rendered messages in chat history
 
         const sessionArtifacts = {};
 
@@ -2174,6 +2344,36 @@
                 renderWatchlist(data);
                 renderTelemetry(data);
                 renderReport(data);
+
+                // --- CHAT PERSISTENCE SYNC ---
+                if (data.chat_history && Array.isArray(data.chat_history)) {
+                    const msgBox = document.getElementById('chat-messages');
+                    if (msgBox) {
+                        // [SELF-HEALING] If DOM is empty but history exists, reset pointer (handles refresh)
+                        const domMessageCount = msgBox.querySelectorAll('.msg').length;
+                        if (domMessageCount === 0 && data.chat_history.length > 0) {
+                            if (window.VLI_DEBUG) console.log("[VLI_SYNC] State Mismatch: DOM empty but history exists. Resetting sync pointer.");
+                            vliChatSyncPointer = 0;
+                        }
+                        
+                        // [SERVER REBOOT HEALING] If backend memory wiped, reset our pointer and DOM
+                        if (data.chat_history.length < vliChatSyncPointer) {
+                            console.warn(`[VLI_SYNC] Server Reboot Detected! Backend length (${data.chat_history.length}) < Local Pointer (${vliChatSyncPointer}). Resegmenting.`);
+                            msgBox.innerHTML = ''; // Wipe orphaned messages
+                            vliChatSyncPointer = 0;
+                        }
+
+                        if (window.VLI_DEBUG && data.chat_history.length > vliChatSyncPointer) {
+                            console.log(`[VLI_SYNC] New history detected. Local Pointer: ${vliChatSyncPointer}, Server History: ${data.chat_history.length}`);
+                        }
+                        
+                        for (let i = vliChatSyncPointer; i < data.chat_history.length; i++) {
+                            const msg = data.chat_history[i];
+                            vliAppendMessage(msgBox, msg);
+                            vliChatSyncPointer++;
+                        }
+                    }
+                }
 
                 bc.postMessage({ type: 'STATE_UPDATE', state: data });
                 if (window.VLI_DEBUG) console.log("[VLI_ORCHESTRA] Master Broadcast Sent.");
@@ -2479,21 +2679,9 @@
                 historyIndex = chatHistory.length;
                 input.value = '';
 
-                const userMsg = document.createElement('div');
-                userMsg.className = 'msg msg-user';
-                userMsg.innerHTML = applyStatusFormatting(marked.parse(rawText));
-                msgBox.appendChild(userMsg);
-
-                // Render Math for the user message
-                renderMathInElement(userMsg, {
-                    delimiters: [
-                        { left: '$$', right: '$$', display: true },
-                        { left: '$', right: '$', display: false },
-                        { left: '\\(', right: '\\)', display: false },
-                        { left: '\\[', right: '\\]', display: true }
-                    ]
-                });
-                msgBox.scrollTop = msgBox.scrollHeight;
+                // Standardized User Rendering
+                vliAppendMessage(msgBox, {role: 'user', content: rawText, timestamp: new Date().toLocaleTimeString('en-US', {hour12:false})});
+                vliChatSyncPointer++;
             }
 
             const btn = document.getElementById('send-stop-btn');
@@ -2506,17 +2694,6 @@
             } else {
                 regenTargetAiMsg.innerHTML = '<div class="typing-indicator"></div>';
             }
-
-            // Render Math for the user message
-            renderMathInElement(userMsg, {
-                delimiters: [
-                    { left: '$$', right: '$$', display: true },
-                    { left: '$', right: '$', display: false },
-                    { left: '\\(', right: '\\)', display: false },
-                    { left: '\\[', right: '\\]', display: true }
-                ]
-            });
-            msgBox.scrollTop = msgBox.scrollHeight;
 
             try {
                 let requestText = rawText;
@@ -2532,6 +2709,10 @@
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ card_id: targetCard })
                     });
+                    
+                    if (targetCard === "ALL" || targetCard === "CHAT" || targetCard === "CI") {
+                        resetVLI();
+                    }
 
                     btn.classList.remove('processing');
                     btn.innerText = "➤";
@@ -2540,9 +2721,9 @@
                 }
 
                 let rawDataMode = false;
-                if (text.toUpperCase().includes("--RAW") || (text.toUpperCase().includes("RAW") && (text.toUpperCase().includes("SMC") || text.toUpperCase().includes("DATA")))) {
+                if (rawText.toUpperCase().includes("--RAW") || (rawText.toUpperCase().includes("RAW") && (rawText.toUpperCase().includes("SMC") || rawText.toUpperCase().includes("DATA")))) {
                     rawDataMode = true;
-                    requestText = text.replace(/--raw/ig, "").trim();
+                    requestText = rawText.replace(/--raw/ig, "").trim();
                 }
 
                 console.log("[VLI_TRACE] " + new Date().toLocaleTimeString() + " - Submitting command to backend: " + requestText);
@@ -2566,119 +2747,32 @@
                 const durationSec = ((performance.now() - startTime) / 1000).toFixed(2);
                 console.log("[VLI_TRACE] " + new Date().toLocaleTimeString() + ` - Command response received in ${durationSec}s.`);
                 
-                hideTypingIndicator();
-
                 if (isProcessing) {
-                    const aiMsg = isRegen ? regenTargetAiMsg : document.createElement('div');
-                    if (!isRegen) aiMsg.className = 'msg msg-ai';
-                    aiMsg.dataset.requestText = rawText;
+                    if (isRegen) regenTargetAiMsg.innerHTML = "";
                     
                     const responseText = data.response || "No response generated.";
-
-                    if (rawDataMode) {
+                    
+                    // Unified AI Rendering if not in raw data mode
+                    if (!rawDataMode && !asyncMode) {
+                        // The server already added the message to history, 
+                        // so the poll() loop will pick it up. We do NOT append it here
+                        // to maintain a single source of truth from history.
+                        // However, we increment the pointer if we were to append it.
+                    } else if (rawDataMode) {
+                        const aiMsg = isRegen ? regenTargetAiMsg : document.createElement('div');
+                        if (!isRegen) aiMsg.className = 'msg msg-ai';
                         try {
                             const blob = new Blob([responseText], { type: 'application/json' });
                             const url = URL.createObjectURL(blob);
                             const artifactId = 'artifact_' + Date.now() + Math.floor(Math.random() * 1000);
                             sessionArtifacts[artifactId] = responseText;
-                            aiMsg.innerHTML = `<strong>[HEADLESS DATA ENGINE - RAW JSON]:</strong><br>Returned <a href="${url}" download="vli_raw_payload.json" onclick="renderArtifactToReport(event, '${artifactId}')" ondblclick="openNativeNotepad('vli_raw_payload.json')" style="color: #e5e7eb; font-weight: 700; text-decoration: underline; background: rgba(128, 128, 128, 0.25); padding: 4px 8px; border-radius: 4px; display: inline-block; margin-top: 10px; cursor: pointer;">vli_raw_payload.json</a><div style="font-size:10px; color:var(--text-muted); margin-top:8px;">⏱️ Latency: ${durationSec}s</div>`;
+                            aiMsg.innerHTML = `<div class="msg-ai-content"><strong>[HEADLESS DATA ENGINE - RAW JSON]:</strong><br>Returned <a href="${url}" download="vli_raw_payload.json" onclick="renderArtifactToReport(event, '${artifactId}')" style="color: #e5e7eb; font-weight: 700; text-decoration: underline; background: rgba(128, 128, 128, 0.25); padding: 4px 8px; border-radius: 4px; display: inline-block; margin-top: 10px; cursor: pointer;">vli_raw_payload.json</a><div style="font-size:10px; color:var(--text-muted); margin-top:8px;">⏱️ Latency: ${durationSec}s</div></div>`;
                         } catch (e) {
-                            aiMsg.innerHTML = `<strong>[HEADLESS DATA ENGINE - RAW JSON]:</strong> Data array returned successfully.<div style="font-size:10px; color:var(--text-muted); margin-top:8px;">⏱️ Latency: ${durationSec}s</div>`;
+                            aiMsg.innerHTML = `<div class="msg-ai-content"><strong>[HEADLESS DATA ENGINE - RAW JSON]:</strong> Data array returned successfully.<div style="font-size:10px; color:var(--text-muted); margin-top:8px;">⏱️ Latency: ${durationSec}s</div></div>`;
                         }
-                    } else {
-                        const leakKeywords = ["# SECURITY OVERRIDE", "APEX 500 SYSTEM", "USER IDENTITY: DAVE", "OPERATIONAL MANDATE", "QUOTA LIMIT", "RESOURCE_EXHAUSTED", "RATE_LIMIT", "QUOTA_EXHAUSTED"];
-                        let cleanText = responseText;
-                        const isLeak = leakKeywords.some(k => cleanText.toUpperCase().includes(k)) || cleanText.toUpperCase().includes("STRUCTURAL_EXCEPTION") || cleanText.includes("Integrity check failed");
-                        const isQuota = cleanText.toUpperCase().includes("QUOTA_EXHAUSTED") || cleanText.toUpperCase().includes("RESOURCE_EXHAUSTED") || cleanText.toUpperCase().includes("RATE_LIMIT");
-                        const isFallback = isLeak || isQuota || cleanText.toUpperCase().includes("INSTITUTIONAL PROCESSING RECOVERY");
-
-                        // [SECURITY] Catch Fallback Message
-                        if (isFallback) {
-                            const warnMsg = document.createElement('div');
-                            warnMsg.className = 'msg msg-ai';
-                            warnMsg.style.borderLeftColor = isQuota ? '#ff9d00' : '#fdbd33';
-
-                            let matchedModel = "Gemini 3 Pro";
-                            const match = cleanText.match(/(?:Quota limit reached for|Tier .*? failed).*?([a-z0-9.-]*?gemini-[a-z0-9.-]+)/i);
-                            if (match) {
-                                matchedModel = match[1].replace(/[()]/g, '').trim();
-                                if (matchedModel.includes("gemini-3")) matchedModel = matchedModel.includes("pro") ? "Gemini 3 Pro" : "Gemini 3 Flash";
-                            } else if (cleanText.includes("gemini-3-pro")) {
-                                matchedModel = "Gemini 3 Pro";
-                            } else if (cleanText.includes("gemini-3-flash") || cleanText.includes("basic")) {
-                                matchedModel = "Gemini 3 Flash";
-                            }
-
-                            const errorType = isQuota ? "API Quota Limit Reached" : "Structural Exception Detected";
-                            const errorDetail = isQuota ? "throtled" : "generated a payload that violated internal security schemas";
-
-                            warnMsg.innerHTML = `<span style="color: ${isQuota ? '#ff9d00' : '#fdbd33'}; font-weight: normal;">⚠️ <strong>${errorType}:</strong> <span style="color: white; font-family: 'Courier New', Courier, monospace; font-weight: bold;">${matchedModel}</span> ${errorDetail}. Managed recovery active.</span>`;
-                            msgBox.appendChild(warnMsg);
-
-                            // Strip internal fallback wrapper from the response if present 
-                            const preIdx = cleanText.lastIndexOf("Falling back to");
-                            if (preIdx !== -1) {
-                                let startAnalysis = cleanText.indexOf("\n", preIdx);
-                                if (startAnalysis !== -1) {
-                                    cleanText = cleanText.substring(startAnalysis).trim();
-                                }
-                            }
-
-                            // Stop if it was an unrecoverable leak
-                            if (leakKeywords.some(k => cleanText.toUpperCase().includes(k)) && !cleanText.toUpperCase().includes("STRUCTURAL_EXCEPTION")) {
-                                msgBox.scrollTop = msgBox.scrollHeight;
-                                return;
-                            }
-
-                            // [NEW] Inject persistent warning at the top of the generated report
-                            const fallbackLabel = isQuota ? "Quota limits" : "structural integrity checks";
-                            cleanText = `<div style="border-left: 4px solid var(--amber-gold); padding: 12px 16px; margin-bottom: 20px; background: rgba(210, 153, 34, 0.08); border-radius: 4px;"><span style="color: var(--amber-gold); font-weight: normal;">⚠️ <strong>Fallback Mode Active:</strong> Due to ${fallbackLabel}, this analysis was generated by a lower-tier model. The accuracy and depth of results may be compromised.</span></div>\n\n` + cleanText;
-                        }
-
-                        // [UX_REFINEMENT] Detect short vs long responses
-                        // A short response is a single paragraph without structural Markdown headers, tables, or lists.
-                        const isShort = !cleanText.includes('###') &&
-                            !cleanText.includes('|') &&
-                            !cleanText.includes('\n* ') &&
-                            !cleanText.includes('\n- ') &&
-                            cleanText.trim().split(/\n\s*\n/).length <= 1 &&
-                            cleanText.length < 600;
-
-                        if (!isShort) {
-                            const artifactId = 'artifact_' + Date.now() + Math.floor(Math.random() * 1000);
-                            sessionArtifacts[artifactId] = cleanText;
-
-                            // Inline Rendering in Chat Log with Gemini-style footer
-                            const footerHTML = `
-                                <div class="gemini-footer" style="display:flex; align-items:center; gap: 14px; margin-top: 15px; color: var(--text-muted); padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.05); font-size:14px; user-select:none;">
-                                    <div style="cursor:default;" title="Latency: ${durationSec}s">◷ ${durationSec}s</div>
-                                    <div style="cursor:pointer; transition:color 0.2s;" onclick="submitFeedback(event, 'up')" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='var(--text-muted)'" title="Good Response"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:-2px;"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path></svg></div>
-                                    <div style="cursor:pointer; transition:color 0.2s;" onclick="submitFeedback(event, 'down')" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='var(--text-muted)'" title="Bad Response"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:-2px;"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"></path></svg></div>
-                                    <div style="cursor:pointer; transition:color 0.2s;" onclick="regenerateMessage(event)" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='var(--text-muted)'" title="Regenerate">⟳</div>
-                                    <div style="cursor:pointer; transition:color 0.2s;" onclick="navigator.clipboard.writeText(sessionArtifacts['${artifactId}'])" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='var(--text-muted)'" title="Copy Raw Markdown">⎘</div>
-                                    <div style="cursor:pointer; transition:color 0.2s;" onclick="renderArtifactToReport(event, '${artifactId}')" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='var(--text-muted)'" title="Popout to Analysis Window">⧉</div>
-                                    <div style="cursor:pointer; transition:color 0.2s;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='var(--text-muted)'" title="More Actions">⋮</div>
-                                </div>`;
-                                
-                            aiMsg.innerHTML = `<div class="chat-inline-markdown">${applyStatusFormatting(marked.parse(cleanText))}</div>` + footerHTML;
-                        } else {
-                            // Inline rendering for single-paragraph responses
-                            aiMsg.innerHTML = `<div class="chat-inline-markdown">${applyStatusFormatting(marked.parse(cleanText))}</div>` + `<div style="font-size:10px; color:var(--text-muted); margin-top:8px; display:flex; gap:10px; align-items:center;"><span>◷ Latency: ${durationSec}s</span><span style="cursor:pointer; transition:color 0.2s;" onclick="submitFeedback(event, 'up')" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='var(--text-muted)'" title="Good Response"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:-2px;"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path></svg></span><span style="cursor:pointer; transition:color 0.2s;" onclick="submitFeedback(event, 'down')" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='var(--text-muted)'" title="Bad Response"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:-2px;"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"></path></svg></span><span style="cursor:pointer; transition:color 0.2s;" onclick="regenerateMessage(event)" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='var(--text-muted)'" title="Regenerate">⟳</span></div>`;
-                        }
-                    } // close else
-
-                    if (!isRegen) msgBox.appendChild(aiMsg);
-
-                    // Render Math for the AI message response
-                    renderMathInElement(aiMsg, {
-                        delimiters: [
-                            { left: '$$', right: '$$', display: true },
-                            { left: '$', right: '$', display: false },
-                            { left: '\\(', right: '\\)', display: false },
-                            { left: '\\[', right: '\\]', display: true }
-                        ]
-                    });
-
+                        if (!isRegen) msgBox.appendChild(aiMsg);
+                        vliChatSyncPointer++;
+                    }
                     msgBox.scrollTop = msgBox.scrollHeight;
                 }
             } catch (e) {

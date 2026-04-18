@@ -301,7 +301,7 @@ async def vli_node(
     # Whitelist of administrative tools that skip Phase B synthesis (One-sentence direct status)
     ADMIN_DIRECT_TOOLS = ["vli_cache_tick", "clear_vli_diagnostic", "invalidate_market_cache"]
     
-    if is_algebra or force_direct_exit or (not is_technical and getattr(plan_obj_a, 'intent', '') == 'EXECUTE_DIRECT'):
+    if is_algebra or force_direct_exit or (getattr(plan_obj_a, 'intent', '') == 'EXECUTE_DIRECT'):
         # check if it's a tool-based admin command
         is_admin_tool = False
         if response.tool_calls:
@@ -375,7 +375,13 @@ async def vli_node(
 
         # [NEW] Prepend fallback warnings to chat answer
         fallback_prefix = "\n".join([f"**{str(m.content)}**" for m in fb_msgs1 + fb_msgs2 if m.name == "system_fallback"])
-        final_answer = f"{fallback_prefix}\n\n{final_synth.content}" if fallback_prefix else str(final_synth.content)
+        
+        if isinstance(final_synth.content, list):
+            extracted_text = "".join([str(c.get("text", "")) if isinstance(c, dict) else str(c) for c in final_synth.content])
+        else:
+            extracted_text = str(final_synth.content)
+            
+        final_answer = f"{fallback_prefix}\n\n{extracted_text}" if fallback_prefix else extracted_text
 
         # Check for admin/direct intent (Hardened to use centralized Layer 0 flag)
         should_bypass_reporter = is_direct or "direct" in str(state.get("intent", "")).lower()
@@ -452,49 +458,56 @@ async def vli_node(
             )],
         )
 
-    # Guardrail: Intent-Based Routing Heuristics
-    # 1. Question Mark Rule: Any '?' triggers a Query (Synthesizer)
-    is_query = "?" in user_query
-
     # 2. Conceptual/Strategy Detection
-    strategy_keywords = ["outlook", "strategy", "approach", "behavior", "macro", "scenario", "this week", "next week", "recommend", "should i", "can i", "what if", "how about", "explain", "describe", "mean", "meaning", "define", "what is"]
-    is_strategy = any(kw in user_query.lower() for kw in strategy_keywords)
+    QUESTION_WORDS = ["what", "how", "why", "describe", "define", "meaning", "mean", "explain", "info"]
+    ADVISORY_WORDS = ["recommend", "should i", "can i", "what if", "how about"]
+    STRATEGY_KEYWORDS = ["outlook", "strategy", "approach", "behavior", "macro", "scenario", "this week", "next week"]
+    
+    is_question = user_query.endswith("?") or any(user_query.lower().startswith(w) for w in QUESTION_WORDS)
+    is_advisory = any(kw in user_query.lower() for kw in ADVISORY_WORDS)
+    is_strategy = any(kw in user_query.lower() for kw in STRATEGY_KEYWORDS)
 
     # 3. Tactical/Command Detection (Imperatives)
     tactical_keywords = ["analyze", "analysis", "smc", "sortino", "sharpe", "report", "get", "run", "scan", "check", "calculate", "audit"]
-    is_tactical = any(kw in user_query.lower() for kw in tactical_keywords)
+    is_tactical = any(user_query.lower().startswith(kw) for kw in ["get", "run", "analyze", "scan", "check", "calculate", "audit"]) or any(kw in user_query.lower() for kw in ["smc", "sortino", "sharpe"])
 
     # 4. Admin/Fast-Path Detection (Diagnostics/Sync)
     # [v3 Hardening] is_admin is now detected at Layer 0 to fix scoping
 
-    # Route Priority: Admin (Direct) -> Question/Strategy (Synthesis) -> Tactical (Audit)
+    # Route Priority: Admin (Direct) -> Advisory (Tactical) -> Question/Strategy (Synthesis) -> Tactical (Audit)
     # [HARDENING] is_admin always forces specialist override to ensure correct tool access
-    if ((not plan_obj.steps or plan_obj.has_enough_context or is_admin) and (is_query or is_strategy or is_tactical or is_admin)):
+    is_hard_tactical = any(user_query.lower().startswith(kw) for kw in ["get", "run", "analyze", "scan", "check", "calculate", "audit"])
+    
+    # We trigger the override if it's admin, or if the model failed to plan steps, or if it's an explicit advisory/question that lacks hard keywords
+    if (is_admin or ((is_question or is_advisory or is_strategy) and not is_hard_tactical) or not plan_obj.steps):
         
-        logger.warning(f"[VLI_SPINE] Guardrail: Intent detected (Q: {is_query}, S: {is_strategy}, T: {is_tactical}, A: {is_admin}). Forcing specialist node.")
+        logger.warning(f"[VLI_SPINE] Guardrail: Intent detected (Q: {is_question}, Adv: {is_advisory}, S: {is_strategy}, T: {is_tactical}, A: {is_admin}). Forcing specialist node.")
         plan_obj.has_enough_context = False
         plan_obj.direct_response = ""
         
-        # Priority Logic: Any '?' or strategy keyword forces Synthesizer
-        if is_query or is_strategy:
+        # Priority Logic: Advisory always forces rigorous tactical authorization 
+        if is_advisory:
+            target_step_type = StepType.SMC_ANALYST
+            step_title = "Institutional Execution Authorization"
+            plan_obj.intent = "TACTICAL_EXECUTION"
+        elif (is_question or is_strategy) and not is_hard_tactical:
             target_step_type = StepType.SYNTHESIZER
             step_title = "Institutional Market Insight"
-        # Admin commands force the System node in Fast-Path mode
         elif is_admin:
             target_step_type = StepType.SYSTEM
             step_title = "System Administrative Sync"
-        # If no '?' and tactical keyword is present, route to Analyst/SMC_Analyst
         elif "smc" in user_query.lower() or "smart money" in user_query.lower():
             target_step_type = StepType.SMC_ANALYST
             step_title = "Institutional SMC Audit"
+            plan_obj.intent = "TACTICAL_EXECUTION"
         else:
             target_step_type = StepType.ANALYST
             step_title = "Institutional Technical Audit"
 
         plan_obj.steps = [Step(
-            need_search=(is_query or is_strategy), 
+            need_search=(is_question or is_strategy), 
             title=step_title, 
-            description=f"FAST_PATH_ADMIN: {user_query}" if is_admin else f"Generate a COMPREHENSIVE institutional report for: {user_query}", 
+            description=f"FAST_PATH_ADMIN: {user_query}" if is_admin else f"Generate a COMPREHENSIVE institutional analysis for: {user_query}", 
             step_type=target_step_type
         )]
         
@@ -530,9 +543,6 @@ async def vli_node(
 
     next_agent = plan_obj.steps[0].step_type.value
 
-    # If we need human feedback first (Skipped in VLI automation mode usually)
-    if not state.get("is_test_mode", False) and not state.get("is_plan_approved", False):
-        next_agent = "human_feedback"
 
     cmd = Command(
         update={

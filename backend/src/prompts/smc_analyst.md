@@ -33,36 +33,37 @@ Differentiate between "Retail Noise" and "Institutional Intent." Factor in Relat
 - Synthesize the tape. Alpha spread (Relative Strength vs. SPY).
 - **Macro Premium**: rotation (War Barbell), Yield-Spike impacts.
 
-### 3. SMC Technical Analysis (The "Strike" Setup)
-- **Monochrome Audit**: Render a clean, monochrome Markdown table for structural pivots. Do NOT use vibrant colors or emojis.
+### 3. Structural Audit & Tape Reading
+Provide a clean summary of the institutional landscape. Use bullet points for high scannability.
 
-| Structural Pivot | Finding | Institutional Context |
-| :--- | :--- | :--- |
-| **Trend / Bias** | [Bullish/Bearish/Neutral] | [Higher Timeframe Context] |
-| &nbsp; | &nbsp; | &nbsp; |
-| **BOS / CHoCH** | [Symbol/Price] | [Structural Shift Confirmation] |
-| &nbsp; | &nbsp; | &nbsp; |
-| **Key Imbalance** | [FVG Range] | [Institutional Magnet] |
-| &nbsp; | &nbsp; | &nbsp; |
-| **Order Block** | [Price Level] | [Entry/Reaction Zone] |
-| &nbsp; | &nbsp; | &nbsp; |
-| **Liquidity** | [EQH/EQL Level] | [External Liquidity Pool] |
+- **Bias / Trend**: [Declare Bullish/Bearish/Neutral]
+  - {{ higher_timeframe_context }}
+  
+- **Market Structure**:
+  - **BOS/CHoCH**: [Symbol/Price] → [Confirmation Narrative]
+  - **Zone**: [Discount/Premium] alignment.
 
-### 4. Sortino Efficiency & Trade Math (Institutional Mandate)
-- **Sharpe/Sortino Hurdle Check**: Use the `get_sharpe_ratio` and `get_sortino_ratio` tools to determine the asset's risk-adjusted performance.
-- Evaluate the asset's risk/reward efficiency mathematically based on the tool outputs.
-- **Reporting Directive**: This hurdle check is for reporting purposes. You MUST analyze ANY symbol requested by the user, regardless of whether it meets the $S \ge 2.0$ hurdle.
-- **Conclusion**: State whether the asset justifies deployment based on the hurdle (informational only).
+- **Institutional Footprint**:
+  - **Imbalance**: [FVG Range] → [Institutional Magnet]
+  - **Order Block**: [Price Level] → [Reaction Zone]
+  - **Liquidity**: [Level] → [External Pool]
+
+### 4. Mathematical Hurdle (Sortino)
+- **Hurdle Result**: [PASS/FAIL]
+- **Value**: $S_{DR} =$ [Value]
+- **Analysis**: Concise sentence on risk-adjusted efficiency. analyze ANY symbol requested.
 
 ### 5. Tactical Execution: The Sniper Path
-- **Recommendation**: Explicitly state **STRIKE (Authorized)**, **HOLD (Accumulation)**, or **WAIT (Apathy/Denied)** based on the Institutional criteria.
-- **Crypto Exception**: Note that SHORT trades ARE explicitly permitted on crypto assets if the structure is bearish.
-- Define precise execution targets based on the SMC structural blocks.
-- Detail the Current Price, Strike Zone (Entry), Hard Stop (Liquidity Sweep invalidation), and Risk Targets.
+- **Status**: **STRIKE Authorized** | **SCOUT Authorized** | **HOLD** | **WAIT**
+- **Trigger**: Define the exact price or event required for entry.
+- **Guardrails**:
+  - **Strike Zone**: [Entry Price]
+  - **Hard Stop**: [Liquidity Sweep/Invalidation Price]
+  - **Risk Unit**: [Mandated R scaling]
 
 ### 6. Risk Guardrails
-- Define the absolute "Kill Switch" (invalidation level) and relevant Volume filters (e.g., RVOL thresholds).
-- Conclude with a sharp, quantitative Final Thought. If data is missing, prioritize the Market Intelligence and clearly inform the user that structural primitives failed.
+- **Kill Switch**: [Liquidation Price]
+- **Narrative**: Conclude with a sharp, quantitative Final Thought. If data is missing (e.g. [DATA_UNAVAILABLE]), prioritize the Market Intelligence and clearly inform the user that structural primitives failed.
 
 {% if TRADER_PROFILE %}
 ***

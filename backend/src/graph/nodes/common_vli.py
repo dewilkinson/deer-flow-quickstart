@@ -65,11 +65,11 @@ async def _run_node_with_tiered_fallback(agent_type, state, config, tools=None, 
         # Execution
         t0 = time.time()
         
-        # [DYNAMIC BUDGET] Calculate remaining global time relative to 115s server limit
+        # [DYNAMIC BUDGET] Calculate remaining global time relative to 180s server limit
         configurable = config.get("configurable", {})
         execution_start_time = configurable.get("execution_start_time", t0)
         elapsed_global = time.time() - execution_start_time
-        remaining_global = 110.0 - elapsed_global # Use 110s to leave buffer
+        remaining_global = 175.0 - elapsed_global # Use 175s to leave buffer for 180s master limit
         
         tier_timeouts = {
             "reasoning": 60.0,
@@ -95,9 +95,11 @@ async def _run_node_with_tiered_fallback(agent_type, state, config, tools=None, 
         tier_timeout = min(static_timeout, max(5.0, remaining_global))
         
         # [TRACE] High-fidelity diagnostic probe
-        state_size = len(str(state))
-        msgs_size = len(str(messages)) if messages is not None else 0
-        logger.info(f"[TRACE_START] Tier: {tier} | Agent: {agent_type} | State: {state_size} | Msgs: {msgs_size} | Timeout: {tier_timeout:.1f}s (Global Remaining: {remaining_global:.1f}s)")
+        # [HARDENING] We avoid str(state) or str(messages) here as they are extremely expensive
+        # and block the event loop in bloated threads.
+        msg_list = messages if messages is not None else state.get("messages", [])
+        msgs_count = len(msg_list) if msg_list else 0
+        logger.info(f"[TRACE_START] Tier: {tier} | Agent: {agent_type} | Message Count: {msgs_count} | Timeout: {tier_timeout:.1f}s (Global Remaining: {remaining_global:.1f}s)")
         
         try:
             # Determine appropriate input format based on whether we are calling a graph or a raw LLM
@@ -300,28 +302,23 @@ async def _setup_and_execute_agent_step(state, config, agent_type, tools, agent_
         new_messages = [AIMessage(content=f"{agent_type.upper()} task completed successfully.", name=f"{agent_type}_finalize")]
     else:
         last_msg = new_messages[-1]
-        if isinstance(last_msg, AIMessage):
-            new_messages[-1] = AIMessage(content=last_msg.content, name=f"{agent_type}_finalize")
-        elif hasattr(last_msg, "content"):
-            content = last_msg.content
-            if (isinstance(content, (dict, list))) and not isinstance(content, list):
-                 import json
-                 content_str = f"```json\n{json.dumps(content, indent=2)}\n```"
-            elif isinstance(content, list):
-                 # Flatten list of content blocks if needed
-                 content_parts = []
-                 for item in content:
-                     if isinstance(item, dict) and "text" in item:
-                         content_parts.append(str(item["text"]))
-                     else:
-                         content_parts.append(str(item))
-                 content_str = "\n".join(content_parts)
-            else:
-                 content_str = str(content)
-            
-            new_messages[-1] = AIMessage(content=content_str, name=f"{agent_type}_finalize")
+        content_val = last_msg.content if hasattr(last_msg, "content") else last_msg
+        
+        if (isinstance(content_val, (dict, list))) and not isinstance(content_val, list):
+             import json
+             content_str = f"```json\n{json.dumps(content_val, indent=2)}\n```"
+        elif isinstance(content_val, list):
+             content_parts = []
+             for item in content_val:
+                 if isinstance(item, dict) and "text" in item:
+                     content_parts.append(str(item["text"]))
+                 else:
+                     content_parts.append(str(item))
+             content_str = "\n".join(content_parts)
         else:
-            new_messages.append(AIMessage(content="Step complete.", name=f"{agent_type}_finalize"))
+             content_str = str(content_val)
+        
+        new_messages[-1] = AIMessage(content=content_str, name=f"{agent_type}_finalize")
 
     return {"messages": fallback_messages + new_messages, "observations": observations, "current_plan": current_plan}
 
@@ -333,20 +330,21 @@ def _compact_history(messages: list) -> list:
     """
     compacted = []
     # Nodes whose messages should be ignored in final narrative synthesis EXCEPT when they hold result logic
-    structural_nodes = ["vli_spine", "vli_parser", "parser"]
+    # [V3 HARDENING] We only skip purely structural metadata nodes
+    structural_nodes = ["vli_spine", "vli_parser", "vli_coordinator", "parser"]
     
-    # [HARDENING] We keep 'coordinator' and 'vli_coordinator' if they were the final node or contain _finalize suffix
-    # because they often hold the entire analytical payload in Fast-Path scenarios.
+    # [HARDENING] Specialist findings MUST be preserved
+    specialist_nodes = ["smc_analyst", "analyst", "portfolio_manager", "risk_manager", "coder", "journaler"]
     
     for m in messages:
         name = getattr(m, "name", "") or ""
         
-        # 1. Skip strictly structural nodes
-        if name in structural_nodes:
+        # 1. Skip strictly structural nodes unless they are the final message
+        if name in structural_nodes and m != messages[-1]:
             continue
             
         # 2. Skip 'coordinator' if it's just a planning stage and NOT a finalization
-        if name in ["coordinator", "vli_coordinator"]:
+        if "coordinator" in name:
             content = str(getattr(m, "content", ""))
             # If it's the very last message in the set, we must keep it (it's the answer)
             if m == messages[-1]:

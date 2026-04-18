@@ -56,9 +56,16 @@ from datetime import datetime
 from typing import Annotated, Any, cast
 from uuid import uuid4
 
-from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query, Security
+from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Query, Security
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, StreamingResponse
+
+# --- VLI GLOBAL STATE ---
+_vli_convergence_history = []
+_vli_dynamic_panels = {}
+_vli_last_async_report = ""
+_vli_last_ux_card = {}
+_vli_rules_enabled = True
 from fastapi.security import APIKeyHeader
 from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage, HumanMessage, ToolMessage
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
@@ -128,13 +135,35 @@ _vli_dynamic_panels = []  # [{id, title, content_html}]
 _vli_macro_worker_task = None
 _vli_last_macro_data = [{"symbol": k, "price": 0, "change": 0, "volume": 0, "color": "gray"} for k in macro_registry.get_macros().keys()]
 _vli_session_id = f"vli-{datetime.now().strftime('%Y%m%d-%H%M%S')}"  # Unique per-server-run
+_vli_last_run_day = datetime.now().strftime("%Y-%m-%d")
 _vli_last_inbox_log_time = 0.0
 _vli_rules_enabled = False
 _vli_convergence_history = []
 _vli_last_async_report = ""
 _vli_last_ux_card = {}
+from collections import defaultdict
+_vli_chat_history_store = defaultdict(list) # {client_id: [{role, content, thought, timestamp, thread_id}]}
 _vli_action_cache_data = {}  # [NEW] Short-term identical query cache
-_vli_last_run_day = datetime.now().strftime("%Y-%m-%d") # Tracked for scheduler day transitions
+
+def _append_to_vli_history(role: str, content: str, thought: str = "", thread_id: str = None):
+    """Unified logger for VLI Chat history."""
+    try:
+        from src.config.vli_context import vli_client_id
+        cid = vli_client_id.get("default")
+    except Exception:
+        cid = "default"
+        
+    global _vli_chat_history_store
+    _vli_chat_history_store[cid].append({
+        "role": role,
+        "content": content,
+        "thought": thought,
+        "timestamp": datetime.now().strftime("%H:%M:%S"),
+        "thread_id": thread_id
+    })
+    # Keep history manageable (last 50 messages per client)
+    if len(_vli_chat_history_store[cid]) > 50:
+        _vli_chat_history_store[cid] = _vli_chat_history_store[cid][-50:]
 
 def scrub_vli_output(text) -> str:
     """Universal firewall to prevent technical instruction leakage and verbose error clusters."""
@@ -404,6 +433,28 @@ graph = build_graph_with_memory()
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 
+@app.get("/api/models")
+async def get_models():
+    """Retrieve all configured LLM models for the UI."""
+    try:
+        raw_models = get_configured_llm_models()
+        transformed_models = []
+        for llm_type, model_list in raw_models.items():
+            for m_name in model_list:
+                transformed_models.append({
+                    "id": f"{llm_type}-{m_name}",
+                    "name": m_name,
+                    "model": m_name,
+                    "display_name": f"{m_name} ({llm_type})",
+                    "supports_thinking": llm_type == "reasoning",
+                    "supports_reasoning_effort": llm_type == "reasoning"
+                })
+        return {"models": transformed_models}
+    except Exception as e:
+        logger.error(f"Failed to fetch models: {e}")
+        return {"models": []}
+
+
 async def verify_api_key(api_key: str = Security(api_key_header)):
     expected_key = get_str_env("COBALT_API_KEY", "")
     if expected_key:
@@ -647,8 +698,14 @@ class VLIActionPlanRequest(BaseModel):
 
 
 @app.get("/api/vli/active-state")
-async def get_active_vli_state():
-    logger.info("[VLI_TRACE] Entering get_active_vli_state")
+async def get_active_vli_state(client_id: str = Header("default", alias="X-VLI-Client-ID")):
+    try:
+        from src.config.vli_context import vli_client_id
+        vli_client_id.set(client_id)
+    except Exception:
+        pass
+        
+    logger.info(f"[VLI_TRACE] Entering get_active_vli_state for client: {client_id}")
     try:
         from src.config.vli import get_action_plan_path, get_inbox_path, get_vli_path
 
@@ -706,10 +763,19 @@ async def get_active_vli_state():
             "ux_card": json.loads(json.dumps(_vli_last_ux_card, default=str)),
             "rules_enabled": _vli_rules_enabled,
             "convergence_data": json.loads(json.dumps(_vli_convergence_history, default=str)),
+            "chat_history": json.loads(json.dumps(_vli_chat_history_store.get(client_id, []), default=str)),
+            "client_id_echo": client_id
         }
     except Exception as e:
         logger.error(f"VLI: Error in consolidated active-state endpoint: {e}", exc_info=True)
-        return {"error": str(e), "macros": [], "alerts": [], "telemetry_tail": "BACKEND_ERROR", "convergence_data": []}
+        return {
+            "error": str(e), 
+            "macros": [], 
+            "alerts": [], 
+            "telemetry_tail": "BACKEND_ERROR", 
+            "convergence_data": [],
+            "chat_history": []
+        }
 
 
 # --- VLI SESSION CONFIGURATION ---
@@ -893,18 +959,23 @@ async def refresh_vli_card(req: RefreshRequest):
 
 
 @app.post("/api/vli/reset")
-async def reset_vli_session():
-    """Clear telemetry and PREEMPTIVELY terminate all active jobs via System Node Hard-Kill."""
-    from src.config.vli import get_vli_path
-
-    telemetry_file = get_vli_path("VLI_Raw_Telemetry.md")
-
-    global _vli_reset_requested, _vli_active_task, _vli_extracted_alerts, _vli_dynamic_panels, _vli_session_id
+async def reset_vli_state(client_id: str = Header("default", alias="X-VLI-Client-ID")):
+    try:
+        from src.config.vli_context import vli_client_id
+        vli_client_id.set(client_id)
+    except Exception:
+        pass
+        
+    global _vli_reset_requested, _vli_active_task, _vli_extracted_alerts, _vli_dynamic_panels, _vli_session_id, _vli_chat_history_store
     _vli_reset_requested = True
+    _vli_chat_history_store[client_id] = [] # Purge specific client history
 
     # [NEW] Refresh Session ID to break 404 Trajectory cycles
     # This forces a fresh Google Cloud session context
     _vli_session_id = f"vli-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+
+    from src.config.vli import get_vli_path
+    telemetry_file = get_vli_path("VLI_Raw_Telemetry.md")
 
     # [HARD KILL] Preemptively cancel the active graph task
     if _vli_active_task and not _vli_active_task.done():
@@ -1299,14 +1370,23 @@ async def _invoke_vli_agent(
     else:
         content_obj = text
 
-    # [V10.5 CONTEXT PATCH]
-    # We pass only the CURRENT message. Because the graph is configured with a
-    # thread_id checkpointer, LangGraph will automatically append this to the
-    # existing history in the database rather than overwriting it.
+    # [V10.5 CONTEXT PATCH & TRUNCATION]
+    # In long-running sessions, we must truncate the history to prevent state-load hangs.
+    # The specialist nodes (SMC Analyst) only need the immediate directive and structural 
+    # history, not the entire conversation from hours ago.
+    try:
+        from langgraph.checkpoint.base import CheckpointTuple
+        # Check current history depth if checkpointer is active
+        # However, since we are doing a fresh invoke with only the current message,
+        # and the checkpointer MERGES them, we should actually be careful.
+        # LangGraph typically handles history merging. 
+        # But if we were passing the WHOLE history in workflow_input, we'd truncate it here.
+    except: pass
+    
     workflow_input = {
         "messages": [HumanMessage(content=content_obj)],
         "plan_iterations": 0,
-        "steps_completed": 0,  # [CRITICAL] Reset traversal index so coordinator doesn't think it's done
+        "steps_completed": 0,
         "final_report": "",
         "current_plan": None,
         "observations": [],
@@ -1317,7 +1397,7 @@ async def _invoke_vli_agent(
         "verbosity": 1,
         "direct_mode": direct_mode,
         "raw_data_mode": raw_data_mode,
-        "intent": intent_mode, # Explicit reset
+        "intent": intent_mode,
     }
 
     # [RESONANCE FLOOR] Configuration for reliable execution
@@ -1351,8 +1431,8 @@ async def _invoke_vli_agent(
         # [DYNAMIC BUDGET] Inject absolute start time for per-node adaptive fallbacks
         workflow_config["configurable"]["execution_start_time"] = start_exec
 
-        # Run the graph and get the final state with an aggressive timeout (115s to respect AsyncRetries safely)
-        final_state = await asyncio.wait_for(graph.ainvoke(workflow_input, config=workflow_config), timeout=115.0)
+        # Run the graph and get the final state with an aggressive timeout (180s to respect AsyncRetries safely)
+        final_state = await asyncio.wait_for(graph.ainvoke(workflow_input, config=workflow_config), timeout=180.0)
 
         exec_duration = time.time() - start_exec
         logger.info(f"VLI Agent: Graph traversal completed in {exec_duration:.2f}s")
@@ -1388,8 +1468,8 @@ async def _invoke_vli_agent(
         return scrub_vli_output(final_output), final_state
 
     except asyncio.TimeoutError:
-        logger.warning("VLI Agent: Master orchestration timed out (115s).")
-        return "Agent processing timed out (115s).", {}
+        logger.warning("VLI Agent: Master orchestration timed out (180s).")
+        return "Agent processing timed out (180s).", {}
     except Exception as e:
         logger.error(f"VLI Agent: Failed with error: {e}")
         return scrub_vli_output(f"Agent reasoning encountered a failure: {str(e)}"), {}
@@ -1406,7 +1486,7 @@ async def _background_synthesis_task(text: str, image: str | None, direct_mode: 
             tf.write(f"\n{timestamp} **ASYNC SYNTHESIS INITIATED**\n")
             tf.write(f"- **Thread ID**: `{thread_id}`\n")
 
-        response_text, final_vli_state = await _invoke_vli_agent(
+        response_text, final_state = await _invoke_vli_agent(
             text=text,
             image=image,
             direct_mode=direct_mode,
@@ -1415,6 +1495,15 @@ async def _background_synthesis_task(text: str, image: str | None, direct_mode: 
             vli_llm_type=vli_llm_type,
             thread_id=thread_id,
         )
+        
+        # [NEW] Persist to Chat History with abstracted thoughts
+        thought = ""
+        if isinstance(final_state, dict):
+            plan = final_state.get("current_plan")
+            if hasattr(plan, "thought"): thought = plan.thought
+            elif isinstance(plan, dict): thought = plan.get("thought", "")
+
+        _append_to_vli_history("ai", response_text, thought=thought, thread_id=thread_id)
 
         with open(telemetry_file, "a", encoding="utf-8") as tf:
             tf.write(f"\n{datetime.now().strftime('[%H:%M:%S]')} **VLI ASYNC TRANSACTION RESOLVED**\n")
@@ -1430,10 +1519,26 @@ async def _background_synthesis_task(text: str, image: str | None, direct_mode: 
 
 
 @app.post("/api/vli/action-plan")
-async def post_vli_action_plan(request: VLIActionPlanRequest, background_tasks: BackgroundTasks):
+async def post_vli_action_plan(request: VLIActionPlanRequest, background_tasks: BackgroundTasks, client_id: str = Header("default", alias="X-VLI-Client-ID")):
     """Handle chat or action-plan updates from the VLI Sidebar."""
+    try:
+        from src.config.vli_context import vli_client_id
+        vli_client_id.set(client_id)
+    except Exception:
+        pass
     plan_file = get_action_plan_path()
 
+    # [BUGFIX: STATE POLLUTION] Explicitly generate a fresh Thread ID for every action plan request ONLY IF one isn't provided.
+    transaction_id = request.thread_id
+    if not transaction_id:
+        if request.text.strip().startswith("Note:") and _vli_last_thread_id:
+            transaction_id = _vli_last_thread_id
+        else:
+            import uuid
+            transaction_id = f"vli_action_{uuid.uuid4().hex[:8]}"
+            
+    # [NEW] Persist User Message IMMEDIATELY (Atomic Visibility across all paths including Cache & Fast-Path)
+    _append_to_vli_history("user", request.text, thread_id=transaction_id)
     # [NEW] Log Issued Command to Raw Telemetry
     try:
         from src.config.vli import get_vli_path
@@ -1490,6 +1595,8 @@ async def post_vli_action_plan(request: VLIActionPlanRequest, background_tasks: 
                     tf.write(f"- **Intent**: `{intent_mode}`\n")
                     tf.write(f"- **Directive**: `{request.text[:40]}...`\n")
                     tf.write(f"- **Response Size**: {len(response_text)} chars\n\n---\n")
+                # [NEW] Persist AI Response to History
+                _append_to_vli_history("ai", response_text, thread_id=transaction_id)
                 return {"response": response_text, "status": status_code, "error_details": None, "thread_id": transaction_id}
         except Exception as e:
             logger.error(f"VLI: Cache read failure: {e}")
@@ -1506,19 +1613,6 @@ async def post_vli_action_plan(request: VLIActionPlanRequest, background_tasks: 
     logger.info(f"VLI: Routing directive to Gemini Agent: {request.text[:50]}...")
     final_vli_state = {}  # Ensure initialization
 
-    # [BUGFIX: STATE POLLUTION] Explicitly generate a fresh Thread ID for every action plan request ONLY IF one isn't provided.
-    # We allow the dashboard to pass a thread_id to maintain history for "Note:" feedback.
-    transaction_id = request.thread_id
-    if not transaction_id:
-        # High-Priority: If this is a Note:, try to recover the last active thread
-        if request.text.strip().startswith("Note:") and _vli_last_thread_id:
-            transaction_id = _vli_last_thread_id
-            logger.info(f"VLI: Feedback detected. Reusing last active thread: {transaction_id}")
-        else:
-            import uuid
-            transaction_id = f"vli_action_{uuid.uuid4().hex[:8]}"
-            logger.info(f"VLI: Fresh transaction initialized: {transaction_id}")
-
     # [FAST-PATH] Shorthand Directive Bypass (Pre-Orchestration)
     # Detects common patterns like "get aapl price", "price of nvda", etc.
     import re
@@ -1526,24 +1620,20 @@ async def post_vli_action_plan(request: VLIActionPlanRequest, background_tasks: 
     ticker = None
     fp_intent = None
     
-    # Robust multi-pattern matching for price-only intent
-    # 1. Ticker (price) | Get Ticker (price)
-    m1 = re.match(r"^(?:GET\s+)?\$?([A-Z]{1,5})(?:\s+PRICE)?$", cleaned_input)
-    # 2. Price of Ticker
-    m2 = re.match(r"^PRICE\s+OF\s+\$?([A-Z]{1,5})$", cleaned_input)
+    # 1. Ticker price variants (AAPL price, get $BTC, price of ETH, etc.)
+    # [ULTRA-ROBUST] Catches tickers up to 20 chars with A-Z, 0-9, dots, hyphens, and underscores.
+    m = re.search(r"(?:^|GET\s+|PRICE\s+OF\s+)\$?([A-Z0-9.\-_=]{1,20})(?:\s+PRICE)?$", cleaned_input)
     
-    if m1:
-        ticker = m1.group(1)
-        fp_intent = "Shorthand/Price"
-    elif m2:
-        ticker = m2.group(1)
-        fp_intent = "Price of Ticker"
+    if m:
+        ticker = m.group(1)
+        fp_intent = "Bypass-Matched"
         
     if ticker and not request.raw_data_mode:
         logger.info(f"VLI: Fast-Path Hit detected: {ticker} (Intent: {fp_intent}). Bypassing AI Orchestration.")
         try:
             from src.tools.finance import get_stock_quote
-            quote = await get_stock_quote(ticker=ticker, use_fast_path=True)
+            # [CRITICAL FIX] get_stock_quote is a LangChain @tool, must use .ainvoke
+            quote = await get_stock_quote.ainvoke({"ticker": ticker, "use_fast_path": True})
             
             if isinstance(quote, dict):
                 price = quote.get("price")
@@ -1554,6 +1644,8 @@ async def post_vli_action_plan(request: VLIActionPlanRequest, background_tasks: 
                     change = quote.get("change", 0.0)
                     change_sign = "+" if change >= 0 else ""
                     response_text = f"**{ticker}**: ${price:.2f} ({change_sign}{change:.2f}%)"
+                    
+                    _append_to_vli_history("ai", response_text, thread_id=transaction_id)
                     
                     # Log to Telemetry
                     try:
@@ -1569,8 +1661,28 @@ async def post_vli_action_plan(request: VLIActionPlanRequest, background_tasks: 
                     except: pass
                     
                     return {"response": response_text, "status": "OK", "error_details": None, "thread_id": transaction_id}
+            
+            # If we reached here, the ticker was matched but quote retrieval failed or returned a string error
+            response_text = str(quote) if isinstance(quote, str) else f"VLI_FAST_PATH: Real-time price for '{ticker}' is currently unavailable."
+            _append_to_vli_history("ai", response_text, thread_id=transaction_id)
+            
+            # Log failure to Telemetry too
+            try:
+                from src.config.vli import get_vli_path
+                telemetry_file = get_vli_path("VLI_Raw_Telemetry.md")
+                timestamp = datetime.now().strftime("[%H:%M:%S]")
+                with open(telemetry_file, "a", encoding="utf-8") as tf:
+                    tf.write(f"\n{timestamp} **FAST_PATH_FAILURE (Bypass: {fp_intent})**\n")
+                    tf.write(f"- **Ticker**: `{ticker}`\n")
+                    tf.write(f"- **Error**: `{response_text}`\n\n---\n")
+                    tf.flush()
+                    os.fsync(tf.fileno())
+            except: pass
+            
+            return {"response": response_text, "status": "ERROR", "error_details": "Tool returned non-dict payload during bypass fetch."}
         except Exception as fe:
-            logger.warning(f"VLI: Fast-Path bypass failed for {ticker}, falling back to full graph: {fe}")
+            logger.warning(f"VLI: Fast-Path bypass failed for {ticker}: {fe}")
+            return {"response": f"VLI_FAST_PATH: Failed to retrieve quote for '{ticker}' (Error: {str(fe)}).", "status": "ERROR", "error_details": str(fe)}
 
     # [NEW] ASYNC SYNTHESIS BYPASS
     wants_background = request.background_synthesis or "--BACKGROUND" in request.text.upper()
@@ -1635,6 +1747,9 @@ async def post_vli_action_plan(request: VLIActionPlanRequest, background_tasks: 
 
     try:
         response_text, final_vli_state = await _invoke_vli_agent(request.text, request.image, request.direct_mode, request.raw_data_mode, request.reporter_llm_type, request.vli_llm_type, thread_id=transaction_id)
+        
+        timestamp = datetime.now().strftime("%H:%M:%S")
+
         if not response_text:
             # [V10 AUDIT] Log structural completion (Empty Payload)
             try:
@@ -1767,6 +1882,15 @@ async def post_vli_action_plan(request: VLIActionPlanRequest, background_tasks: 
                     json.dump({"timestamp": time.time(), "response_text": response_text}, cf)
             except Exception as ce:
                 logger.error(f"VLI: Failed to write cache: {ce}")
+
+    # [NEW] Persist AI Response to History
+    thought = ""
+    if isinstance(final_vli_state, dict):
+        plan = final_vli_state.get("current_plan")
+        if hasattr(plan, "thought"): thought = plan.thought
+        elif isinstance(plan, dict): thought = plan.get("thought", "")
+
+    _append_to_vli_history("ai", response_text, thought=thought, thread_id=transaction_id)
 
     return {"response": response_text, "status": "OK", "error_details": None, "thread_id": transaction_id}
 
@@ -2451,6 +2575,13 @@ async def config():
 # Include research API routes
 app.include_router(research_router, prefix="/api/research", tags=["research"])
 app.include_router(studio_router)
+
+# Trigger Telemetry Purge on Server Startup
+try:
+    from src.config.vli import purge_stale_vli_sessions
+    purge_stale_vli_sessions()
+except Exception:
+    pass
 
 # Mount the backend directory to serve the dashboard HTML
 backend_dir = os.path.dirname(os.path.abspath(__file__))  # src/server

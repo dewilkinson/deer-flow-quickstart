@@ -3,6 +3,11 @@ import os
 import sys
 import logging
 
+try:
+    sys.stdout.reconfigure(encoding='utf-8')
+except AttributeError:
+    pass
+
 # Ensure backend/src is in pythonpath
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -45,7 +50,12 @@ async def run_test():
         
         for m in result.get("messages", []):
             name = getattr(m, 'name', '') or ''
-            print(f"[{m.type.upper()}] {name}: {str(m.content)[:300]}...")
+            print(f"\n[----------------- {m.type.upper()} : {name} -----------------]")
+            content_str = str(m.content)
+            try:
+                print(content_str)
+            except UnicodeEncodeError:
+                print(content_str.encode('utf-8', 'ignore').decode('utf-8'))
             
     except Exception as e:
         print(f"\n[ERROR] Graph execution crashed: {e}")

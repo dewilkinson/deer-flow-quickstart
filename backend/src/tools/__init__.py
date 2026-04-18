@@ -19,7 +19,7 @@ from .python_repl import python_repl_tool
 from .retriever import get_retriever_tool
 from .screenshot import snapper
 from .search import get_web_search_tool
-from .smc import get_smc_analysis
+from .smc import run_smc_analysis, get_raw_smc_tables, get_smc_analysis
 from .scheduler import manage_scheduled_tasks
 from .tts import VolcengineTTS
 from .vision import get_image_from_local_path, get_image_from_url
@@ -47,7 +47,9 @@ __all__ = [
     "get_journal_folder",
     "set_journal_folder",
     "VolcengineTTS",
+    "run_smc_analysis",
     "get_smc_analysis",
+    "get_raw_smc_tables",
     "get_ema_analysis",
     "get_rsi_analysis",
     "get_macd_analysis",

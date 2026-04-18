@@ -9,7 +9,8 @@ from typing import Any
 
 from langchain_core.runnables import RunnableConfig
 
-from src.tools.finance import get_raw_smc_tables, get_stock_quote, run_smc_analysis
+from src.tools.finance import get_stock_quote
+from src.tools.smc import get_raw_smc_tables, run_smc_analysis
 from src.tools.artifacts import read_session_artifact
 from src.tools.indicators import get_sharpe_ratio, get_sortino_ratio, get_volatility_atr, get_volume_profile
 from src.tools.shared_storage import ANALYST_CONTEXT, GLOBAL_CONTEXT

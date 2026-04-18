@@ -14,6 +14,16 @@ export const getBackendWSURL = () => {
     return base.replace('http', 'ws');
 };
 
-export const getLangGraphBaseURL = getBackendBaseURL;
+export const getLangGraphBaseURL = () => {
+    if (typeof window !== 'undefined') {
+        const url = new URL(window.location.href);
+        const host = url.hostname === 'localhost' ? '127.0.0.1' : url.hostname;
+        if (url.port === '3000' || url.port === '3001') {
+            return `http://${host}:2024`;
+        }
+        return `http://${host}:${url.port}`;
+    }
+    return process.env.NEXT_PUBLIC_LANGGRAPH_URL || "http://127.0.0.1:2024";
+};
 
 export * from "./types";

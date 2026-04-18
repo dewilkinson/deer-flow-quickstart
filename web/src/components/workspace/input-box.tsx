@@ -253,7 +253,7 @@ export function InputBox({
       setFollowups([]);
       setFollowupsHidden(false);
       setFollowupsLoading(false);
-      onSubmit?.(message);
+      await onSubmit?.(message);
     },
     [onSubmit, onStop, status],
   );

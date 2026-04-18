@@ -2,7 +2,7 @@ import type { AIMessage, Message } from "@langchain/langgraph-sdk";
 import type { ThreadsClient } from "@langchain/langgraph-sdk/client";
 import { useStream } from "@langchain/langgraph-sdk/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import type { PromptInputMessage } from "@/components/ai-elements/prompt-input";
@@ -233,17 +233,19 @@ export function useThreadStream({
           optimisticFiles.length > 0 ? { files: optimisticFiles } : {},
       };
 
-      const newOptimistic: Message[] = [optimisticHumanMsg];
+      setOptimisticMessages((prev) => [...prev, optimisticHumanMsg]);
+
       if (optimisticFiles.length > 0) {
-        // Mock AI message while files are being uploaded
-        newOptimistic.push({
-          type: "ai",
-          id: `opt-ai-${Date.now()}`,
-          content: t.uploads.uploadingFiles,
-          additional_kwargs: { element: "task" },
-        });
+        setOptimisticMessages((prev) => [
+          ...prev,
+          {
+            type: "ai",
+            id: `opt-ai-${Date.now()}`,
+            content: t.uploads.uploadingFiles,
+            additional_kwargs: { element: "task" },
+          },
+        ]);
       }
-      setOptimisticMessages(newOptimistic);
 
       _handleOnStart(threadId);
 
@@ -399,13 +401,25 @@ export function useThreadStream({
   );
 
   // Merge thread with optimistic messages for display
-  const mergedThread =
-    optimisticMessages.length > 0
-      ? ({
-          ...thread,
-          messages: [...thread.messages, ...optimisticMessages],
-        } as typeof thread)
-      : thread;
+  const mergedThread = useMemo(() => {
+    if (optimisticMessages.length === 0) return thread;
+
+    // Use a Proxy to preserve all properties/methods from the SDK's thread object
+    // while overriding the 'messages' array with our optimistic merge.
+    return new Proxy(thread, {
+      get(target, prop, receiver) {
+        if (prop === "then") return undefined;
+        const val = Reflect.get(target, prop, receiver);
+        if (prop === "messages") {
+          return [...target.messages, ...optimisticMessages];
+        }
+        if (typeof val === "function") {
+          return val.bind(target);
+        }
+        return val;
+      },
+    }) as typeof thread;
+  }, [thread, optimisticMessages]);
 
   return [mergedThread, sendMessage, isUploading] as const;
 }
