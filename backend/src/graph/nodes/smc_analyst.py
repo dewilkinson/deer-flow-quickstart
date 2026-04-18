@@ -3,6 +3,7 @@
 # Copyright (c) 2026 Dave Wilkinson <dwilkins@bluesec.ai>
 # License: PolyForm Noncommercial 1.0.0
 
+import asyncio
 import logging
 from typing import Any
 
@@ -37,6 +38,31 @@ async def smc_analyst_node(state: State, config: RunnableConfig):
     logger.info(f"SMC Analyst Node: Executing ICT Structural Analysis. GLOBAL_CACHE_VISIBILITY=[{cached_list}]")
 
     tools = [run_smc_analysis, get_raw_smc_tables, get_stock_quote, get_volume_profile, get_volatility_atr, get_sortino_ratio, get_sharpe_ratio, read_session_artifact]
+
+    # [PERFORMANCE] Node-level Pre-warming
+    # Fetch all common data windows concurrently before starting the LLM to ensure tool hits are instant.
+    try:
+        from src.tools.finance import _fetch_stock_history, _normalize_ticker
+        import re
+
+        # Simple heuristic to find ticker in last message
+        last_msg = state.get("messages", [])[-1].content if state.get("messages") else ""
+        ticker_match = re.search(r'\b[A-Z]{1,5}\b', str(last_msg))
+        if ticker_match:
+            ticker = ticker_match.group(0)
+            norm_t = _normalize_ticker(ticker)
+            logger.info(f"[PRE-WARM] Proactively fetching institutional data for {norm_t}...")
+            # Fire-and-forget concurrent fetches into the shared cache
+            # We fetch the exact periods tools will soon request
+            await asyncio.gather(
+                asyncio.wait_for(asyncio.to_thread(_fetch_stock_history, norm_t, "60d", "1d"), timeout=10.0), # ATR/Quote
+                asyncio.wait_for(asyncio.to_thread(_fetch_stock_history, norm_t, "20d", "1d"), timeout=10.0), # Sortino/Sharpe
+                asyncio.wait_for(asyncio.to_thread(_fetch_stock_history, norm_t, "1mo", "1h"), timeout=10.0), # MTF Tactical
+                asyncio.wait_for(asyncio.to_thread(_fetch_stock_history, norm_t, "5d", "5m"), timeout=10.0),  # MTF Trigger
+                return_exceptions=True
+            )
+    except Exception as e:
+        logger.warning(f"[PRE-WARM] Skipped/Failed: {e}")
 
     instructions = (
         "You are a specialized SMC (Smart Money Concepts) and ICT Analyst. "

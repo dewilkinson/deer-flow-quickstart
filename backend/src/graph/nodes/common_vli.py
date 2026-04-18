@@ -72,7 +72,7 @@ async def _run_node_with_tiered_fallback(agent_type, state, config, tools=None, 
         remaining_global = 110.0 - elapsed_global # Use 110s to leave buffer
         
         tier_timeouts = {
-            "reasoning": 40.0,
+            "reasoning": 60.0,
             "basic": 35.0,
             "legacy": 30.0
         }
@@ -120,13 +120,8 @@ async def _run_node_with_tiered_fallback(agent_type, state, config, tools=None, 
                 if hasattr(result, "content") and result.content is None:
                     result.content = ""
 
-            # If we invoked a graph directly, result is a state dict; extract the last message for the unified return type
-            if not is_structured and isinstance(result, dict) and "messages" in result and result["messages"]:
-                result = result["messages"][-1]
-                if result is None:
-                     result = AIMessage(content="", name="vli_null_recovery")
-                elif hasattr(result, "content") and result.content is None:
-                     result.content = ""
+            # Removed: We no longer arbitrarily flatten the tool execution dictionary into a single AIMessage.
+            # `result` natively maintains the full conversation history from inside the nested agent run.
 
             
             # [PROMPT LEAKAGE GUARD] Detect if the model is echoing its own instructions/security protocol
@@ -292,8 +287,15 @@ async def _setup_and_execute_agent_step(state, config, agent_type, tools, agent_
                 step["execution_res"] = last_content or "Executed."
                 break
 
-    # Ensure all messages from the agent are "Signed"
-    new_messages = result.get("messages", []) if isinstance(result, dict) else []
+    # Ensure all messages from the agent are "Signed" and properly extracted
+    if isinstance(result, dict) and "messages" in result:
+        original_len = len(state.get("messages", []))
+        new_messages = result["messages"][original_len:]
+    elif hasattr(result, "content"):
+        new_messages = [result]
+    else:
+        new_messages = []
+
     if not new_messages:
         new_messages = [AIMessage(content=f"{agent_type.upper()} task completed successfully.", name=f"{agent_type}_finalize")]
     else:

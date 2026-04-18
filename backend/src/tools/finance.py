@@ -43,6 +43,10 @@ _GLOBAL_RESOURCE_CONTEXT = GLOBAL_CONTEXT
 # 4. Specialized Analysis Cache (Isolated from Scout)
 _ANALYSIS_CACHE: dict[str, Any] = {}
 
+# [PERFORMANCE] Turn-level Raw Data Cache to prevent redundant yfinance calls in a single turn.
+_RAW_DATA_CACHE: dict[str, Any] = {}
+_RAW_DATA_LOCK = threading.Lock()
+
 # Global semaphore to prevent slamming Yahoo Finance API
 # We limit to 3 concurrent network requests to prevent rate limiting and head-of-line blocking.
 _YF_SEMAPHORE: asyncio.Semaphore | None = None
@@ -67,6 +71,13 @@ def _get_session():
     return session
 
 
+# Data Integrity
+# - **ABSORPTION REQUIREMENT**: Use ONLY information explicitly provided in the tool outputs.
+# - **ZERO HALLUCINATION POLICY**: You are STRICTLY FORBIDDEN from creating, estimating, or "projecting" any numerical data, stock prices, or percentages that are not found in the source material.
+# - If a price or metric is missing from the tool output, you MUST state "[DATA_UNAVAILABLE]" or "Price data currently out of reach" instead of providing a simulated value.
+# - Never create fictional examples, hypothetical performance metrics, or imaginary scenarios.
+
+
 # Datastore registration is moved to the bottom of the file to prevent circular imports
 
 
@@ -89,9 +100,9 @@ def _normalize_ticker(ticker: str) -> str:
         return "^TYX"
     if t == "FVX":
         return "^FVX"
-    if t == "BTC" or t == "BTCUSDT":
+    if t == "BTC" or t == "BTCUSDT" or t == "BT":
         return "BTC-USD"
-    if t == "ETH" or t == "ETHUSDT":
+    if t == "ETH" or t == "ETHUSDT" or t == "ET":
         return "ETH-USD"
     if t.endswith("USDT"):
         return t.replace("USDT", "-USD")
@@ -117,8 +128,8 @@ def _normalize_ticker(ticker: str) -> str:
 
 def _bucket_sparkline_data(df: pd.DataFrame, ref_time: datetime, current_price: float, num_points: int = 20, span_minutes: int = 390) -> list[float | None]:
     """
-    High-Fidelity Resampling: Spans span_minutes ending at ref_time.
-    Defaults to 20 points over 390 minutes (9:30 AM - 4:00 PM trading session).
+    High-Fidelity Resampling: Uses row-index interpolation to prevent chronological stagnation.
+    Defaults to 20 points extracted across the last span_minutes rows of active trading.
     """
     if df.empty:
         return [round(current_price, 4)] * num_points
@@ -131,56 +142,25 @@ def _bucket_sparkline_data(df: pd.DataFrame, ref_time: datetime, current_price: 
         target_data = target_data.iloc[:, 0]
         
     # Crucial Fix: Drop NaN values that leak from multi-ticker batch unions
-    target_data = target_data.dropna()
+    target_data = target_data.dropna().sort_index()
     
-    # Ensure index is correctly unified to Naive EDT
-    try:
-        if getattr(df.index, 'tz', None) is not None:
-            df.index = df.index.tz_convert('America/New_York').tz_localize(None)
-        else:
-            df.index = pd.to_datetime(df.index)
-    except Exception as e:
-        pass
-    
-    temp_series = target_data.sort_index()
-    last_data_time = temp_series.index.max()
-    
-    # Calculate the exact 20-point grid spanning the window
-    start_time = ref_time - timedelta(minutes=span_minutes)
-    target_index = pd.date_range(start=start_time, end=ref_time, periods=num_points).round('s')
-    
-    values = []
-    for i, target_time in enumerate(target_index):
-        # [ROBUST_LOOKUP] Find the last price available at or before the target time
-        tt = target_time
-        if getattr(temp_series.index, 'tz', None) is not None:
-            tt = target_time.tz_localize('America/New_York').tz_convert(temp_series.index.tz)
-            
-        try:
-            val = temp_series.asof(tt)
-        except Exception as e:
-            val = None
+    if target_data.empty:
+        return [round(current_price, 4)] * num_points
         
-        if pd.isna(val):
-            values.append(None)
-            continue
-            
-        final_val = val if i < len(target_index) - 1 else current_price
-        values.append(round(float(final_val), 4))
-            
-    # [STABILITY] Forward fill None values to maintain trend flow
-    for i in range(len(values)):
-        if values[i] is None:
-            if i == 0:
-                # Find first valid future value
-                future_vals = [v for v in values if v is not None]
-                values[i] = future_vals[0] if future_vals else round(current_price, 4)
-            else:
-                values[i] = values[i-1] # Forward fill
-                
-    return values
-        
-    return values
+    # Obtain the most recent `span_minutes` rows (equivalent to last 6.5 hours of active trading since 1 row = 1 min).
+    # If the history is less than span_minutes, it uses whatever is valid.
+    recent_data = target_data.tail(span_minutes)
+    
+    # Use numpy.linspace to grab exactly `num_points` spanning the rows evenly.
+    # This natively ignores all overnight/weekend gaps.
+    indices = np.linspace(0, len(recent_data) - 1, num_points, dtype=int)
+    values = recent_data.iloc[indices].tolist()
+    
+    # Ensure current_price caps the array so the sparkline resolves to the exact real-time boundary.
+    output_values = [round(float(v), 4) for v in values]
+    output_values[-1] = round(float(current_price), 4)
+    
+    return output_values
 
 
 def _fetch_batch_history(tickers: list[str], period: str = "5d", interval: str = "1d") -> pd.DataFrame:
@@ -192,46 +172,62 @@ def _fetch_batch_history(tickers: list[str], period: str = "5d", interval: str =
     logger.info(f"Executing batched fetch for {tickers} (p={period}, i={interval})")
     
     # [UNIVERSAL_TEMPORAL_INSTRUMENTATION]
-    # Check if we are in Replay mode and trigger the sliding window fetcher
     from src.utils.temporal import get_effective_now
     ref_time = get_effective_now()
     now = datetime.now()
     
-    # If ref_time is more than 5 seconds away from 'now', we assume Replay Mode
-    if abs((now - ref_time).total_seconds()) > 5:
-        logger.info(f"VLI_REPLAY: Universal delegation for {tickers} (Target Origin: {ref_time})")
-        return _fetch_replay_history(tickers, period, interval, end_date=ref_time)
-
+    # Check if we are in Replay mode
+    is_replay = abs((now - ref_time).total_seconds()) > 5
+    
     mapped_tickers = [_normalize_ticker(t) for t in tickers]
+    # Cache key includes the temporal origin if in replay mode
+    temporal_suffix = f"_{ref_time.isoformat()}" if is_replay else ""
+    cache_key = f"{','.join(sorted(mapped_tickers))}_{period}_{interval}{temporal_suffix}"
+    
+    with _RAW_DATA_LOCK:
+        if cache_key in _RAW_DATA_CACHE:
+            cached_data, timestamp = _RAW_DATA_CACHE[cache_key]
+            # [REPLAY_STABILITY] Replay data is cached for the entire session (3600s), 
+            # Real-time data for 60s.
+            ttl = 3600 if is_replay else 60
+            if (datetime.now() - timestamp).total_seconds() < ttl:
+                logger.debug(f"[RAW_CACHE_HIT] Reusing data for {mapped_tickers} ({period}/{interval})")
+                return cached_data
 
-    logger.debug(f"[WEB REQUEST] Yahoo Finance fetching {len(mapped_tickers)} tickers: {mapped_tickers}")
-    start_time = time.time()
-    try:
-        data = yfinance.download(
-            tickers=mapped_tickers,
-            period=period,
-            interval=interval,
-            group_by="ticker",
-            session=_get_session(),
-            progress=False,
-            threads=False,  # Maintain throttle integrity
-            timeout=10.0,
-            auto_adjust=False, # [SPLIT_AWARENESS] Return both nominal and adjusted
-            prepost=True,      # [EXTENDED_HOURS] Support pre/post market trading
-        )
-        duration_ms = (time.time() - start_time) * 1000
+    # Hand off to specific fetchers
+    if is_replay:
+        logger.info(f"VLI_REPLAY: Universal delegation for {tickers} (Target Origin: {ref_time})")
+        data = _fetch_replay_history(tickers, period, interval, end_date=ref_time)
+    else:
+        logger.debug(f"[WEB REQUEST] Yahoo Finance fetching {len(mapped_tickers)} tickers: {mapped_tickers}")
+        start_time = time.time()
+        try:
+            data = yfinance.download(
+                tickers=mapped_tickers,
+                period=period,
+                interval=interval,
+                group_by="ticker",
+                session=_get_session(),
+                progress=False,
+                threads=False,
+                timeout=20.0,    # [HARDEN] Increased from 15.0
+                auto_adjust=False,
+                prepost=True,
+            )
+            duration_ms = (time.time() - start_time) * 1000
+            if data is not None and not data.empty:
+                logger.debug(f"[WEB RESPONSE] Yahoo Finance fetch successful in {duration_ms:.2f}ms for {mapped_tickers}")
+            else:
+                logger.warning(f"[WEB RESPONSE] Empty data for {mapped_tickers}")
+        except Exception as e:
+            logger.error(f"[ERROR] Yahoo Finance fetch failed: {e}")
+            raise
 
-        if data is not None and not data.empty:
-            logger.debug(f"[WEB RESPONSE] Yahoo Finance fetch successful in {duration_ms:.2f}ms for {mapped_tickers}")
-        else:
-            logger.warning(f"[WEB RESPONSE] Yahoo Finance returned empty data in {duration_ms:.2f}ms for {mapped_tickers}")
-    except Exception as e:
-        duration_ms = (time.time() - start_time) * 1000
-        logger.error(f"[ERROR] Yahoo Finance fetch failed after {duration_ms:.2f}ms for {mapped_tickers}: {e}", exc_info=True)
-        raise
-
-    # Hard delay to prevent rate limiting
-    time.sleep(1.0)
+    # Store in cache after fetch
+    if data is not None and not data.empty:
+        with _RAW_DATA_LOCK:
+            _RAW_DATA_CACHE[cache_key] = (data, datetime.now())
+            
     return data
 
 
@@ -258,6 +254,7 @@ def _fetch_replay_history(tickers: list[str], period: str = "5d", interval: str 
     # yfinance handles 'period' internally if 'end' is provided, but 'start' is safer for specific windows
     # Actually yfinance 0.2.x handles start/end well.
     
+    # ... (rest of function unchanged, but removing blocking sleep if any)
     start_time = time.time()
     try:
         data = yfinance.download(
@@ -269,7 +266,7 @@ def _fetch_replay_history(tickers: list[str], period: str = "5d", interval: str 
             session=_get_session(),
             progress=False,
             threads=False,
-            timeout=10.0,
+            timeout=20.0,    # [HARDEN]
             auto_adjust=False, # [SPLIT_AWARENESS] Maintain nominal scale for reporting
         )
         duration_ms = (time.time() - start_time) * 1000
@@ -726,21 +723,25 @@ async def get_stock_quote(ticker: str, period: str = "1d", interval: str = "1m",
             try:
                 # [STABILITY] 5s hard-timeout for all data retrieval threads
                 t_obj = await asyncio.wait_for(asyncio.to_thread(yfinance.Ticker, norm_ticker, session=_get_session()), timeout=5.0)
-                # Use faster 'fast_info' instead of full history
-                fast = t_obj.fast_info
-
-                if fast is not None and hasattr(fast, "last_price") and fast.last_price:
-                    return {
-                        "symbol": norm_ticker,
-                        "price": fast.last_price,
-                        "change": ((fast.last_price / fast.previous_close) - 1) * 100 if hasattr(fast, "previous_close") and fast.previous_close else 0.0,
-                        "volume": getattr(fast, "last_volume", 0),
-                        "is_fast_fetch": True,
-                    }
-                else:
-                    logger.info(f"VLI: Fast-info empty for {norm_ticker}, falling back to batched history.")
+                
+                # [DEFENSIVE] fast_info can throw KeyError: 'currentTradingPeriod' for invalid/delisted tickers
+                try:
+                    fast = t_obj.fast_info
+                    if fast is not None and hasattr(fast, "last_price") and fast.last_price:
+                        return {
+                            "symbol": norm_ticker,
+                            "price": fast.last_price,
+                            "change": ((fast.last_price / fast.previous_close) - 1) * 100 if hasattr(fast, "previous_close") and fast.previous_close else 0.0,
+                            "volume": getattr(fast, "last_volume", 0),
+                            "is_fast_fetch": True,
+                        }
+                except (KeyError, AttributeError, Exception) as e:
+                    logger.warning(f"VLI: fast_info access failed for {norm_ticker}: {e}")
+                    # Fall through to batched history
+                
+                logger.info(f"VLI: Fast-info empty or failed for {norm_ticker}, falling back to batched history.")
             except Exception as fe:
-                logger.warning(f"Fast-fetch failed for {norm_ticker}, falling back to batched fetch: {fe}")
+                logger.warning(f"VLI: Fast-fetch thread failed for {norm_ticker}, falling back to batched fetch: {fe}")
 
         # 3. Standard Batched Fetch (Tier 3 fallback)
         # [REPLAY_INSTRUMENTATION] Expand window to 10d for Replay to survive weekends
@@ -1042,7 +1043,18 @@ async def run_smc_analysis(ticker: str, interval: str = "auto") -> str:
     # === CONCURRENT FETCH PHASE ===
     async def fetch_with_sem(period, tf):
         async with _get_yf_semaphore():
-            return await asyncio.wait_for(asyncio.to_thread(_fetch_stock_history, norm_ticker, period, tf), timeout=12.0)
+            try:
+                # [HARDEN] Increased timeout from 12.0s to 20.0s for institutional stability
+                return await asyncio.wait_for(asyncio.to_thread(_fetch_stock_history, norm_ticker, period, tf), timeout=20.0)
+            except (asyncio.TimeoutError, Exception) as e:
+                # [STABILITY_FALLBACK] If 5m data is slow/failing (common yfinance bottleneck), try 15m.
+                if tf == "5m":
+                    logger.warning(f"VLI_STABILITY: 5m fetch failed for {norm_ticker} ({e}). Falling back to 15m data.")
+                    try:
+                        return await asyncio.wait_for(asyncio.to_thread(_fetch_stock_history, norm_ticker, period, "15m"), timeout=15.0)
+                    except:
+                        pass
+                raise e
 
     results = await asyncio.gather(
         fetch_with_sem(macro_period, macro_tf), 
